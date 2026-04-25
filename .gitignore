@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+.venv/
+venv/
+env/
+.env
+*.egg-link
+pip-wheel-metadata/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (local data)
+data/postgres/
+data/kafka/
+data/zookeeper/
+
+# ML models (large binaries — track with DVC or Git LFS if needed)
+ml/models/*.pkl
+ml/models/*.pt
+ml/models/*.pth
+!ml/models/.gitkeep
+
+# Airflow
+airflow/logs/
+airflow/plugins/
+airflow.cfg
+airflow.db
+webserver_config.py
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node.js (frontend)
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# Experiments & checkpoints
+experiments/*/
+checkpoints/
+
+# Logs
+*.log
+logs/
