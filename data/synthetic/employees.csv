@@ -1,0 +1,201 @@
+employee_id,name,department,role,active,consent
+8442c27f-53c1-4304-ab3d-73b59c751f23,Mia Harris,Engineering,Engineering Manager,True,True
+b0e53f6d-ef3a-4ed7-a033-2115cd64297b,Sam Garcia,Engineering,Engineering Manager,True,True
+34c9ac99-609a-4c25-a766-051f23ded4ae,Quinn Walker,Engineering,Software Engineer,True,True
+e64be73b-0b5e-431a-bbbf-e45ab40e7263,Dave Thomas,HR,Recruiter,True,True
+0aeb80a1-0f5a-4aea-8977-1352f365ad18,Dave Moore,Engineering,Tech Lead,True,True
+dcee24f8-1c9c-45a4-8bf3-9506c11aa661,Liam Clark,Sales,Sales Manager,True,True
+9552907b-6423-4355-8a71-636369ced65b,Quinn Jackson,Engineering,Software Engineer,True,True
+395ef7f9-7689-4899-85a7-dc510de64211,Xavier Miller,Sales,Account Executive,True,True
+53b0fa8b-2de9-4966-b928-80113fddb2ca,Ivy Martin,Engineering,Tech Lead,True,True
+3923d276-c837-4f94-b4c6-394c9ac86c91,Victor Rodriguez,Engineering,Tech Lead,True,True
+84a5fc33-04b5-47c5-8ca8-efa6ea42b95e,Uma Miller,Sales,Account Executive,True,True
+92cd8db5-42cd-4ca8-9d53-37491e20e6d2,Hana White,HR,HR Specialist,True,True
+613c4e8d-2639-45d4-af64-ea40381d3046,Tara Garcia,HR,HR Specialist,True,True
+2d475b6d-50b4-4fe2-b5ee-34df676d9f21,Beth Harris,HR,HR Manager,True,True
+3f63cb65-3f51-43c5-b112-84540efdb8bc,Yara Anderson,HR,HR Specialist,True,True
+130fdcf9-5480-4e3e-b683-9b26a958dd6c,Noah Thomas,Sales,Sales Manager,True,True
+e90ce5c0-514c-45a5-9097-f3cbbc92f61a,Beth Moore,Sales,Sales Representative,True,True
+8115cc24-fb87-4cc3-8bfb-a7c6d3eadb12,Wendy Wright,Sales,Sales Representative,True,True
+0eaa93c9-e388-4303-9f30-7266e4832d9e,Carl Walker,Sales,Sales Manager,True,True
+e4746a0f-0079-4ae1-88d2-4151c3b98ea9,Hector Thomas,Sales,Sales Manager,True,True
+66a01d56-ded7-4709-9b83-46dd037ce663,Beth Williams,HR,HR Manager,True,True
+f6b444b1-123a-47d5-8d3e-4fee33ee2065,Aaron Lopez,Engineering,Engineering Manager,True,True
+46a3d219-3d6b-44b2-85cb-dadcd37b5d01,Carol Robinson,Sales,BDR,True,True
+ad8aeeef-2d34-47ac-8e7e-1a12a8668192,Laura Brown,Sales,BDR,True,True
+c992dd56-e16a-43ea-ae5d-9f00acff9c57,Bob Moore,Engineering,Tech Lead,True,True
+3227f009-e660-4e99-a8c3-43611926d801,Frank White,Engineering,Senior Engineer,True,True
+e34d69c5-a0b4-4cf5-8f28-0e9a58d0ea31,Grace Moore,HR,HR Specialist,True,True
+46cf3938-2cf3-442c-9b4d-d8c1e0bb2f1f,Ethan Wright,Sales,Sales Manager,True,True
+7afb084c-56e2-4fe8-95b3-e6d27f83e698,Tara Hall,Sales,Account Executive,True,True
+f65665ae-eb55-48ed-86b7-fd2e577d4e54,George White,Sales,BDR,True,True
+1623c80b-3fbc-41f3-8786-b11cbbab6e11,Mia Martin,HR,People Ops Analyst,True,True
+aba36c44-1b82-4759-9690-3a52073fcd0c,Olivia Walker,Engineering,Software Engineer,True,True
+0d195a43-b5eb-4c86-bc4b-0a319241549c,Hana Lee,Sales,BDR,True,True
+96d00b99-346f-4b63-8408-b43a6dd273c5,Zoe Jones,HR,HR Specialist,True,True
+f731d911-21c2-4696-8cce-4e1f34481b1d,Julia Brown,Sales,Sales Manager,True,True
+4849fffc-da5f-47bb-862d-27069a69f8bb,Noah Rodriguez,Engineering,Software Engineer,True,True
+4fe067f5-71b4-4ceb-8d64-a11f99a2d7f5,Yara Miller,Engineering,Senior Engineer,True,True
+44f31b68-11d5-4f6d-9d7e-ef7552bad8c9,Ethan Jackson,Engineering,Tech Lead,True,True
+90b81ee4-d458-40f2-89a4-01c263ce2455,Carl Young,HR,HR Manager,True,True
+360f6203-f8e6-479b-b634-4304fb1343b1,Kate Moore,HR,Recruiter,True,True
+e466573e-0911-4e84-9fa3-45f4d0a339cd,Kate King,Sales,BDR,True,True
+f03c8445-0359-4d13-bf49-71a0d18647de,Grace Miller,Engineering,Engineering Manager,True,True
+fe18e3a5-cfee-40b6-bb6e-c5d91a060ff6,Rita Hall,Engineering,Software Engineer,True,True
+4fa454d1-bfdf-475e-be16-28a8b3e79dc4,Fiona Brown,Sales,Sales Manager,True,True
+c01655f6-0224-4b2d-a48d-95a546cacfa8,Eva Clark,Engineering,Tech Lead,True,True
+883506c9-8208-4bb5-96f1-02e6393c38a9,Carol Wilson,Engineering,Senior Engineer,True,True
+fb26845d-e822-4697-bac3-3e8a73b21c39,Xavier Wright,Engineering,Tech Lead,True,True
+cc91236b-dbbf-47ca-a464-ef7e60dca4c4,Beth Walker,Engineering,Engineering Manager,True,True
+77cdd1c2-a058-491c-8f4b-0fdaae00a7ea,Paul Clark,Engineering,Engineering Manager,True,True
+f74b7d73-3a16-4b34-bbae-76c31debd1f6,Carol Brown,Sales,BDR,True,True
+9497d135-db89-4e1c-bfe9-7528f95ab2f7,Ivy Lopez,Engineering,Tech Lead,True,True
+aa0bcff2-7bdf-42c7-8f71-f4628ff05e88,Olivia Wright,Engineering,Senior Engineer,True,True
+342527c3-6b29-47f0-82be-e643950a45f0,Liam Thomas,Sales,BDR,True,True
+54bdc262-a0e5-439f-8798-17262f892703,Zoe Hernandez,Sales,Sales Representative,True,True
+eded4ffe-fc08-4e02-a158-90bdc1eadf7e,James Lopez,Engineering,Tech Lead,True,True
+76d9ec4a-2bf1-4a2b-8a1f-b68f026eb136,Yara White,Engineering,Senior Engineer,True,True
+497e75b3-78d1-46d3-93aa-8ec05624dafa,Beth Lewis,HR,Recruiter,True,True
+6902ed75-7545-45c5-9ba1-0d2c650b644e,Eva Young,Engineering,Software Engineer,True,True
+ac0e70fd-e953-4e5c-92f0-30503d0b01d6,Wendy King,Engineering,Engineering Manager,True,True
+0c5149b0-da43-4d60-90d8-a97bd4ba594e,Paul Allen,Engineering,Software Engineer,True,True
+0d89646f-1ce0-48e0-a1c9-e4e5102162b5,Yara Walker,Sales,Account Executive,True,True
+d4498dbe-f9ea-4ec4-8f9e-53019d79f2b7,Xavier Jackson,Engineering,Engineering Manager,True,True
+d0bd6aaf-caec-4d11-890c-b03d120598b5,Rita Miller,Engineering,Tech Lead,True,True
+318cd788-5c9c-4fe6-878d-c2bb7e2d360f,Carl White,Engineering,Senior Engineer,True,True
+b3896358-fb60-463b-a629-28c6842df646,James Wright,HR,HR Manager,True,True
+5fc742fa-02be-47e0-ab7d-f47e3d444ce0,Dave King,Sales,Sales Representative,True,True
+6bab9934-e504-4b9d-aa81-984484fab516,Bob Harris,Engineering,Software Engineer,True,True
+b4c0d42d-0bd5-477c-878b-6303e8b90340,Liam Hernandez,Sales,Sales Manager,True,True
+4f1b6d96-34df-4129-a078-2b86abae211e,Eva King,Engineering,Software Engineer,True,True
+1e9353f6-9a35-46de-ace4-df815d798230,Wendy Rodriguez,Engineering,Tech Lead,True,True
+6779c74e-c504-4be2-9270-2870d0a4cb0e,Uma Rodriguez,Sales,BDR,True,True
+9eb44214-6bd4-4ed5-b458-4e20f9a4d4af,Kate Lee,Sales,BDR,True,True
+cb5f42db-7a2e-486f-9a88-f7f87c457eaf,Kevin Martinez,HR,Recruiter,True,True
+09f66094-0b9f-41ab-8c41-ae12f0cbf46c,Quinn Brown,Engineering,Engineering Manager,True,True
+978ea9b6-0e40-4606-ae12-5dba6bda18a1,Sam Clark,Engineering,Tech Lead,True,True
+1bb4cbe1-ec51-4022-9d0f-6051415d971d,Xavier Wilson,Sales,Sales Representative,True,True
+51d23bc4-e140-4b0b-b85d-91bb8b006178,Paul Jones,HR,HR Specialist,True,True
+eb5f52b6-4c5f-4c2d-8c80-6e05e3ed60b7,Diana White,HR,Recruiter,True,True
+0684a95f-5d19-425e-b1a3-3dedca08f776,Grace Jackson,Engineering,Tech Lead,True,True
+78a61689-0d83-4ad1-93e7-d46e725e1e2f,Uma Lee,Engineering,Engineering Manager,True,True
+7b57aa49-44f1-409e-b272-2cb79cecc092,Mia Moore,Sales,Account Executive,True,True
+31d0643f-44b5-4b2b-a443-d8082921e27f,Liam Miller,Engineering,Tech Lead,True,True
+76033da2-d8f8-4551-a1c7-ed70eb2dac02,Paul Lee,HR,People Ops Analyst,True,True
+72b7131b-decf-4062-bfed-592aff933262,Yara Hernandez,Engineering,Engineering Manager,True,True
+4095c4b2-4cdc-4c15-beed-faa623b42a7b,Sam Davis,HR,Recruiter,True,True
+4c8ddd85-29e1-4f1f-b833-4ffecfd5553d,Mia Thomas,Sales,Account Executive,True,True
+99af3915-c78f-4662-b2ae-cba7e721d8e8,Hector Walker,Engineering,Senior Engineer,True,True
+2c801198-ccff-4349-9d67-ff8fa9c7b341,Paul Martinez,Engineering,Engineering Manager,True,True
+30149670-ff97-4c74-bf48-db5581053ef8,Laura Young,Sales,BDR,True,True
+6ad977d3-4f8b-4d35-a316-7593d38d25a4,Julia Hall,Engineering,Tech Lead,True,True
+e6a27123-c6f0-45a3-a4af-4a8e2198ff86,Carol Lopez,Sales,Account Executive,True,True
+f7ec6e0e-bb29-4cb4-968e-1c64840d2373,Grace Wright,Engineering,Software Engineer,True,True
+4a69af40-c748-47d9-9217-9faaa527504f,Uma Smith,Engineering,Senior Engineer,True,True
+b1fa23c8-6112-4d9c-b333-b2989183b8f1,Rita Clark,Engineering,Tech Lead,True,True
+fb6f1018-962b-4cfe-a06d-94c47321b1c2,Paul Young,Engineering,Software Engineer,True,True
+a2a2af88-fc44-4260-afec-759671681e40,James Lee,HR,HR Manager,True,True
+cb9836fb-1556-4ccd-a318-eb37680636b1,Dave Anderson,Engineering,Tech Lead,True,True
+6b3ed791-40fe-4491-bcdb-76b6ae69069f,Carol Hall,Sales,Account Executive,True,True
+08537b15-67bd-450b-9299-0541860c9c36,Ethan Smith,Sales,Account Executive,True,True
+b589c8b3-adf9-4a7e-b1a3-e6b9c571974f,Beth Wright,Engineering,Senior Engineer,True,True
+00c77cd9-ea1d-4932-9ec3-a0408cb7c525,Uma Martin,Engineering,Tech Lead,True,True
+53216b89-2f11-44cb-a4c0-f9b15a0f1d7e,Mia Hernandez,Sales,BDR,True,True
+d33345f0-a45a-4458-802c-a729a883e6d2,Fiona King,Engineering,Senior Engineer,True,True
+1d72e444-355c-4173-8bf8-9907fc748e46,Yara Lewis,Sales,Sales Representative,True,True
+827c55a1-2554-487a-bf86-eb86c033ca7a,Quinn Garcia,Engineering,Engineering Manager,True,True
+cc5e0638-40d4-4b21-b24b-0719a46a9567,Kevin Harris,Engineering,Senior Engineer,True,True
+aa383733-c6db-4301-a372-bc70f096b929,Aaron Lewis,Engineering,Senior Engineer,True,True
+0093d2f4-c1e5-45ea-8c5a-00fa6fff54bf,Alice Moore,Sales,Sales Representative,True,True
+d336f17c-8bfa-4311-bc4e-0c000fa60346,Olivia Thomas,Sales,Account Executive,True,True
+b3a569d0-39ae-4f49-9f0b-1093c1f69371,Aaron Thomas,HR,Recruiter,True,True
+1d312175-93ce-4c25-b790-4d315eef7018,Grace Smith,Sales,Sales Manager,True,True
+2bdaa45a-9937-4105-94af-d7c82d429810,Ethan Thomas,Sales,BDR,True,True
+c32bea07-e274-4667-8c9e-afbc369bfc91,Noah Walker,HR,HR Manager,True,True
+a2c0a3fe-1a61-4cc5-9297-a16bde797330,Aaron Young,Engineering,Engineering Manager,True,True
+da15f4f9-e9f2-4882-97e8-4c546fe89ebd,Ian King,Sales,Sales Manager,True,True
+065a466a-ce71-4c9d-854d-a52446ac5308,Kevin Anderson,Sales,Account Executive,True,True
+704cbc4f-1bcd-4fb3-b75f-5baab825aaa5,Paul Jackson,Sales,Sales Representative,True,True
+4058423e-bff8-47c7-b313-33353467d1a6,Hana Lopez,Sales,BDR,True,True
+62e15c34-bd6c-4f6e-a86c-b8d98de4097e,Quinn Lee,Sales,Account Executive,True,True
+71954d44-b8c6-4544-b796-bd01692730f9,Sam Smith,HR,People Ops Analyst,True,True
+4f6db69b-2132-400f-b745-dcc43fcb0acd,Quinn Lewis,Engineering,Tech Lead,True,True
+fd97c8fd-b5c2-49a0-9e07-10ecd83161a2,Wendy Jones,Engineering,Senior Engineer,True,True
+69033acf-f04c-4173-ba71-3b1147dada64,Ethan Hernandez,HR,People Ops Analyst,True,True
+487f3361-47b4-43ba-9c10-cf35f8941086,Frank Brown,Engineering,Engineering Manager,True,True
+ceb7c565-4ba1-4fba-b79f-b4858911db69,Ethan Hall,Sales,Account Executive,True,True
+6428497c-22ab-4dca-a4ec-e020bf1a6ad9,Mia Jones,Engineering,Software Engineer,True,True
+f50bac87-d919-446f-aaad-e0ea47458f33,Xavier Rodriguez,Engineering,Tech Lead,True,True
+97d35af6-6c6b-4713-8c28-f52bb2d2fd77,Olivia White,Sales,BDR,True,True
+aba296a1-c140-4d68-8bc5-d880e50ad901,Uma Robinson,Sales,Account Executive,True,True
+0495551e-52f2-4f21-9a1c-f7a4180d6d60,James Smith,Engineering,Tech Lead,True,True
+f8bcdc9b-0e7a-4a3c-9a54-dee1698bd6eb,Hector Lewis,Sales,Account Executive,True,True
+495aefc5-caef-40b9-9868-0f8cb99de319,George Smith,HR,HR Manager,True,True
+21e934a9-e50b-4ece-99dd-ae2c78d51de6,Olivia Rodriguez,Sales,Sales Manager,True,True
+f3d67e2a-0358-4351-b02b-fdbb1276855e,Wendy Hall,Engineering,Software Engineer,True,True
+354d52f9-18e1-4714-9a90-40fc9522e697,Alice Young,Engineering,Tech Lead,True,True
+cf2d8d8e-d1a7-4352-bd79-63ab0112f399,Carl Martin,Sales,BDR,True,True
+d06e2e7c-5ade-4d0f-af47-8b3aff95511f,Liam Young,Engineering,Engineering Manager,True,True
+392a0d47-b16c-4d3a-8ea0-c8f5c75dcc33,Yara Allen,Engineering,Software Engineer,True,True
+03fbc599-a285-4af7-b0d0-c140bcde20fb,Diana Hall,Engineering,Software Engineer,True,True
+7401567c-25e7-4729-b6c2-bb62555c0496,Beth Jackson,HR,HR Specialist,True,True
+44a3cd7e-3de7-42bb-9592-35a899db1c45,Frank Martin,Engineering,Senior Engineer,True,True
+43c1dd54-a914-4279-86ed-b9f7a7b59e52,Zoe Davis,Engineering,Software Engineer,True,True
+3ae70f29-5d25-4319-a4da-7409d7211c33,Uma Jackson,Sales,BDR,True,True
+f3defa96-acda-49dd-a9fa-dcfdb0780329,Xavier Clark,Sales,BDR,True,True
+dce60b63-230d-4f66-911c-1980941141bc,Quinn Smith,Sales,BDR,True,True
+31aa04de-8b1e-4a1d-9c38-2ef45630f609,Ivy Taylor,Engineering,Software Engineer,True,True
+af4131f7-464d-4ec9-8020-3db303e6f734,Wendy Thomas,Engineering,Software Engineer,True,True
+bbbf16cb-164d-4134-88e5-a2551db27078,Aaron Martinez,Sales,BDR,True,True
+d60caed1-8980-4506-b5b4-9614bf65abd7,Laura Lopez,Sales,Sales Representative,True,True
+f1ee6bce-7129-41e0-b44d-c766ed58b771,Mia Lopez,Sales,Sales Manager,True,True
+431dae47-0534-44bc-9b26-f6fcdb170746,Carol Lee,Engineering,Engineering Manager,True,True
+095154d9-55d2-4987-81b0-811a4aef5395,Eva Jones,Engineering,Software Engineer,True,True
+ad15a735-8030-4b39-a5b7-a18e939483d1,George Jackson,Engineering,Software Engineer,True,True
+0b66393b-ec44-41d6-8374-6b5ef5345501,Bob Anderson,HR,HR Specialist,True,True
+8c172892-02e5-4b5d-ad57-8a2a17442a30,Yara Wilson,HR,HR Specialist,True,True
+8e92f974-94fd-4bfd-a649-a1dcddd0c0a8,Eva Martin,Engineering,Software Engineer,True,True
+ad930f62-793c-4baa-9ac2-d156b1aabb7e,Beth Lopez,Engineering,Engineering Manager,True,True
+4cabe337-9d29-4323-8b6d-b2c499a107a7,Aaron Williams,Engineering,Tech Lead,True,True
+6467adc3-f72b-4b9f-bf59-0d73e9934fc4,Carl Lopez,Engineering,Engineering Manager,True,True
+3d8445cc-c9f6-43b7-8f8f-bed4131934aa,Sam Lee,Sales,BDR,True,True
+fc7920fd-726f-4032-b08d-8727df542906,Carl Clark,Engineering,Engineering Manager,True,True
+62fbf62c-5157-47a6-b88e-10ff4b10a413,Sam Robinson,Engineering,Software Engineer,True,True
+35d409b9-733c-4a05-bb04-050a744545bb,Aaron Allen,Engineering,Senior Engineer,True,True
+5a1c9f76-801a-4ebb-bfe6-117648a11831,Quinn Martin,Sales,BDR,True,True
+c828bed3-5fd8-4b34-bf99-27b0b16a953f,Ivy Rodriguez,Engineering,Software Engineer,True,True
+cb633f95-5840-4d6c-acac-7f623c9e6f70,Hana Robinson,HR,HR Specialist,True,True
+fa92bed9-0950-426f-a441-46bf4b19e466,Carol Allen,Engineering,Tech Lead,True,True
+76d640b7-34a7-45ed-bf9a-eec27858835a,Noah Allen,Sales,BDR,True,True
+0534d914-c9f9-4e0c-9c7e-05b1ab476b9c,Julia King,HR,People Ops Analyst,True,True
+4e69ac56-5e43-4739-a845-d594f4d8769c,Tara Miller,HR,People Ops Analyst,True,True
+5b6b0ff4-d724-4030-8b62-26a2a1b6f08d,Olivia Robinson,HR,HR Specialist,True,True
+d2a4f4ec-a1f1-465a-84d9-6401103039ce,Ethan Lopez,Engineering,Engineering Manager,True,True
+dc20d788-95e4-4eb0-a4e8-a6b6aa8681e4,Carl Hernandez,Engineering,Engineering Manager,True,True
+b9164e0e-2d63-4c80-bc45-c75a663c7ca4,Julia White,Engineering,Tech Lead,True,True
+1b332a70-d39a-4ad7-a807-e49017a619f2,Paul Harris,Engineering,Engineering Manager,True,True
+3e17134c-e8a3-452a-8647-cd40dc20c570,Julia Robinson,Engineering,Engineering Manager,True,True
+4eb4c809-c2cb-417f-b982-fbed30cfca85,Carol Williams,Engineering,Senior Engineer,True,True
+41e7537a-e0bb-4739-b5f1-8d0c27aba050,Uma Williams,Engineering,Software Engineer,True,True
+0d29cca7-2367-4db4-ada3-60577da605a2,Frank Lewis,Engineering,Senior Engineer,True,True
+ecee6866-7ac1-4cb3-8ed1-2b412e231af7,Frank Young,Engineering,Software Engineer,True,True
+384f1c70-cef3-4116-b7d2-22ab1d8e50b2,Kevin Hall,Sales,Account Executive,True,True
+9971a4d6-9c2c-450a-9ba5-00b4ac923b98,Olivia Hernandez,Engineering,Software Engineer,True,True
+5d7d457d-0031-460c-a2e5-f732ed4085ae,Eva Williams,HR,HR Manager,True,True
+fca8f8cd-e8ea-4e1b-9573-c89dd5912355,Wendy Young,Engineering,Tech Lead,True,True
+aa6ab810-d335-433d-8f5d-57bc27b5b0d2,Xavier Hall,Sales,Sales Manager,True,True
+2581c3e9-bea9-44fd-83c9-7d3d0720954d,Laura Hernandez,HR,HR Manager,True,True
+da388700-6283-4a70-bd84-29442870f184,Victor Garcia,Sales,Sales Manager,True,True
+48e2dd7a-43ce-4933-9852-ab8a3bfcdf78,Zoe Hall,Sales,Sales Manager,True,True
+84670994-8b95-4877-a8d4-92a8cf85a8f2,Julia Young,Engineering,Software Engineer,True,True
+fdb49960-1247-463e-aea4-f9e08a27a559,Zoe Lewis,HR,People Ops Analyst,True,True
+e5cc191b-5e04-4531-a2f0-666ff77ad1ab,Noah Lewis,Sales,Sales Representative,True,True
+f0240831-3785-41ee-94c6-586b84a976ef,Zoe Brown,Sales,Account Executive,True,True
+cedee934-1ace-4336-8508-caa5ec4332ad,Olivia Anderson,Sales,BDR,True,True
+d956760f-bf19-4ae9-9763-e4ba822b9bf5,Diana Allen,Engineering,Tech Lead,True,True
+a595b319-c560-4fe5-a702-a1aa03e07409,Grace Harris,Sales,Account Executive,True,True
+94d8a747-d9e9-410f-9eac-99a283476ffb,Carl Robinson,Engineering,Software Engineer,True,True
+497c9abe-c80d-4cad-9681-c40442ac3b5b,Bob Brown,Engineering,Software Engineer,True,True
+ccab5845-e315-424f-8240-c24a9dfe3daf,Ian Clark,Engineering,Senior Engineer,True,True
+4d71bfe6-7491-4626-b841-ff237adbf241,Julia Jones,Engineering,Software Engineer,True,True
+abe5860a-63f8-4a69-b456-f3db69567935,Eva Jackson,Engineering,Tech Lead,True,True
