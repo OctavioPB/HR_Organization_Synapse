@@ -14,7 +14,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import alerts, connectors, graph, risk
+from api.routers import alerts, connectors, graph, knowledge, risk, succession
 
 try:
     from prometheus_fastapi_instrumentator import Instrumentator as _PrometheusInstrumentator
@@ -60,6 +60,8 @@ app.include_router(graph.router)
 app.include_router(risk.router)
 app.include_router(alerts.router)
 app.include_router(connectors.router)
+app.include_router(knowledge.router)
+app.include_router(succession.router)
 
 # ─── Prometheus metrics ───────────────────────────────────────────────────────
 # Exposes GET /metrics (Prometheus text format) when the instrumentator is installed.

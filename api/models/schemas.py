@@ -189,6 +189,75 @@ class EmployeeChurnDetail(BaseModel):
     history: list[ChurnScore]
 
 
+# ─── Knowledge risk ───────────────────────────────────────────────────────────
+
+
+class DomainExpertise(BaseModel):
+    domain: str
+    doc_count: int
+    is_sole_expert: bool
+    expertise_score: float
+
+
+class KnowledgeScore(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    knowledge_score: float = Field(..., ge=0.0, le=1.0)
+    sole_expert_count: int
+    domain_count: int
+    doc_count: int
+    enhanced_spof_score: float | None = None
+    impacted_departments: list[str] = []
+    computed_at: date
+
+
+class KnowledgeScoresResponse(BaseModel):
+    computed_at: date
+    total: int
+    scores: list[KnowledgeScore]
+
+
+class KnowledgeDomain(BaseModel):
+    domain: str
+    total_docs: int
+    contributor_count: int
+    sole_expert_id: str | None = None
+    sole_expert_name: str | None = None
+
+
+class KnowledgeDomainsResponse(BaseModel):
+    total: int
+    domains: list[KnowledgeDomain]
+
+
+class EmployeeKnowledgeProfile(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    knowledge_score: float
+    sole_expert_count: int
+    domain_count: int
+    doc_count: int
+    enhanced_spof_score: float | None = None
+    domains: list[DomainExpertise]
+    computed_at: date
+
+
+class KnowledgeImpactStatement(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    sole_expert_count: int
+    domain_count: int
+    knowledge_score: float
+    enhanced_spof_score: float | None = None
+    sole_expert_domains: list[str]
+    impacted_departments: list[str]
+    statement: str
+    computed_at: str
+
+
 # ─── Temporal graph analysis ──────────────────────────────────────────────────
 
 
@@ -225,6 +294,35 @@ class TemporalAnomalyResponse(BaseModel):
     scored_at: date
     total: int
     scores: list[TemporalAnomalyScore]
+
+
+# ─── Succession planning ──────────────────────────────────────────────────────
+
+
+class SuccessionCandidate(BaseModel):
+    candidate_employee_id: str
+    name: str
+    department: str
+    compatibility_score: float = Field(..., ge=0.0, le=1.0)
+    structural_overlap: float = Field(..., ge=0.0, le=1.0)
+    clustering_score: float = Field(..., ge=0.0, le=1.0)
+    domain_overlap: float = Field(..., ge=0.0, le=1.0)
+    rank: int
+
+
+class SuccessionRecommendation(BaseModel):
+    source_employee_id: str
+    source_name: str
+    source_department: str
+    spof_score: float
+    computed_at: date
+    candidates: list[SuccessionCandidate]
+
+
+class SuccessionResponse(BaseModel):
+    computed_at: date
+    total: int
+    recommendations: list[SuccessionRecommendation]
 
 
 # ─── Alerts ───────────────────────────────────────────────────────────────────

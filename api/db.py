@@ -541,3 +541,338 @@ def fetch_employee_churn_history(employee_id: str, conn) -> list[dict]:
             (employee_id,),
         )
         return [dict(r) for r in cur.fetchall()]
+
+
+# ─── Succession planning ──────────────────────────────────────────────────────
+
+
+def fetch_latest_succession_date(conn) -> date | None:
+    """Return the most recent computed_at in succession_recommendations, or None."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(computed_at) FROM succession_recommendations")
+        row = cur.fetchone()
+    return row["max"] if row and row["max"] else None
+
+
+def fetch_succession_recommendations(
+    computed_at: date,
+    top_spof: int,
+    min_spof_score: float,
+    conn,
+) -> list[dict]:
+    """Return succession recommendations for the given date.
+
+    Groups candidates under their source employee. Returns at most top_spof
+    source employees ordered by spof_score descending.
+
+    Args:
+        computed_at: Date of the succession computation run.
+        top_spof: Maximum number of source (SPOF) employees to return.
+        min_spof_score: Only include sources with spof_score >= this value.
+    """
+    with conn.cursor() as cur:
+        # Top SPOF sources for this computed_at date
+        cur.execute(
+            """
+            SELECT DISTINCT
+                sr.source_employee_id::text,
+                es.name          AS source_name,
+                es.department    AS source_department,
+                rs.spof_score
+            FROM succession_recommendations sr
+            JOIN employees es ON sr.source_employee_id = es.id
+            LEFT JOIN LATERAL (
+                SELECT spof_score
+                FROM risk_scores
+                WHERE employee_id = sr.source_employee_id
+                  AND scored_at::date <= sr.computed_at
+                ORDER BY scored_at DESC
+                LIMIT 1
+            ) rs ON true
+            WHERE sr.computed_at = %s
+              AND COALESCE(rs.spof_score, 0) >= %s
+            ORDER BY rs.spof_score DESC NULLS LAST
+            LIMIT %s
+            """,
+            (computed_at, min_spof_score, top_spof),
+        )
+        sources = [dict(r) for r in cur.fetchall()]
+
+    if not sources:
+        return []
+
+    source_ids = [s["source_employee_id"] for s in sources]
+
+    # Candidates for all sources in one query
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                sr.source_employee_id::text,
+                sr.candidate_employee_id::text,
+                ec.name          AS candidate_name,
+                ec.department    AS candidate_department,
+                sr.compatibility_score,
+                sr.structural_overlap,
+                sr.clustering_score,
+                sr.domain_overlap,
+                sr.rank
+            FROM succession_recommendations sr
+            JOIN employees ec ON sr.candidate_employee_id = ec.id
+            WHERE sr.computed_at = %s
+              AND sr.source_employee_id = ANY(%s::uuid[])
+            ORDER BY sr.source_employee_id, sr.rank
+            """,
+            (computed_at, source_ids),
+        )
+        candidate_rows = cur.fetchall()
+
+    # Group candidates under each source
+    from collections import defaultdict
+    candidates_by_source: dict[str, list[dict]] = defaultdict(list)
+    for r in candidate_rows:
+        candidates_by_source[r["source_employee_id"]].append(dict(r))
+
+    return [
+        {
+            **s,
+            "candidates": candidates_by_source.get(s["source_employee_id"], []),
+        }
+        for s in sources
+    ]
+
+
+def fetch_employee_succession(employee_id: str, conn) -> dict | None:
+    """Return the most recent succession plan for one SPOF source employee.
+
+    Returns None if no succession data exists for this employee.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT MAX(computed_at) AS latest
+            FROM succession_recommendations
+            WHERE source_employee_id = %s::uuid
+            """,
+            (employee_id,),
+        )
+        row = cur.fetchone()
+    if not row or not row["latest"]:
+        return None
+
+    computed_at = row["latest"]
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT name, department FROM employees WHERE id = %s::uuid
+            """,
+            (employee_id,),
+        )
+        emp = cur.fetchone()
+    if not emp:
+        return None
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                sr.candidate_employee_id::text,
+                ec.name          AS candidate_name,
+                ec.department    AS candidate_department,
+                sr.compatibility_score,
+                sr.structural_overlap,
+                sr.clustering_score,
+                sr.domain_overlap,
+                sr.rank
+            FROM succession_recommendations sr
+            JOIN employees ec ON sr.candidate_employee_id = ec.id
+            WHERE sr.source_employee_id = %s::uuid
+              AND sr.computed_at = %s
+            ORDER BY sr.rank
+            """,
+            (employee_id, computed_at),
+        )
+        candidates = [dict(r) for r in cur.fetchall()]
+
+    # Fetch most recent SPOF score
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT spof_score FROM risk_scores
+            WHERE employee_id = %s::uuid
+              AND scored_at::date <= %s
+            ORDER BY scored_at DESC
+            LIMIT 1
+            """,
+            (employee_id, computed_at),
+        )
+        spof_row = cur.fetchone()
+
+    return {
+        "source_employee_id": employee_id,
+        "source_name": emp["name"],
+        "source_department": emp["department"],
+        "spof_score": float(spof_row["spof_score"]) if spof_row else 0.0,
+        "computed_at": computed_at,
+        "candidates": candidates,
+    }
+
+
+# ─── Knowledge risk ───────────────────────────────────────────────────────────
+
+
+def fetch_knowledge_scores(
+    computed_at: date,
+    top: int,
+    min_score: float,
+    conn,
+) -> list[dict]:
+    """Return knowledge risk scores for the given computed_at date.
+
+    Args:
+        computed_at: Date of the scoring run.
+        top: Maximum rows to return.
+        min_score: Only return employees with knowledge_score >= min_score.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                kr.employee_id::text,
+                e.name,
+                e.department,
+                kr.knowledge_score,
+                kr.sole_expert_count,
+                kr.domain_count,
+                kr.doc_count,
+                kr.enhanced_spof_score,
+                kr.impacted_departments,
+                kr.computed_at
+            FROM knowledge_risk_scores kr
+            JOIN employees e ON kr.employee_id = e.id
+            WHERE kr.computed_at = %s
+              AND kr.knowledge_score >= %s
+            ORDER BY kr.knowledge_score DESC
+            LIMIT %s
+            """,
+            (computed_at, min_score, top),
+        )
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            # impacted_departments is JSONB → already a list from psycopg2
+            if isinstance(d["impacted_departments"], str):
+                import json
+                d["impacted_departments"] = json.loads(d["impacted_departments"])
+            d["impacted_departments"] = d["impacted_departments"] or []
+            rows.append(d)
+        return rows
+
+
+def fetch_latest_knowledge_date(conn) -> date | None:
+    """Return the most recent computed_at in knowledge_risk_scores, or None."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(computed_at) FROM knowledge_risk_scores")
+        row = cur.fetchone()
+    return row["max"] if row and row["max"] else None
+
+
+def fetch_knowledge_domains(conn) -> list[dict]:
+    """Return all knowledge domains with contributor counts and sole-expert info.
+
+    For each domain, checks whether there is exactly one contributor
+    (sole expert) and returns that employee's id and name.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH latest AS (
+                SELECT employee_id, domain, doc_count, is_sole_expert,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY employee_id, domain
+                           ORDER BY computed_at DESC
+                       ) AS rn
+                FROM employee_knowledge
+            ),
+            latest_ek AS (
+                SELECT employee_id, domain, doc_count, is_sole_expert
+                FROM latest WHERE rn = 1
+            ),
+            domain_stats AS (
+                SELECT
+                    domain,
+                    SUM(doc_count)            AS total_docs,
+                    COUNT(DISTINCT employee_id) AS contributor_count
+                FROM latest_ek
+                WHERE doc_count > 0
+                GROUP BY domain
+            ),
+            sole_experts AS (
+                SELECT ek.domain, ek.employee_id::text, e.name
+                FROM latest_ek ek
+                JOIN employees e ON ek.employee_id = e.id
+                WHERE ek.is_sole_expert = true
+            )
+            SELECT
+                ds.domain,
+                ds.total_docs,
+                ds.contributor_count,
+                se.employee_id AS sole_expert_id,
+                se.name        AS sole_expert_name
+            FROM domain_stats ds
+            LEFT JOIN sole_experts se ON ds.domain = se.domain
+            ORDER BY ds.total_docs DESC
+            """
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def fetch_employee_knowledge_profile(employee_id: str, conn) -> dict | None:
+    """Return the most recent knowledge profile for one employee.
+
+    Returns None if no knowledge risk record exists.
+    """
+    with conn.cursor() as cur:
+        # Summary row
+        cur.execute(
+            """
+            SELECT
+                kr.employee_id::text,
+                e.name,
+                e.department,
+                kr.knowledge_score,
+                kr.sole_expert_count,
+                kr.domain_count,
+                kr.doc_count,
+                kr.enhanced_spof_score,
+                kr.computed_at
+            FROM knowledge_risk_scores kr
+            JOIN employees e ON kr.employee_id = e.id
+            WHERE kr.employee_id = %s::uuid
+            ORDER BY kr.computed_at DESC
+            LIMIT 1
+            """,
+            (employee_id,),
+        )
+        summary = cur.fetchone()
+    if not summary:
+        return None
+
+    profile = dict(summary)
+
+    # Per-domain detail from employee_knowledge
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT domain, doc_count, is_sole_expert, expertise_score
+            FROM employee_knowledge
+            WHERE employee_id = %s::uuid
+              AND computed_at = %s
+            ORDER BY expertise_score DESC
+            """,
+            (employee_id, profile["computed_at"]),
+        )
+        profile["domains"] = [dict(r) for r in cur.fetchall()]
+
+    return profile
