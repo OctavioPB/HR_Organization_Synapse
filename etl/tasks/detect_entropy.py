@@ -58,6 +58,7 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
     from graph.builder import build_graph, load_raw_edges
     from graph.metrics import compute_betweenness, compute_clustering
     from graph.risk_scorer import score_all, write_scores
+    from ml.features.feature_extractor import compute_entropy_trends
 
     d = date.fromisoformat(snapshot_date_str)
     raw_edges = load_raw_edges(d, window_days)
@@ -74,8 +75,9 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
 
     betweenness = compute_betweenness(G)
     clustering = compute_clustering(G)
-    scores = score_all(G, betweenness, clustering)
-    write_scores(scores, {}, d)
+    entropy_trends = compute_entropy_trends(d, window_days)
+    scores = score_all(G, betweenness, clustering, entropy_trends=entropy_trends)
+    write_scores(scores, entropy_trends, d)
 
     critical = sum(1 for s in scores.values() if s >= 0.7)
     warning = sum(1 for s in scores.values() if 0.5 <= s < 0.7)

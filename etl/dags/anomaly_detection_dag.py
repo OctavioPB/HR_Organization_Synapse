@@ -1,11 +1,18 @@
-"""Weekly DAG: run ML anomaly detection on rolling graph metrics.
+"""Weekly DAG: ML anomaly detection on rolling graph metrics.
 
 Schedule: 03:00 UTC every Monday.
-Sprint 4 stubs: actual ML tasks are placeholders that will be filled in S4.
-On completion it triggers risk_scoring_dag.
+On completion it triggers risk_scoring_dag so that SPOF scores reflect
+the latest anomaly signals.
+
+Task chain:
+    extract_features
+        → run_isolation_forest
+            → write_anomaly_alerts
+                → trigger_risk_scoring
 """
 
 import logging
+import os
 from datetime import timedelta
 
 from airflow.decorators import dag, task
@@ -13,6 +20,8 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.dates import days_ago
 
 logger = logging.getLogger(__name__)
+
+_WINDOW_DAYS = int(os.environ.get("GRAPH_WINDOW_DAYS", "30"))
 
 _DEFAULT_ARGS = {
     "owner": "org-synapse",
@@ -24,7 +33,7 @@ _DEFAULT_ARGS = {
 
 @dag(
     dag_id="anomaly_detection_dag",
-    description="Weekly ML anomaly detection on graph metrics (S4 stubs)",
+    description="Weekly ML anomaly detection on graph metrics",
     schedule="0 3 * * 1",
     start_date=days_ago(1),
     catchup=False,
@@ -35,45 +44,25 @@ def anomaly_detection_dag():
 
     @task()
     def extract_features(**context) -> dict:
-        """Extract rolling graph features for anomaly detection.
+        """Extract rolling graph features for all employees."""
+        from etl.tasks.run_anomaly import task_extract_features as _extract
 
-        Sprint 4: replace stub with ml.features.feature_extractor.extract_features().
-        """
-        logger.info(
-            "extract_features stub — Sprint 4 will implement feature extraction for %s",
-            context["ds"],
-        )
-        return {"snapshot_date": context["ds"], "feature_rows": 0}
+        return _extract(context["ds"], window_days=_WINDOW_DAYS)
 
     @task()
     def run_isolation_forest(feature_stats: dict) -> dict:
-        """Run Isolation Forest anomaly detection on extracted features.
+        """Run Isolation Forest and write connectivity_anomaly alerts."""
+        from etl.tasks.run_anomaly import task_run_isolation_forest as _run_if
 
-        Sprint 4: replace stub with ml.anomaly.isolation_forest.run().
-        """
-        logger.info(
-            "run_isolation_forest stub — Sprint 4 will implement anomaly detection "
-            "for snapshot %s",
-            feature_stats.get("snapshot_date"),
-        )
-        return {
-            "snapshot_date": feature_stats.get("snapshot_date"),
-            "anomalies_detected": 0,
-        }
+        snapshot_date_str = feature_stats["snapshot_date"]
+        return _run_if(snapshot_date_str, window_days=_WINDOW_DAYS)
 
     @task()
     def write_anomaly_alerts(anomaly_stats: dict) -> dict:
-        """Persist anomaly alerts to the alerts table.
+        """Log anomaly detection summary (alerts already written by run_isolation_forest)."""
+        from etl.tasks.run_anomaly import task_summarise_anomalies as _summarise
 
-        Sprint 4: replace stub with write_alerts() call from ml layer.
-        """
-        logger.info(
-            "write_anomaly_alerts stub — Sprint 4 will persist anomaly alerts "
-            "for snapshot %s (anomalies=%d)",
-            anomaly_stats.get("snapshot_date"),
-            anomaly_stats.get("anomalies_detected", 0),
-        )
-        return anomaly_stats
+        return _summarise(anomaly_stats)
 
     trigger_risk_scoring = TriggerDagRunOperator(
         task_id="trigger_risk_scoring",
@@ -84,8 +73,8 @@ def anomaly_detection_dag():
 
     features = extract_features()
     anomalies = run_isolation_forest(features)
-    alerts = write_anomaly_alerts(anomalies)
-    alerts >> trigger_risk_scoring
+    summary = write_anomaly_alerts(anomalies)
+    summary >> trigger_risk_scoring
 
 
 anomaly_detection_dag()
