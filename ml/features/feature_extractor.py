@@ -133,14 +133,14 @@ def _load_weekly_interactions(
     cur.execute(
         """
         SELECT
-            source_employee_id::text,
+            source_id::text,
             LEAST(
                 FLOOR(
                     EXTRACT(EPOCH FROM (ts::date - %s::date)) / 604800
                 )::int,
                 %s
             ) AS week_idx,
-            target_employee_id::text,
+            target_id::text,
             COUNT(*) AS cnt
         FROM raw_events
         WHERE ts >= %s::date
