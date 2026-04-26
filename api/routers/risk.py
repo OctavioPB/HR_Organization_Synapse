@@ -11,6 +11,9 @@ from api import db as queries
 from api.deps import get_db
 from graph.builder import build_graph, load_raw_edges
 from api.models.schemas import (
+    ChurnScore,
+    ChurnScoresResponse,
+    EmployeeChurnDetail,
     EmployeeRiskHistory,
     EmployeeRiskPoint,
     GraphHealthStats,
@@ -199,4 +202,65 @@ def simulate_removal(
         before=before_stats,
         after=after_stats,
         impact=impact,
+    )
+
+
+# ─── Churn risk ───────────────────────────────────────────────────────────────
+
+
+@router.get("/churn-scores", response_model=ChurnScoresResponse)
+def get_churn_scores(
+    date: date | None = Query(default=None),
+    top: int = Query(default=50, ge=1, le=500),
+    min_prob: float = Query(default=0.0, ge=0.0, le=1.0),
+    conn=Depends(get_db),
+) -> ChurnScoresResponse:
+    """Churn risk scores for all employees from the most recent GNN scoring run.
+
+    Args:
+        date: Specific scored_at date.  Defaults to the latest available.
+        top: Maximum number of employees to return (sorted by churn_prob desc).
+        min_prob: Only include employees with churn_prob >= min_prob.
+
+    Returns 404 when no scoring run has been executed yet.
+    """
+    scored_at = date
+    if scored_at is None:
+        scored_at = queries.fetch_latest_churn_date(conn)
+        if scored_at is None:
+            raise HTTPException(
+                status_code=404,
+                detail="No churn scores found. Run the churn_gnn_score DAG first.",
+            )
+
+    rows = queries.fetch_churn_scores(scored_at, top, min_prob, conn)
+    scores = [ChurnScore(**r) for r in rows]
+    return ChurnScoresResponse(scored_at=scored_at, total=len(scores), scores=scores)
+
+
+@router.get("/employee/{employee_id}/churn", response_model=EmployeeChurnDetail)
+def get_employee_churn(
+    employee_id: str,
+    conn=Depends(get_db),
+) -> EmployeeChurnDetail:
+    """Full churn score history for a single employee (up to 90 days).
+
+    Returns 404 when the employee has no churn scores on record.
+    """
+    rows = queries.fetch_employee_churn_history(employee_id, conn)
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No churn scores found for employee {employee_id}.",
+        )
+
+    history = [ChurnScore(**r) for r in rows]
+    latest = history[0]
+    return EmployeeChurnDetail(
+        employee_id=employee_id,
+        name=latest.name,
+        department=latest.department,
+        latest_churn_prob=latest.churn_prob,
+        latest_risk_tier=latest.risk_tier,
+        history=history,
     )

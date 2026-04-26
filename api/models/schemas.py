@@ -161,6 +161,34 @@ class KnowledgeIslandsResponse(BaseModel):
     source: Literal["neo4j", "networkx"]
 
 
+# ─── Churn risk ───────────────────────────────────────────────────────────────
+
+
+class ChurnScore(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    churn_prob: float = Field(..., ge=0.0, le=1.0, description="Model output probability [0,1]")
+    risk_tier: Literal["high", "medium", "low"]
+    model_version: str
+    scored_at: date
+
+
+class ChurnScoresResponse(BaseModel):
+    scored_at: date
+    total: int
+    scores: list[ChurnScore]
+
+
+class EmployeeChurnDetail(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    latest_churn_prob: float | None = None
+    latest_risk_tier: str | None = None
+    history: list[ChurnScore]
+
+
 # ─── Alerts ───────────────────────────────────────────────────────────────────
 
 

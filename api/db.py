@@ -377,3 +377,74 @@ def fetch_alert_history(days: int, conn) -> list[dict]:
             (days,),
         )
         return [dict(r) for r in cur.fetchall()]
+
+
+# ─── Churn risk ───────────────────────────────────────────────────────────────
+
+
+def fetch_churn_scores(
+    scored_at: date,
+    top: int,
+    min_prob: float,
+    conn,
+) -> list[dict]:
+    """Return churn scores for the given scored_at date.
+
+    Args:
+        scored_at: Date to query.
+        top: Maximum number of rows to return.
+        min_prob: Only return rows where churn_prob >= min_prob.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                cs.employee_id::text,
+                e.name,
+                e.department,
+                cs.churn_prob,
+                cs.risk_tier,
+                cs.model_version,
+                cs.scored_at
+            FROM churn_scores cs
+            JOIN employees e ON cs.employee_id = e.id
+            WHERE cs.scored_at = %s
+              AND cs.churn_prob >= %s
+            ORDER BY cs.churn_prob DESC
+            LIMIT %s
+            """,
+            (scored_at, min_prob, top),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def fetch_latest_churn_date(conn) -> date | None:
+    """Return the most recent scored_at date in churn_scores, or None."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(scored_at) FROM churn_scores")
+        row = cur.fetchone()
+    return row["max"] if row and row["max"] else None
+
+
+def fetch_employee_churn_history(employee_id: str, conn) -> list[dict]:
+    """Return full churn score history for one employee, most recent first."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                cs.employee_id::text,
+                e.name,
+                e.department,
+                cs.churn_prob,
+                cs.risk_tier,
+                cs.model_version,
+                cs.scored_at
+            FROM churn_scores cs
+            JOIN employees e ON cs.employee_id = e.id
+            WHERE cs.employee_id = %s::uuid
+            ORDER BY cs.scored_at DESC
+            LIMIT 90
+            """,
+            (employee_id,),
+        )
+        return [dict(r) for r in cur.fetchall()]
