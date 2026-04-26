@@ -426,6 +426,99 @@ def fetch_latest_churn_date(conn) -> date | None:
     return row["max"] if row and row["max"] else None
 
 
+# ─── Temporal graph analysis ──────────────────────────────────────────────────
+
+
+def fetch_temporal_flow(
+    employee_id: str,
+    weeks: int,
+    conn,
+) -> list[dict]:
+    """Return weekly graph metric time series for one employee.
+
+    Args:
+        employee_id: UUID string.
+        weeks: Number of most-recent weekly snapshots to return.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                gs.snapshot_date,
+                gs.betweenness,
+                gs.degree_in,
+                gs.degree_out,
+                gs.clustering,
+                gs.community_id
+            FROM graph_snapshots gs
+            WHERE gs.employee_id = %s::uuid
+            ORDER BY gs.snapshot_date DESC
+            LIMIT %s
+            """,
+            (employee_id, weeks),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+    rows.reverse()  # oldest first
+    return rows
+
+
+def fetch_employee_temporal_meta(employee_id: str, conn) -> dict | None:
+    """Return name and department for one employee."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT name, department FROM employees WHERE id = %s::uuid",
+            (employee_id,),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def fetch_temporal_anomaly_scores(
+    scored_at: date,
+    top: int,
+    min_score: float,
+    conn,
+) -> list[dict]:
+    """Return temporal anomaly scores for a given scoring date.
+
+    Args:
+        scored_at: Date of the scoring run.
+        top: Maximum rows to return.
+        min_score: Only return employees with anomaly_score >= min_score.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                ta.employee_id::text,
+                e.name,
+                e.department,
+                ta.anomaly_score,
+                ta.anomaly_tier,
+                ta.reconstruction_error,
+                ta.trend_slope,
+                ta.model_version,
+                ta.scored_at
+            FROM temporal_anomaly_scores ta
+            JOIN employees e ON ta.employee_id = e.id
+            WHERE ta.scored_at = %s
+              AND ta.anomaly_score >= %s
+            ORDER BY ta.anomaly_score DESC
+            LIMIT %s
+            """,
+            (scored_at, min_score, top),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def fetch_latest_temporal_anomaly_date(conn) -> date | None:
+    """Return the most recent scored_at in temporal_anomaly_scores, or None."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(scored_at) FROM temporal_anomaly_scores")
+        row = cur.fetchone()
+    return row["max"] if row and row["max"] else None
+
+
 def fetch_employee_churn_history(employee_id: str, conn) -> list[dict]:
     """Return full churn score history for one employee, most recent first."""
     with conn.cursor() as cur:

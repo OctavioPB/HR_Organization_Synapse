@@ -189,6 +189,44 @@ class EmployeeChurnDetail(BaseModel):
     history: list[ChurnScore]
 
 
+# ─── Temporal graph analysis ──────────────────────────────────────────────────
+
+
+class TemporalMetricPoint(BaseModel):
+    snapshot_date: date
+    betweenness: float = 0.0
+    degree_in: float = 0.0
+    degree_out: float = 0.0
+    clustering: float = 0.0
+    community_id: int | None = None
+
+
+class TemporalFlowResponse(BaseModel):
+    employee_id: str
+    name: str | None = None
+    department: str | None = None
+    weeks: int
+    series: list[TemporalMetricPoint]
+
+
+class TemporalAnomalyScore(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    anomaly_score: float = Field(..., ge=0.0, le=1.0)
+    anomaly_tier: Literal["high", "medium", "low"]
+    reconstruction_error: float
+    trend_slope: float = Field(..., description="Positive = worsening, negative = recovering")
+    model_version: str
+    scored_at: date
+
+
+class TemporalAnomalyResponse(BaseModel):
+    scored_at: date
+    total: int
+    scores: list[TemporalAnomalyScore]
+
+
 # ─── Alerts ───────────────────────────────────────────────────────────────────
 
 

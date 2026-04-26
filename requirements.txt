@@ -19,11 +19,13 @@ neo4j>=5.0
 scikit-learn>=1.4.0
 pyod>=1.1.0
 
-# ─── GNN (F1 — Churn Risk) ────────────────────────────────────────────────────
+# ─── GNN (F1 — Churn Risk, F2 — Temporal Graph Analysis) ─────────────────────
 # Install PyTorch first: https://pytorch.org/get-started/locally/
 # Then install torch-geometric: https://pytorch-geometric.readthedocs.io/
+# Then install torch-geometric-temporal: pip install torch-geometric-temporal
 torch>=2.2.0
 torch-geometric>=2.5.0
+torch-geometric-temporal>=0.54.0
 
 # ─── API ──────────────────────────────────────────────────────────────────────
 fastapi>=0.110.0

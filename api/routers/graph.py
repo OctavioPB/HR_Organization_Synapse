@@ -22,6 +22,10 @@ from api.models.schemas import (
     ReachabilityResponse,
     ReachableEmployee,
     ShortestPathResponse,
+    TemporalAnomalyResponse,
+    TemporalAnomalyScore,
+    TemporalFlowResponse,
+    TemporalMetricPoint,
 )
 from graph.builder import build_graph, load_raw_edges
 
@@ -248,6 +252,88 @@ def get_knowledge_islands(
         max_size=max_size,
         islands=[KnowledgeIsland(**i) for i in islands],
         source=source,
+    )
+
+
+# ─── Temporal graph analysis ──────────────────────────────────────────────────
+
+
+@router.get("/temporal/flow", response_model=TemporalFlowResponse)
+def get_temporal_flow(
+    employee_id: str = Query(..., description="Employee UUID"),
+    weeks: int = Query(default=12, ge=2, le=52),
+    conn=Depends(get_db),
+) -> TemporalFlowResponse:
+    """Weekly time series of graph metrics for one employee (oldest → newest).
+
+    Useful for visualising how an employee's centrality, connectivity, and
+    community membership have evolved over time.  Returns up to `weeks` data
+    points; may return fewer if the employee has fewer snapshots on record.
+
+    Returns 404 when the employee has no graph_snapshots.
+    """
+    series_rows = queries.fetch_temporal_flow(employee_id, weeks, conn)
+    if not series_rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No graph snapshots found for employee {employee_id}.",
+        )
+
+    meta = queries.fetch_employee_temporal_meta(employee_id, conn)
+    series = [TemporalMetricPoint(**r) for r in series_rows]
+
+    return TemporalFlowResponse(
+        employee_id=employee_id,
+        name=meta["name"] if meta else None,
+        department=meta["department"] if meta else None,
+        weeks=len(series),
+        series=series,
+    )
+
+
+@router.get("/temporal/anomalies", response_model=TemporalAnomalyResponse)
+def get_temporal_anomalies(
+    date: date | None = Query(default=None, description="Scoring date YYYY-MM-DD"),
+    top: int = Query(default=50, ge=1, le=500),
+    min_score: float = Query(default=0.0, ge=0.0, le=1.0),
+    conn=Depends(get_db),
+) -> TemporalAnomalyResponse:
+    """Employees ranked by temporal anomaly score from the most recent scoring run.
+
+    The anomaly score is the normalised graph-trajectory reconstruction error
+    from TemporalRiskGNN: high score means the employee's current graph metrics
+    deviate significantly from what the model predicted based on prior weeks.
+
+    Args:
+        date: Specific scoring date.  Defaults to the latest run.
+        top: Max employees to return.
+        min_score: Filter to employees with anomaly_score >= min_score.
+
+    Returns 404 when no scoring run has been executed yet.
+    """
+    scored_at = date
+    if scored_at is None:
+        scored_at = queries.fetch_latest_temporal_anomaly_date(conn)
+        if scored_at is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "No temporal anomaly scores found. "
+                    "Run the temporal_gnn_score DAG first."
+                ),
+            )
+
+    rows = queries.fetch_temporal_anomaly_scores(scored_at, top, min_score, conn)
+    scores = [TemporalAnomalyScore(**r) for r in rows]
+
+    logger.info(
+        "GET /graph/temporal/anomalies scored_at=%s returned=%d",
+        scored_at, len(scores),
+    )
+    return TemporalAnomalyResponse(
+        scored_at=scored_at,
+        total=len(scores),
+        scores=scores,
     )
 
 
