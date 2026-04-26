@@ -27,8 +27,10 @@ _MIN_EVENTS = int(os.environ.get("GRAPH_MIN_EVENTS", "100"))
 
 _DEFAULT_ARGS = {
     "owner": "org-synapse",
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    "retries": 3,
+    "retry_delay": timedelta(minutes=2),
+    "retry_exponential_backoff": True,  # delays: 2m, 4m, 8m
+    "max_retry_delay": timedelta(minutes=30),
     "email_on_failure": False,
 }
 
@@ -72,8 +74,12 @@ def graph_builder_dag():
     @task(on_failure_callback=_on_failure_callback)
     def compute_metrics(**context) -> dict:
         from etl.tasks.compute_centrality import task_compute_metrics as _metrics
+        from api.cache import invalidate_snapshot
 
-        return _metrics(context["ds"], window_days=_WINDOW_DAYS)
+        result = _metrics(context["ds"], window_days=_WINDOW_DAYS)
+        # Invalidate the Redis snapshot cache so the API serves fresh data immediately
+        invalidate_snapshot(context["ds"])
+        return result
 
     @task(on_failure_callback=_on_failure_callback)
     def detect_silos(**context) -> dict:

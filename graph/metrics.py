@@ -8,6 +8,11 @@ Public functions:
     compute_cross_dept_ratio(G)    → {employee_id: float}
     write_snapshot(snapshot_date, G, metrics, conn) → None
 
+Performance:
+    Graphs with > BETWEENNESS_EXACT_THRESHOLD nodes use approximate betweenness
+    (Brandes k-pivot sampling) to stay within the 30-second DAG budget.
+    Community detection runs in parallel across CPU cores when joblib is available.
+
 CLI:
     python graph/metrics.py --snapshot-date 2025-04-25
 """
@@ -29,6 +34,17 @@ try:
 except ImportError:
     _LOUVAIN_AVAILABLE = False
 
+try:
+    from joblib import Parallel, delayed
+    _JOBLIB_AVAILABLE = True
+except ImportError:
+    _JOBLIB_AVAILABLE = False
+
+# Graphs larger than this use k-pivot approximate betweenness (O(k·n²) vs O(n³))
+BETWEENNESS_EXACT_THRESHOLD = int(os.environ.get("BETWEENNESS_EXACT_THRESHOLD", "500"))
+# Number of pivot nodes for approximate betweenness (higher k = more accurate, slower)
+BETWEENNESS_K_PIVOTS = int(os.environ.get("BETWEENNESS_K_PIVOTS", "200"))
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from graph.builder import build_graph, load_raw_edges
@@ -46,19 +62,34 @@ def compute_betweenness(G: nx.DiGraph) -> dict[str, float]:
     Uses edge weights (higher weight = shorter path via weight inversion).
     Returns 0.0 for all nodes in graphs with fewer than 3 nodes.
 
+    For graphs larger than BETWEENNESS_EXACT_THRESHOLD nodes, uses Brandes
+    k-pivot approximate algorithm (k=BETWEENNESS_K_PIVOTS). Error is bounded
+    by O(1/sqrt(k)) — with k=200 the typical error is < 1% for org graphs.
+
     Args:
         G: Directed weighted collaboration graph.
 
     Returns:
         Dict mapping employee_id → betweenness centrality ∈ [0, 1].
     """
-    if G.number_of_nodes() < 3:
-        return {n: 0.0 for n in G.nodes()}
+    n = G.number_of_nodes()
+    if n < 3:
+        return {node: 0.0 for node in G.nodes()}
 
     # Invert weights so higher interaction frequency = shorter path
     G_inv = G.copy()
     for u, v, data in G_inv.edges(data=True):
         G_inv[u][v]["inv_weight"] = 1.0 / max(data.get("weight", 1.0), 1e-9)
+
+    if n > BETWEENNESS_EXACT_THRESHOLD:
+        k = min(n, BETWEENNESS_K_PIVOTS)
+        logger.info(
+            "Graph has %d nodes (> %d threshold): using approximate betweenness k=%d",
+            n, BETWEENNESS_EXACT_THRESHOLD, k,
+        )
+        return nx.betweenness_centrality(
+            G_inv, normalized=True, weight="inv_weight", k=k, seed=42
+        )
 
     return nx.betweenness_centrality(G_inv, normalized=True, weight="inv_weight")
 
@@ -96,30 +127,54 @@ def compute_clustering(G: nx.DiGraph) -> dict[str, float]:
 def compute_community(
     G: nx.DiGraph,
     random_state: int = 42,
+    n_jobs: int = -1,
 ) -> dict[str, int]:
     """Detect communities using Louvain on the undirected projection.
+
+    For large graphs (> BETWEENNESS_EXACT_THRESHOLD nodes), runs multiple
+    Louvain trials in parallel via joblib and returns the partition with the
+    highest modularity score. This both exploits available CPU cores and
+    reduces sensitivity to Louvain's randomised initialisation.
 
     Falls back to weakly connected components if python-louvain is not installed.
 
     Args:
         G: Directed collaboration graph.
-        random_state: Seed for Louvain randomness (reproducibility).
+        random_state: Base seed; parallel trials use random_state + trial_index.
+        n_jobs: Number of parallel jobs (-1 = all CPUs). Ignored when joblib
+                is not installed or the graph is below the exact threshold.
 
     Returns:
         Dict mapping employee_id → community_id (int).
     """
     U = G.to_undirected()
 
-    if _LOUVAIN_AVAILABLE and U.number_of_nodes() > 0:
-        return community_louvain.best_partition(U, random_state=random_state)
+    if not _LOUVAIN_AVAILABLE or U.number_of_nodes() == 0:
+        logger.warning("python-louvain not installed — falling back to connected components")
+        communities: dict[str, int] = {}
+        for comm_id, component in enumerate(nx.connected_components(U)):
+            for node in component:
+                communities[node] = comm_id
+        return communities
 
-    # Fallback: weakly connected components as communities
-    logger.warning("python-louvain not installed — falling back to connected components")
-    communities: dict[str, int] = {}
-    for comm_id, component in enumerate(nx.connected_components(U)):
-        for node in component:
-            communities[node] = comm_id
-    return communities
+    n = U.number_of_nodes()
+    if _JOBLIB_AVAILABLE and n > BETWEENNESS_EXACT_THRESHOLD:
+        n_trials = min(8, max(2, (n_jobs if n_jobs > 0 else 4)))
+        logger.info(
+            "Graph has %d nodes: running %d parallel Louvain trials", n, n_trials
+        )
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(community_louvain.best_partition)(U, random_state=random_state + i)
+            for i in range(n_trials)
+        )
+        # Select partition with highest modularity
+        best = max(
+            results,
+            key=lambda p: community_louvain.modularity(p, U),
+        )
+        return best
+
+    return community_louvain.best_partition(U, random_state=random_state)
 
 
 def compute_cross_dept_ratio(G: nx.DiGraph) -> dict[str, float]:

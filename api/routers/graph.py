@@ -7,7 +7,7 @@ from datetime import date
 import networkx as nx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api import db as queries
+from api import cache, db as queries
 from api.deps import get_db
 from api.models.schemas import (
     CommunitiesResponse,
@@ -53,8 +53,16 @@ def get_snapshot(
     """Full graph adjacency list with per-node metrics for a given snapshot date.
 
     Returns the latest available snapshot when no date is specified.
+    Responses are cached in Redis for CACHE_TTL_SEC seconds (default 1 hour).
+    Cache is automatically invalidated when graph_builder_dag writes a new snapshot.
     """
     snapshot_date = _resolve_date(date, conn)
+    cache_key = cache.make_key("snapshot", str(snapshot_date), str(window_days))
+
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.debug("GET /graph/snapshot cache HIT date=%s", snapshot_date)
+        return GraphSnapshot(**cached)
 
     node_rows = queries.fetch_graph_nodes(snapshot_date, conn)
     if not node_rows:
@@ -68,17 +76,20 @@ def get_snapshot(
     nodes = [NodeMetrics(**r) for r in node_rows]
     edges = [GraphEdge(**r) for r in edge_rows]
 
-    logger.info(
-        "GET /graph/snapshot date=%s nodes=%d edges=%d",
-        snapshot_date, len(nodes), len(edges),
-    )
-    return GraphSnapshot(
+    response = GraphSnapshot(
         snapshot_date=snapshot_date,
         node_count=len(nodes),
         edge_count=len(edges),
         nodes=nodes,
         edges=edges,
     )
+    cache.set(cache_key, response.model_dump(mode="json"))
+
+    logger.info(
+        "GET /graph/snapshot date=%s nodes=%d edges=%d",
+        snapshot_date, len(nodes), len(edges),
+    )
+    return response
 
 
 @router.get("/employee/{employee_id}", response_model=EgoNetwork)

@@ -14,8 +14,10 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_ARGS = {
     "owner": "org-synapse",
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    "retries": 3,
+    "retry_delay": timedelta(minutes=2),
+    "retry_exponential_backoff": True,  # delays: 2m, 4m, 8m
+    "max_retry_delay": timedelta(minutes=30),
     "email_on_failure": False,
 }
 

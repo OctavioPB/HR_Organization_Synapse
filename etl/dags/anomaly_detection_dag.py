@@ -25,8 +25,10 @@ _WINDOW_DAYS = int(os.environ.get("GRAPH_WINDOW_DAYS", "30"))
 
 _DEFAULT_ARGS = {
     "owner": "org-synapse",
-    "retries": 1,
-    "retry_delay": timedelta(minutes=10),
+    "retries": 3,
+    "retry_delay": timedelta(minutes=5),
+    "retry_exponential_backoff": True,  # delays: 5m, 10m, 20m
+    "max_retry_delay": timedelta(minutes=60),
     "email_on_failure": False,
 }
 

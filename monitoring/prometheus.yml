@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service: org-synapse
+
+scrape_configs:
+  # FastAPI application metrics
+  - job_name: org_synapse_api
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  # Kafka JMX metrics (via kafka-exporter sidecar — optional)
+  # Uncomment when kafka-exporter is deployed alongside Kafka
+  # - job_name: kafka
+  #   static_configs:
+  #     - targets: ["kafka-exporter:9308"]
+  #   scrape_interval: 30s
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
