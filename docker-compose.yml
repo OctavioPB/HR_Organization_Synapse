@@ -10,8 +10,32 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-org_synapse_dev_secret}
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__LOGGING__LOG_LEVEL: INFO
+    # Project code is mounted read-only and added to PYTHONPATH
+    PYTHONPATH: /opt/airflow/project
+    # App database connection (separate from Airflow's own DB)
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: ${POSTGRES_DB:-org_synapse}
+    POSTGRES_USER: ${POSTGRES_USER:-opb}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    # Graph & ML config
+    GRAPH_WINDOW_DAYS: ${GRAPH_WINDOW_DAYS:-30}
+    GRAPH_MIN_EVENTS: ${GRAPH_MIN_EVENTS:-100}
+    SILO_THRESHOLD: ${SILO_THRESHOLD:-4.0}
+    SPOF_ALPHA: ${SPOF_ALPHA:-0.4}
+    SPOF_BETA: ${SPOF_BETA:-0.3}
+    SPOF_GAMMA: ${SPOF_GAMMA:-0.2}
+    SPOF_DELTA: ${SPOF_DELTA:-0.1}
+    # Pip-installable project dependencies (pre-baked into custom image in production)
+    _PIP_ADDITIONAL_REQUIREMENTS: >-
+      networkx>=3.0
+      python-louvain>=0.16
+      psycopg2-binary>=2.9
+      pydantic>=2.0
+      kafka-python>=2.0
   volumes:
     - ./etl/dags:/opt/airflow/dags
+    - ./:/opt/airflow/project:ro
     - airflow_logs:/opt/airflow/logs
   depends_on:
     postgres:
