@@ -13,6 +13,7 @@ sqlalchemy>=2.0
 networkx>=3.0
 python-louvain>=0.16
 pandas>=2.0.0
+neo4j>=5.0
 
 # ─── ML / Anomaly detection ───────────────────────────────────────────────────
 scikit-learn>=1.4.0

@@ -17,6 +17,7 @@ import os
 from datetime import timedelta
 
 from airflow.decorators import dag, task
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.dates import days_ago
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,13 @@ def graph_builder_dag():
 
         return _flag(context["ds"])
 
+    trigger_neo4j = TriggerDagRunOperator(
+        task_id="trigger_neo4j_import",
+        trigger_dag_id="neo4j_import_dag",
+        wait_for_completion=False,  # fire-and-forget; Neo4j may not be deployed
+        reset_dag_run=True,
+    )
+
     # Chain: each task passes its return value downstream (XCom) but
     # dependencies are explicit to guarantee execution order.
     raw_count = check_raw_events()
@@ -101,7 +109,7 @@ def graph_builder_dag():
     risk_stats = score_risks()
     spof_stats = flag_spof_critical()
 
-    raw_count >> graph_stats >> metric_stats >> silo_stats >> risk_stats >> spof_stats
+    raw_count >> graph_stats >> metric_stats >> silo_stats >> risk_stats >> spof_stats >> trigger_neo4j
 
 
 graph_builder_dag()

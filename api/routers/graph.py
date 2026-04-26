@@ -1,9 +1,10 @@
-"""Router: /graph — graph snapshot, ego-network, and community endpoints."""
+"""Router: /graph — graph snapshot, ego-network, community, and path endpoints."""
 
 import logging
 import os
 from datetime import date
 
+import networkx as nx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api import db as queries
@@ -14,8 +15,15 @@ from api.models.schemas import (
     EgoNetwork,
     GraphEdge,
     GraphSnapshot,
+    KnowledgeIsland,
+    KnowledgeIslandsResponse,
     NodeMetrics,
+    PathNode,
+    ReachabilityResponse,
+    ReachableEmployee,
+    ShortestPathResponse,
 )
+from graph.builder import build_graph, load_raw_edges
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -123,3 +131,181 @@ def get_communities(
         community_count=len(communities),
         communities=communities,
     )
+
+
+@router.get("/path", response_model=ShortestPathResponse)
+def get_shortest_path(
+    from_employee_id: str = Query(..., description="Source employee UUID"),
+    to_employee_id: str = Query(..., description="Target employee UUID"),
+    conn=Depends(get_db),
+) -> ShortestPathResponse:
+    """Shortest collaboration path between two employees.
+
+    Queries Neo4j when available; falls back to NetworkX if Neo4j is unreachable.
+    Returns 404 if the two employees are not connected within 6 hops.
+    """
+    from graph.neo4j_client import neo4j_available, query_shortest_path
+
+    if neo4j_available():
+        result = query_shortest_path(from_employee_id, to_employee_id)
+        source = "neo4j"
+    else:
+        result = _nx_shortest_path(from_employee_id, to_employee_id, conn)
+        source = "networkx"
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No collaboration path found between {from_employee_id[:8]}… "
+                f"and {to_employee_id[:8]}… within 6 hops."
+            ),
+        )
+
+    logger.info(
+        "GET /graph/path source=%s hops=%d from=%s to=%s",
+        source, result["hops"], from_employee_id[:8], to_employee_id[:8],
+    )
+    return ShortestPathResponse(
+        from_employee_id=from_employee_id,
+        to_employee_id=to_employee_id,
+        path=[PathNode(**n) for n in result["path"]],
+        hops=result["hops"],
+        source=source,
+    )
+
+
+@router.get("/reachability/{employee_id}", response_model=ReachabilityResponse)
+def get_reachability(
+    employee_id: str,
+    hops: int = Query(default=2, ge=1, le=4, description="Maximum hop distance"),
+    conn=Depends(get_db),
+) -> ReachabilityResponse:
+    """All employees reachable from the given employee within N undirected hops.
+
+    Queries Neo4j when available; falls back to NetworkX if Neo4j is unreachable.
+    Useful for understanding an employee's extended influence or isolation.
+    """
+    from graph.neo4j_client import neo4j_available, query_reachability
+
+    if neo4j_available():
+        reachable = query_reachability(employee_id, hops)
+        source = "neo4j"
+    else:
+        reachable = _nx_reachability(employee_id, hops, conn)
+        source = "networkx"
+
+    logger.info(
+        "GET /graph/reachability/%s hops=%d reachable=%d source=%s",
+        employee_id[:8], hops, len(reachable), source,
+    )
+    return ReachabilityResponse(
+        employee_id=employee_id,
+        hops=hops,
+        reachable_count=len(reachable),
+        reachable=[ReachableEmployee(**r) for r in reachable],
+        source=source,
+    )
+
+
+@router.get("/knowledge-islands", response_model=KnowledgeIslandsResponse)
+def get_knowledge_islands(
+    max_size: int = Query(default=2, ge=1, le=10, description="Max connection count to qualify"),
+    conn=Depends(get_db),
+) -> KnowledgeIslandsResponse:
+    """Employees with very few collaboration connections (knowledge islands).
+
+    Identifies employees who interact with at most max_size unique colleagues,
+    making them potential knowledge silos or at-risk of isolation.
+    Queries Neo4j when available; falls back to NetworkX if unreachable.
+    """
+    from graph.neo4j_client import neo4j_available, query_knowledge_islands
+
+    if neo4j_available():
+        islands = query_knowledge_islands(max_size)
+        source = "neo4j"
+    else:
+        islands = _nx_knowledge_islands(max_size, conn)
+        source = "networkx"
+
+    logger.info(
+        "GET /graph/knowledge-islands max_size=%d found=%d source=%s",
+        max_size, len(islands), source,
+    )
+    return KnowledgeIslandsResponse(
+        total=len(islands),
+        max_size=max_size,
+        islands=[KnowledgeIsland(**i) for i in islands],
+        source=source,
+    )
+
+
+# ─── NetworkX fallback helpers ────────────────────────────────────────────────
+
+
+def _load_latest_graph(conn):
+    """Load the most recent graph snapshot from PostgreSQL via NetworkX."""
+    snapshot_date = queries.fetch_latest_snapshot_date(conn)
+    if snapshot_date is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No graph snapshots found. Run the graph_builder_dag first.",
+        )
+    raw_edges = load_raw_edges(snapshot_date, _WINDOW_DAYS)
+    return build_graph(raw_edges)
+
+
+def _nx_shortest_path(from_id: str, to_id: str, conn) -> dict | None:
+    G = _load_latest_graph(conn)
+    G_undirected = G.to_undirected()
+    try:
+        path_nodes = nx.shortest_path(G_undirected, from_id, to_id)
+    except (nx.NetworkXNoPath, nx.NodeNotFound):
+        return None
+    return {
+        "path": [
+            {
+                "employee_id": n,
+                "name": None,
+                "department": G.nodes[n].get("department") if n in G else None,
+            }
+            for n in path_nodes
+        ],
+        "hops": len(path_nodes) - 1,
+    }
+
+
+def _nx_reachability(employee_id: str, hops: int, conn) -> list[dict]:
+    G = _load_latest_graph(conn)
+    if employee_id not in G:
+        return []
+    ego = nx.ego_graph(G.to_undirected(), employee_id, radius=hops)
+    return [
+        {
+            "employee_id": n,
+            "name": None,
+            "department": G.nodes[n].get("department") if n in G else None,
+            "spof_score": None,
+        }
+        for n in ego.nodes()
+        if n != employee_id
+    ]
+
+
+def _nx_knowledge_islands(max_size: int, conn) -> list[dict]:
+    G = _load_latest_graph(conn)
+    G_undirected = G.to_undirected()
+    islands = []
+    for node in G_undirected.nodes():
+        connection_count = G_undirected.degree(node)
+        if connection_count <= max_size:
+            islands.append(
+                {
+                    "employee_id": node,
+                    "name": None,
+                    "department": G.nodes[node].get("department"),
+                    "connection_count": connection_count,
+                }
+            )
+    islands.sort(key=lambda x: x["connection_count"])
+    return islands

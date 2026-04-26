@@ -8,7 +8,7 @@ receive anonymized data without names.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -113,6 +113,52 @@ class SimulateResponse(BaseModel):
     before: GraphHealthStats
     after: GraphHealthStats
     impact: dict[str, Any]
+
+
+# ─── Neo4j graph queries ──────────────────────────────────────────────────────
+
+
+class PathNode(BaseModel):
+    employee_id: str
+    name: str | None = None
+    department: str | None = None
+
+
+class ShortestPathResponse(BaseModel):
+    from_employee_id: str
+    to_employee_id: str
+    path: list[PathNode]
+    hops: int
+    source: Literal["neo4j", "networkx"]
+
+
+class ReachableEmployee(BaseModel):
+    employee_id: str
+    name: str | None = None
+    department: str | None = None
+    spof_score: float | None = None
+
+
+class ReachabilityResponse(BaseModel):
+    employee_id: str
+    hops: int
+    reachable_count: int
+    reachable: list[ReachableEmployee]
+    source: Literal["neo4j", "networkx"]
+
+
+class KnowledgeIsland(BaseModel):
+    employee_id: str
+    name: str | None = None
+    department: str | None = None
+    connection_count: int
+
+
+class KnowledgeIslandsResponse(BaseModel):
+    total: int
+    max_size: int
+    islands: list[KnowledgeIsland]
+    source: Literal["neo4j", "networkx"]
 
 
 # ─── Alerts ───────────────────────────────────────────────────────────────────

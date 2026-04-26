@@ -12,6 +12,10 @@ x-airflow-common: &airflow-common
     AIRFLOW__LOGGING__LOG_LEVEL: INFO
     # Project code is mounted read-only and added to PYTHONPATH
     PYTHONPATH: /opt/airflow/project
+    # Neo4j connection (used by neo4j_import_dag tasks)
+    NEO4J_URI: bolt://neo4j:7687
+    NEO4J_USER: neo4j
+    NEO4J_PASSWORD: ${NEO4J_PASSWORD:-changeme}
     # App database connection (separate from Airflow's own DB)
     POSTGRES_HOST: postgres
     POSTGRES_PORT: "5432"
@@ -109,6 +113,25 @@ services:
     environment:
       ADMINER_DEFAULT_SERVER: postgres
 
+  # ─── Neo4j ──────────────────────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7474:7474"   # HTTP browser
+      - "7687:7687"   # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-changeme}
+      NEO4J_PLUGINS: '["graph-data-science"]'
+      NEO4J_dbms_security_procedures_unrestricted: gds.*
+      NEO4J_dbms_security_procedures_allowlist: gds.*
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   # ─── Airflow init (runs once) ───────────────────────────────────────────────
   airflow-init:
     <<: *airflow-common
@@ -153,3 +176,4 @@ volumes:
   kafka_data:
   postgres_data:
   airflow_logs:
+  neo4j_data:
