@@ -25,7 +25,7 @@ class CollaborationEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_employee_id: str
     target_employee_id: str
-    channel: Literal["slack", "email", "jira", "calendar", "github"]
+    channel: Literal["slack", "email", "jira", "calendar", "github", "teams"]
     direction: Literal["sent", "mentioned", "invited", "assigned", "reviewed"]
     department_source: str
     department_target: str

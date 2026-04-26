@@ -14,7 +14,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import alerts, graph, risk
+from api.routers import alerts, connectors, graph, risk
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -53,6 +53,7 @@ app.add_middleware(
 app.include_router(graph.router)
 app.include_router(risk.router)
 app.include_router(alerts.router)
+app.include_router(connectors.router)
 
 
 # ─── Health / root ────────────────────────────────────────────────────────────

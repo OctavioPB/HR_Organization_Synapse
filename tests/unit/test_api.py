@@ -420,3 +420,166 @@ def test_alert_history_days_param_validated(client):
     """days=0 is below the minimum (ge=1) and must return 422."""
     resp = client.get("/alerts/history?days=0")
     assert resp.status_code == 422
+
+
+# ─── GET /graph/path ──────────────────────────────────────────────────────────
+
+
+_PATH_RESULT = {
+    "path": [
+        {"employee_id": _EMP_A, "name": "Alice", "department": "Engineering"},
+        {"employee_id": _EMP_B, "name": "Bob",   "department": "Sales"},
+    ],
+    "hops": 1,
+}
+
+
+def test_graph_path_neo4j_found(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=True),
+        patch("graph.neo4j_client.query_shortest_path", return_value=_PATH_RESULT),
+    ):
+        resp = client.get(f"/graph/path?from_employee_id={_EMP_A}&to_employee_id={_EMP_B}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["hops"] == 1
+    assert body["source"] == "neo4j"
+    assert len(body["path"]) == 2
+    assert body["path"][0]["employee_id"] == _EMP_A
+
+
+def test_graph_path_neo4j_no_path_returns_404(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=True),
+        patch("graph.neo4j_client.query_shortest_path", return_value=None),
+    ):
+        resp = client.get(f"/graph/path?from_employee_id={_EMP_A}&to_employee_id={_EMP_C}")
+    assert resp.status_code == 404
+
+
+def test_graph_path_networkx_fallback_when_neo4j_unavailable(client):
+    nx_result = {
+        "path": [
+            {"employee_id": _EMP_A, "name": None, "department": "Engineering"},
+            {"employee_id": _EMP_B, "name": None, "department": "Sales"},
+        ],
+        "hops": 1,
+    }
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=False),
+        patch("api.routers.graph._nx_shortest_path", return_value=nx_result),
+    ):
+        resp = client.get(f"/graph/path?from_employee_id={_EMP_A}&to_employee_id={_EMP_B}")
+    assert resp.status_code == 200
+    assert resp.json()["source"] == "networkx"
+
+
+def test_graph_path_missing_required_params(client):
+    """Both from_employee_id and to_employee_id are required (Query(...))."""
+    resp = client.get("/graph/path")
+    assert resp.status_code == 422
+
+
+# ─── GET /graph/reachability/{employee_id} ────────────────────────────────────
+
+
+_REACHABLE_ROWS = [
+    {"employee_id": _EMP_B, "name": "Bob",   "department": "Sales",  "spof_score": 0.3},
+    {"employee_id": _EMP_C, "name": "Carol", "department": "HR",     "spof_score": 0.5},
+]
+
+
+def test_graph_reachability_neo4j_returns_200(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=True),
+        patch("graph.neo4j_client.query_reachability", return_value=_REACHABLE_ROWS),
+    ):
+        resp = client.get(f"/graph/reachability/{_EMP_A}?hops=2")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reachable_count"] == 2
+    assert body["source"] == "neo4j"
+    assert body["hops"] == 2
+
+
+def test_graph_reachability_empty_when_isolated(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=True),
+        patch("graph.neo4j_client.query_reachability", return_value=[]),
+    ):
+        resp = client.get(f"/graph/reachability/{_EMP_A}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reachable_count"] == 0
+    assert body["reachable"] == []
+
+
+def test_graph_reachability_networkx_fallback(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=False),
+        patch("api.routers.graph._nx_reachability", return_value=_REACHABLE_ROWS),
+    ):
+        resp = client.get(f"/graph/reachability/{_EMP_A}?hops=3")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["source"] == "networkx"
+    assert body["reachable_count"] == 2
+
+
+def test_graph_reachability_hops_out_of_range(client):
+    """hops must be ge=1, le=4; hops=5 must return 422."""
+    resp = client.get(f"/graph/reachability/{_EMP_A}?hops=5")
+    assert resp.status_code == 422
+
+
+# ─── GET /graph/knowledge-islands ────────────────────────────────────────────
+
+
+_ISLAND_ROWS = [
+    {"employee_id": _EMP_C, "name": "Carol", "department": "HR", "connection_count": 0},
+]
+
+
+def test_graph_knowledge_islands_neo4j_returns_200(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=True),
+        patch("graph.neo4j_client.query_knowledge_islands", return_value=_ISLAND_ROWS),
+    ):
+        resp = client.get("/graph/knowledge-islands")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["source"] == "neo4j"
+    assert body["islands"][0]["connection_count"] == 0
+
+
+def test_graph_knowledge_islands_empty_when_none(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=True),
+        patch("graph.neo4j_client.query_knowledge_islands", return_value=[]),
+    ):
+        resp = client.get("/graph/knowledge-islands")
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
+def test_graph_knowledge_islands_networkx_fallback(client):
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=False),
+        patch("api.routers.graph._nx_knowledge_islands", return_value=_ISLAND_ROWS),
+    ):
+        resp = client.get("/graph/knowledge-islands?max_size=1")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["source"] == "networkx"
+    assert body["max_size"] == 1
+
+
+def test_graph_knowledge_islands_max_size_forwarded(client):
+    """max_size query param must be passed through to the Neo4j query function."""
+    with (
+        patch("graph.neo4j_client.neo4j_available", return_value=True),
+        patch("graph.neo4j_client.query_knowledge_islands", return_value=[]) as mock_q,
+    ):
+        client.get("/graph/knowledge-islands?max_size=3")
+    mock_q.assert_called_once_with(3)
