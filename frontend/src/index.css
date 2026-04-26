@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary:    #003366;
+  --primary-80: #1A4D80;
+  --primary-60: #336699;
+  --primary-30: #99BBDD;
+  --primary-10: #E0EAF4;
+  --gold:       #C8982A;
+  --gold-light: #E8C46A;
+  --dark:       #1C1C2E;
+  --mid:        #6B7280;
+  --light:      #F4F6F9;
+  --white:      #FFFFFF;
+  --fd: 'Fraunces', Georgia, serif;
+  --fb: 'Plus Jakarta Sans', sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--light);
+  font-family: var(--fb);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--dark);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Gold eyebrow label */
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 9px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-family: var(--fb);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.eyebrow::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 1px;
+  background: var(--gold);
+  flex-shrink: 0;
+}
+
+/* Section divider */
+.section-divider {
+  height: 1px;
+  background: var(--primary-10);
+  border: none;
+  margin: 0;
+}
+
+/* Top accent bar on cards */
+.card-accent {
+  height: 3px;
+  background: var(--gold);
+  border-radius: 12px 12px 0 0;
+}
+
+/* Status badge base */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--fb);
+}
+.badge::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.badge-critical { background: #FDEAEA; color: #7A1020; }
+.badge-critical::before { background: #E03448; }
+.badge-warning  { background: #FEF0E6; color: #7A3800; }
+.badge-warning::before  { background: #F07020; }
+.badge-normal   { background: #E0F7EF; color: #0D5C3A; }
+.badge-normal::before   { background: #27B97C; }
+.badge-info     { background: #E0EAF4; color: #001F4D; }
+.badge-info::before     { background: #003366; }
+
+/* Sigma container */
+.sigma-container {
+  width: 100%;
+  height: 100%;
+}
