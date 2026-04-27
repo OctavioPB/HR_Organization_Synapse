@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 
 const NAV_LINKS = [
   { to: "/",      label: "Dashboard" },
+  { to: "/info",  label: "Platform" },
   { to: "/admin", label: "Admin" },
 ];
 
