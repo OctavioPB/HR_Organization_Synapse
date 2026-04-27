@@ -106,6 +106,68 @@ def graph_builder_dag():
         reset_dag_run=True,
     )
 
+    @task(trigger_rule="all_done")  # runs even if upstream tasks fail
+    def broadcast_alerts(**context) -> dict:
+        """Push today's new alerts to all connected WebSocket clients.
+
+        Calls POST /internal/alerts/broadcast on the local API.
+        Failure here does not affect DAG success/failure — WS is best-effort.
+        """
+        import os
+        import httpx
+
+        api_url = os.environ.get("API_INTERNAL_URL", "http://localhost:8000")
+        api_key = os.environ.get("INTERNAL_API_KEY", "")
+        snapshot_date = context["ds"]
+
+        # Fetch alerts fired in the last 24h
+        try:
+            from ingestion.db import get_conn
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            id::text, fired_at, type, severity,
+                            affected_entities, details, resolved, resolved_at
+                        FROM alerts
+                        WHERE fired_at >= NOW() - INTERVAL '24 hours'
+                        ORDER BY fired_at DESC
+                        LIMIT 50
+                        """,
+                    )
+                    alerts_rows = [dict(r) for r in cur.fetchall()]
+        except Exception as exc:
+            logger.warning("broadcast_alerts: could not fetch alerts from DB: %s", exc)
+            alerts_rows = []
+
+        payload = {
+            "source": "graph_builder_dag",
+            "alerts": alerts_rows,
+            "metadata": {"snapshot_date": snapshot_date},
+        }
+        headers = {}
+        if api_key:
+            headers["X-Internal-Key"] = api_key
+
+        try:
+            resp = httpx.post(
+                f"{api_url}/internal/alerts/broadcast",
+                json=payload,
+                headers=headers,
+                timeout=10,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+            logger.info(
+                "broadcast_alerts: pushed %d alerts to %d WS clients",
+                result.get("broadcast", 0), result.get("connections", 0),
+            )
+            return result
+        except Exception as exc:
+            logger.warning("broadcast_alerts: HTTP call failed (%s) — skipping", exc)
+            return {"broadcast": 0, "connections": 0}
+
     # Chain: each task passes its return value downstream (XCom) but
     # dependencies are explicit to guarantee execution order.
     raw_count = check_raw_events()
@@ -114,8 +176,10 @@ def graph_builder_dag():
     silo_stats = detect_silos()
     risk_stats = score_risks()
     spof_stats = flag_spof_critical()
+    ws_result = broadcast_alerts()
 
     raw_count >> graph_stats >> metric_stats >> silo_stats >> risk_stats >> spof_stats >> trigger_neo4j
+    spof_stats >> ws_result
 
 
 graph_builder_dag()

@@ -876,3 +876,78 @@ def fetch_employee_knowledge_profile(employee_id: str, conn) -> dict | None:
         profile["domains"] = [dict(r) for r in cur.fetchall()]
 
     return profile
+
+
+# ─── Org Health Score (F9) ────────────────────────────────────────────────────
+
+
+def fetch_latest_org_health(conn) -> dict | None:
+    """Return the most recent org health score row, or None if none computed yet."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT computed_at, score, tier, silo_count, avg_spof_score,
+                   avg_entropy_trend, wcc_count, node_count, component_scores
+            FROM org_health_scores
+            ORDER BY computed_at DESC
+            LIMIT 1
+            """
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def fetch_org_health_trend(weeks: int, conn) -> list[dict]:
+    """Return up to *weeks* health score rows, ordered oldest-first."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT computed_at, score, tier, silo_count, avg_spof_score,
+                   avg_entropy_trend, wcc_count, node_count
+            FROM org_health_scores
+            ORDER BY computed_at DESC
+            LIMIT %s
+            """,
+            (weeks,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+    return list(reversed(rows))  # chronological order
+
+
+def persist_org_health(data: dict, conn) -> None:
+    """Upsert an org health score row (ON CONFLICT computed_at DO UPDATE)."""
+    import json
+
+    component_scores = data.get("component_scores", {})
+    if not isinstance(component_scores, str):
+        component_scores = json.dumps(component_scores)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO org_health_scores
+                (computed_at, score, tier, silo_count, avg_spof_score,
+                 avg_entropy_trend, wcc_count, node_count, component_scores)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (computed_at) DO UPDATE
+                SET score             = EXCLUDED.score,
+                    tier              = EXCLUDED.tier,
+                    silo_count        = EXCLUDED.silo_count,
+                    avg_spof_score    = EXCLUDED.avg_spof_score,
+                    avg_entropy_trend = EXCLUDED.avg_entropy_trend,
+                    wcc_count         = EXCLUDED.wcc_count,
+                    node_count        = EXCLUDED.node_count,
+                    component_scores  = EXCLUDED.component_scores
+            """,
+            (
+                data["computed_at"],
+                data["score"],
+                data["tier"],
+                data["silo_count"],
+                data["avg_spof_score"],
+                data.get("avg_entropy_trend"),
+                data["wcc_count"],
+                data["node_count"],
+                component_scores,
+            ),
+        )

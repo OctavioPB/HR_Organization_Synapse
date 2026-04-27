@@ -325,6 +325,78 @@ class SuccessionResponse(BaseModel):
     recommendations: list[SuccessionRecommendation]
 
 
+# ─── Org Health Score (F9) ───────────────────────────────────────────────────
+
+
+class OrgHealthComponentScores(BaseModel):
+    silo: float = Field(..., ge=0.0, le=1.0)
+    spof: float = Field(..., ge=0.0, le=1.0)
+    entropy: float = Field(..., ge=0.0, le=1.0)
+    frag: float = Field(..., ge=0.0, le=1.0)
+
+
+class OrgHealthScore(BaseModel):
+    computed_at: date
+    score: float = Field(..., ge=0.0, le=100.0)
+    tier: Literal["healthy", "caution", "at_risk", "critical"]
+    silo_count: int
+    avg_spof_score: float
+    avg_entropy_trend: float | None = None
+    wcc_count: int
+    node_count: int
+    component_scores: OrgHealthComponentScores
+
+
+class OrgHealthTrendPoint(BaseModel):
+    computed_at: date
+    score: float
+    tier: Literal["healthy", "caution", "at_risk", "critical"]
+    silo_count: int
+    avg_spof_score: float
+
+
+class OrgHealthTrend(BaseModel):
+    weeks: int
+    points: list[OrgHealthTrendPoint]
+
+
+class RiskFactor(BaseModel):
+    factor: str
+    risk_level: float = Field(..., ge=0.0, le=1.0)
+
+
+class OrgHealthBriefing(BaseModel):
+    computed_at: str
+    score: float
+    tier: Literal["healthy", "caution", "at_risk", "critical"]
+    trend_delta: float
+    trend_direction: Literal["improving", "declining", "stable"]
+    top_risks: list[RiskFactor]
+    recommended_actions: list[str]
+    narrative: str
+
+
+# ─── NL Query (F7) ───────────────────────────────────────────────────────────
+
+
+class NLQueryRequest(BaseModel):
+    question: str = Field(..., min_length=3, max_length=2000)
+
+
+class ToolCall(BaseModel):
+    name: str
+    input: dict[str, Any]
+    result_summary: str
+
+
+class NLQueryResponse(BaseModel):
+    answer: str
+    tools_used: list[ToolCall]
+    model: str
+    turns: int
+    latency_ms: int
+
+
 # ─── Alerts ───────────────────────────────────────────────────────────────────
 
 
