@@ -16,7 +16,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import alerts, connectors, graph, internal, knowledge, org_health, query, risk, succession, ws
+from api.middleware.tenant_middleware import TenantMiddleware
+
+from api.routers import (
+    admin, alerts, billing, connectors, graph, internal,
+    knowledge, org_health, query, risk, succession, ws,
+)
 
 try:
     from prometheus_fastapi_instrumentator import Instrumentator as _PrometheusInstrumentator
@@ -80,6 +85,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(TenantMiddleware)   # extracts X-Tenant-ID + X-Api-Key → request.state
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +95,8 @@ app.include_router(alerts.router)
 app.include_router(connectors.router)
 app.include_router(knowledge.router)
 app.include_router(succession.router)
+app.include_router(admin.router)       # POST /admin/tenants (F6)
+app.include_router(billing.router)     # GET /billing/usage, POST /billing/webhook (F6)
 app.include_router(org_health.router)  # GET /org-health/* (F9)
 app.include_router(query.router)       # POST /query/natural (F7)
 app.include_router(ws.router)          # WS /alerts/live

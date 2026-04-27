@@ -325,6 +325,64 @@ class SuccessionResponse(BaseModel):
     recommendations: list[SuccessionRecommendation]
 
 
+# ─── Multi-tenant (F6) ───────────────────────────────────────────────────────
+
+
+class TenantCreateRequest(BaseModel):
+    slug: str = Field(..., min_length=3, max_length=63,
+                      pattern=r"^[a-z0-9][a-z0-9_-]{1,61}[a-z0-9]$")
+    name: str = Field(..., min_length=2, max_length=200)
+    plan: Literal["free", "starter", "pro", "enterprise"] = "free"
+
+
+class TenantCreateResponse(BaseModel):
+    tenant_id: str
+    slug: str
+    name: str
+    plan: str
+    schema_name: str
+    raw_api_key: str   # shown once — not stored
+
+
+class TenantDetail(BaseModel):
+    id: str
+    slug: str
+    name: str
+    plan: str
+    schema_name: str
+    active: bool
+    stripe_customer_id: str | None = None
+    created_at: datetime
+
+
+class TenantListResponse(BaseModel):
+    total: int
+    tenants: list[TenantDetail]
+
+
+class TenantApiKeyResponse(BaseModel):
+    key_id: str
+    tenant_id: str
+    name: str
+    raw_api_key: str   # shown once — not stored
+    created_at: datetime
+
+
+class UsageMonth(BaseModel):
+    month: date
+    event_count: int
+    reported_to_stripe: bool = False
+
+
+class BillingUsageResponse(BaseModel):
+    tenant_id: str
+    plan: str
+    current_month_events: int
+    plan_limit: int | None = None
+    usage_pct: float | None = None
+    history: list[UsageMonth]
+
+
 # ─── Org Health Score (F9) ───────────────────────────────────────────────────
 
 
