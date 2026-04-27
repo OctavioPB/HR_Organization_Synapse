@@ -1,8 +1,11 @@
 import { NavLink } from "react-router-dom";
 
 const NAV_LINKS = [
-  { to: "/", label: "Dashboard" },
+  { to: "/",      label: "Dashboard" },
+  { to: "/admin", label: "Admin" },
 ];
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 export default function Navbar() {
   return (
@@ -61,18 +64,37 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Right: report title */}
-      <span
-        style={{
-          fontFamily: "var(--fb)",
-          fontSize: "9px",
-          letterSpacing: "3px",
-          textTransform: "uppercase",
-          color: "rgba(255,255,255,.4)",
-        }}
-      >
-        Org Synapse · ONA Platform
-      </span>
+      {/* Right: external links + wordmark */}
+      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+        <a
+          href={`${API_BASE}/docs`}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            fontFamily: "var(--fb)",
+            fontSize: "11px",
+            letterSpacing: "1px",
+            textDecoration: "none",
+            color: "rgba(255,255,255,.45)",
+            transition: "color 150ms",
+          }}
+          onMouseEnter={e => e.target.style.color = "rgba(255,255,255,.8)"}
+          onMouseLeave={e => e.target.style.color = "rgba(255,255,255,.45)"}
+        >
+          API Docs ↗
+        </a>
+        <span
+          style={{
+            fontFamily: "var(--fb)",
+            fontSize: "9px",
+            letterSpacing: "3px",
+            textTransform: "uppercase",
+            color: "rgba(255,255,255,.25)",
+          }}
+        >
+          Org Synapse · ONA Platform
+        </span>
+      </div>
     </nav>
   );
 }

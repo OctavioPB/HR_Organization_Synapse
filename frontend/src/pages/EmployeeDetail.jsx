@@ -111,7 +111,7 @@ function SimulatePanel({ employeeId }) {
             margin: "0 0 16px",
           }}
         >
-          Recalculates graph health after removing this employee from the network.
+          Models what happens to collaboration health if this person left tomorrow. A higher network fragment count means previously connected teams would lose their shared communication path.
         </p>
 
         <button
@@ -243,7 +243,7 @@ function SimulatePanel({ employeeId }) {
                     color: "var(--dark)",
                   }}
                 >
-                  Components delta:{" "}
+                  Network fragments added:{" "}
                   <strong
                     style={{
                       color:
@@ -257,6 +257,11 @@ function SimulatePanel({ employeeId }) {
                     {data.impact.components_delta > 0 ? "+" : ""}
                     {data.impact.components_delta}
                   </strong>
+                  {data.impact.components_delta > 0 && (
+                    <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "#E03448", marginLeft: "6px" }}>
+                      — network splits into disconnected groups
+                    </span>
+                  )}
                 </span>
                 <span
                   style={{
@@ -265,11 +270,12 @@ function SimulatePanel({ employeeId }) {
                     color: "var(--dark)",
                   }}
                 >
-                  Betweenness shift:{" "}
+                  Avg. bridge load change:{" "}
                   <strong>
                     {data.impact.betweenness_avg_delta >= 0 ? "+" : ""}
                     {data.impact.betweenness_avg_delta.toFixed(6)}
                   </strong>
+                  <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "var(--mid)", marginLeft: "6px" }}>per remaining employee</span>
                 </span>
                 <span
                   style={{
@@ -278,8 +284,9 @@ function SimulatePanel({ employeeId }) {
                     color: "var(--dark)",
                   }}
                 >
-                  Edges removed:{" "}
+                  Collaboration links severed:{" "}
                   <strong>{data.impact.node_removed_degree}</strong>
+                  <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "var(--mid)", marginLeft: "6px" }}>direct connections lost</span>
                 </span>
               </div>
             </div>
@@ -404,12 +411,17 @@ export default function EmployeeDetail() {
       <div style={{ padding: "32px 48px 64px" }}>
         {/* Metrics row */}
         {employee && (
-          <div style={{ display: "flex", gap: "16px", marginBottom: "32px" }}>
-            <StatPill label="Betweenness" value={employee.betweenness} />
-            <StatPill label="Degree in" value={employee.degree_in} />
-            <StatPill label="Degree out" value={employee.degree_out} />
-            <StatPill label="Clustering" value={employee.clustering} />
-            <StatPill label="Neighbors" value={neighbors.length} unit="" />
+          <div style={{ marginBottom: "32px" }}>
+            <div style={{ display: "flex", gap: "16px", marginBottom: "10px" }}>
+              <StatPill label="Bridge Score" value={employee.betweenness} />
+              <StatPill label="Contacts In" value={employee.degree_in} />
+              <StatPill label="Contacts Out" value={employee.degree_out} />
+              <StatPill label="Team Density" value={employee.clustering} />
+              <StatPill label="Direct Links" value={neighbors.length} unit="" />
+            </div>
+            <p style={{ fontFamily: "var(--fb)", fontSize: "12px", color: "var(--mid)", margin: 0 }}>
+              <strong>Bridge Score</strong> — how often this person is the shortest path between other colleagues (high = critical connector). <strong>Team Density</strong> — how tightly interconnected their immediate circle is; low density means they are the primary link holding their cluster together. <strong>Contacts In/Out</strong> — collaboration volume received vs. initiated.
+            </p>
           </div>
         )}
 
@@ -445,7 +457,7 @@ export default function EmployeeDetail() {
                     margin: "2px 0 0",
                   }}
                 >
-                  Direct collaboration network · {neighbors.length} neighbors
+                  First-degree collaboration network — everyone this employee has directly exchanged with in the current window. {neighbors.length} active connection{neighbors.length !== 1 ? "s" : ""}. Larger nodes in the graph carry higher bridge scores.
                 </p>
               </div>
               <div style={{ height: "calc(100% - 72px)" }}>
@@ -481,7 +493,7 @@ export default function EmployeeDetail() {
                       margin: "2px 0 0",
                     }}
                   >
-                    SPOF score over time
+                    Departure risk score over time. Rising scores signal growing dependency. Dashed lines mark the warning (50) and critical (75) thresholds.
                   </p>
                 </div>
                 <select

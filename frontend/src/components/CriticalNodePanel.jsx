@@ -75,7 +75,18 @@ export default function CriticalNodePanel({ scores = [], loading = false }) {
             margin: "4px 0 0",
           }}
         >
-          Ranked by single-point-of-failure score
+          People whose absence would most disrupt collaboration. High-scorers bridge multiple teams with few peers who could absorb their role.
+        </p>
+        <p
+          style={{
+            fontFamily: "var(--fb)",
+            fontSize: "11px",
+            color: "var(--mid)",
+            margin: "6px 0 0",
+            opacity: 0.75,
+          }}
+        >
+          Score bar: <span style={{ color: "#27B97C" }}>■</span> low · <span style={{ color: "#336699" }}>■</span> moderate · <span style={{ color: "#F07020" }}>■</span> elevated · <span style={{ color: "#E03448" }}>■</span> critical &nbsp;·&nbsp; Trend: ↑ risk rising · ↓ improving · → stable
         </p>
       </div>
 

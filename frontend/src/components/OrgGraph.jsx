@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Graph from "graphology";
 import { SigmaContainer, useLoadGraph, useRegisterEvents } from "@react-sigma/core";
 import { useWorkerLayoutForceAtlas2 } from "@react-sigma/layout-forceatlas2";
-import "@react-sigma/core/lib/style.css";
+import "@react-sigma/core/lib/react-sigma.min.css";
 
 // SPOF score → node color per BRAND.md spec
 function spofColor(score) {

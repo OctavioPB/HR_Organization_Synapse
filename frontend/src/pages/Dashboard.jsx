@@ -68,24 +68,28 @@ function KpiCard({ value, label, sub }) {
 }
 
 export default function Dashboard() {
-  const { data: snapshot, isLoading: loadingGraph } = useQuery({
+  const { data: snapshot, isLoading: loadingGraph, isError: graphError, error: graphErr } = useQuery({
     queryKey: ["graph-snapshot"],
     queryFn: () => fetchGraphSnapshot(),
+    retry: 1,
   });
 
   const { data: riskData, isLoading: loadingRisk } = useQuery({
     queryKey: ["risk-scores"],
     queryFn: () => fetchRiskScores(10),
+    retry: 1,
   });
 
   const { data: siloData, isLoading: loadingAlerts } = useQuery({
     queryKey: ["silo-alerts"],
     queryFn: fetchSiloAlerts,
+    retry: 1,
   });
 
   const { data: communityData } = useQuery({
     queryKey: ["communities"],
     queryFn: () => fetchCommunities(),
+    retry: 1,
   });
 
   const nodes = snapshot?.nodes ?? [];
@@ -133,7 +137,7 @@ export default function Dashboard() {
             maxWidth: "560px",
           }}
         >
-          Real-time collaboration graph · SPOF risk scoring · Silo detection
+          See who bridges your teams, where collaboration is fragmenting, and which employees represent the greatest departure risk — surfaced from metadata before HR has any subjective signal.
         </p>
         {snapshot?.snapshot_date && (
           <div
@@ -157,12 +161,12 @@ export default function Dashboard() {
           <KpiCard
             value={snapshot?.node_count ?? "—"}
             label="Employees mapped"
-            sub="active in graph"
+            sub="with collaboration data this window"
           />
           <KpiCard
             value={snapshot?.edge_count ?? "—"}
             label="Collaboration edges"
-            sub="weighted interactions"
+            sub="cross-channel interactions recorded"
           />
           <KpiCard
             value={communityCount}
@@ -172,9 +176,31 @@ export default function Dashboard() {
           <KpiCard
             value={criticalCount}
             label="Critical nodes"
-            sub="SPOF score > 0.75"
+            sub="departure risk above critical — flag for retention review"
           />
         </div>
+
+        {/* No-data / API error banner */}
+        {!loadingGraph && (graphError || !snapshot) && (
+          <div style={{
+            background: "#FEF0E6", border: "1px solid #F07020", borderRadius: 8,
+            padding: "16px 20px", marginBottom: 24, display: "flex",
+            alignItems: "flex-start", gap: 12,
+          }}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>⚠</span>
+            <div style={{ fontFamily: "var(--fb)", fontSize: 13, color: "#7A3800" }}>
+              <strong>No graph data found.</strong>
+              {graphErr?.response?.status === 404
+                ? " The database has no snapshots yet."
+                : graphErr?.message
+                  ? ` API error: ${graphErr.message}`
+                  : " Could not reach the API — is uvicorn running on port 8000?"}
+              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 11, opacity: 0.8 }}>
+                Seed the database: <code>python scripts/seed_dev.py</code>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Silo alerts */}
         <div style={{ marginBottom: "24px" }}>
@@ -194,7 +220,7 @@ export default function Dashboard() {
               margin: "4px 0 0",
             }}
           >
-            Force-directed layout · Node size = betweenness centrality · Color = SPOF risk
+            Each dot is an employee. Larger nodes bridge more teams and carry more organizational risk. Color indicates departure risk: <span style={{ color: "#27B97C", fontWeight: 600 }}>blue</span> = low · <span style={{ color: "#F07020", fontWeight: 600 }}>orange</span> = elevated · <span style={{ color: "#E03448", fontWeight: 600 }}>red</span> = critical. Click any node to open their profile.
           </p>
         </div>
 

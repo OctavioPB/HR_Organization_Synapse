@@ -71,7 +71,7 @@ Collaboration tools (Slack, Teams, Jira, GitHub, Calendar, Confluence, Notion)
 
 | Layer | Technology |
 |---|---|
-| Ingestion | Apache Kafka 3.6 + kafka-python |
+| Ingestion | Apache Kafka 3.7 (KRaft mode, no Zookeeper) + kafka-python |
 | Orchestration | Apache Airflow 2.9 (LocalExecutor) |
 | Graph processing | NetworkX 3.x (betweenness, clustering, Louvain); optional Neo4j 5 |
 | ML | scikit-learn Isolation Forest · numpy polyfit entropy trend · PyTorch Geometric GNN (churn) |
@@ -229,7 +229,9 @@ uvicorn api.main:app --reload --port 8000
 ### 6. Start the frontend
 
 ```bash
-cd frontend && npm install && npm run dev
+cd frontend
+npm install
+npm run dev
 # Dashboard: http://localhost:5173
 ```
 

@@ -198,7 +198,7 @@ export default function SiloAlert({ alerts = [], loading = false }) {
             margin: "4px 0 0",
           }}
         >
-          Communities with isolation ratio above threshold
+          Teams where cross-department communication has dropped below a healthy baseline. Siloed groups are slower to respond to change and more exposed when key connectors leave. Click an alert to see affected employees.
         </p>
       </div>
 
