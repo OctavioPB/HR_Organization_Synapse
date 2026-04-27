@@ -951,3 +951,21 @@ def persist_org_health(data: dict, conn) -> None:
                 component_scores,
             ),
         )
+
+
+# ─── Compliance (F8) ──────────────────────────────────────────────────────────
+
+
+def fetch_purge_history(limit: int, conn) -> list[dict]:
+    """Return recent data retention purge runs, most-recent first."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT purged_at, table_name, rows_deleted, cutoff_date, triggered_by, status
+            FROM data_retention_purges
+            ORDER BY purged_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return [dict(r) for r in cur.fetchall()]

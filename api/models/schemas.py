@@ -434,6 +434,88 @@ class OrgHealthBriefing(BaseModel):
     narrative: str
 
 
+# ─── Compliance (F8) ─────────────────────────────────────────────────────────
+
+
+class DataCategory(BaseModel):
+    table: str
+    description: str
+    personal_data: bool
+    sensitivity: Literal["low", "medium", "high"]
+    retention_days: int | None
+    legal_basis: str
+    fields: list[str]
+    excludes_content: bool
+    row_count: int
+    cutoff_date: str | None = None
+
+
+class DataAuditReport(BaseModel):
+    generated_at: str
+    framework: list[str]
+    data_controller: str
+    dpo_contact: str
+    categories: list[DataCategory]
+    total_tables: int
+    total_personal_rows: int
+
+
+class RetentionPurgeResult(BaseModel):
+    table: str
+    rows_deleted: int
+    cutoff_date: str
+    status: Literal["completed", "failed", "partial"]
+    error: str | None = None
+
+
+class RetentionPurgeResponse(BaseModel):
+    triggered_at: str
+    results: list[RetentionPurgeResult]
+    total_rows_deleted: int
+
+
+class PurgeHistoryEntry(BaseModel):
+    purged_at: datetime
+    table_name: str
+    rows_deleted: int
+    cutoff_date: date
+    triggered_by: str
+    status: str
+
+
+class PurgeHistoryResponse(BaseModel):
+    total: int
+    entries: list[PurgeHistoryEntry]
+
+
+class ConsentUpdateRequest(BaseModel):
+    consent: bool
+    changed_by: str = Field(..., min_length=2, max_length=100)
+    reason: str | None = None
+
+
+class ConsentUpdateResponse(BaseModel):
+    employee_id: str
+    previous_value: bool
+    new_value: bool
+    changed_by: str
+    reason: str | None = None
+    changed_at: str
+
+
+class EmployeeDataExport(BaseModel):
+    export_generated_at: str
+    article: str
+    employee_id: str
+    employee: dict[str, Any]
+    raw_events: list[dict[str, Any]]
+    graph_snapshots: list[dict[str, Any]]
+    risk_scores: list[dict[str, Any]]
+    churn_scores: list[dict[str, Any]]
+    knowledge_entries: list[dict[str, Any]]
+    consent_audit_log: list[dict[str, Any]]
+
+
 # ─── NL Query (F7) ───────────────────────────────────────────────────────────
 
 

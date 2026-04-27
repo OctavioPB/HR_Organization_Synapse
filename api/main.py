@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.middleware.tenant_middleware import TenantMiddleware
 
 from api.routers import (
-    admin, alerts, billing, connectors, graph, internal,
+    admin, alerts, billing, compliance, connectors, graph, internal,
     knowledge, org_health, query, risk, succession, ws,
 )
 
@@ -99,6 +99,7 @@ app.include_router(admin.router)       # POST /admin/tenants (F6)
 app.include_router(billing.router)     # GET /billing/usage, POST /billing/webhook (F6)
 app.include_router(org_health.router)  # GET /org-health/* (F9)
 app.include_router(query.router)       # POST /query/natural (F7)
+app.include_router(compliance.router)  # GET /compliance/* (F8)
 app.include_router(ws.router)          # WS /alerts/live
 app.include_router(internal.router)   # POST /internal/alerts/broadcast
 
