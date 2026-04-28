@@ -68,6 +68,30 @@ def _graph_health_stats(G: nx.DiGraph) -> GraphHealthStats:
     )
 
 
+def _cross_dept_edges(G: nx.DiGraph) -> int:
+    """Count edges that cross department boundaries."""
+    return sum(
+        1 for u, v in G.edges()
+        if G.nodes[u].get("department") != G.nodes[v].get("department")
+    )
+
+
+def _avg_path_length(G: nx.DiGraph) -> float:
+    """Average shortest path length on the largest weakly connected component (undirected).
+
+    Uses the undirected projection to avoid issues with directed reachability.
+    Returns 0.0 when the graph has fewer than 2 nodes.
+    """
+    U = G.to_undirected()
+    if U.number_of_nodes() < 2:
+        return 0.0
+    largest_cc = max(nx.connected_components(U), key=len)
+    sub = U.subgraph(largest_cc)
+    if sub.number_of_nodes() < 2:
+        return 0.0
+    return round(nx.average_shortest_path_length(sub), 3)
+
+
 @router.get("/scores", response_model=RiskScoresResponse)
 def get_risk_scores(
     date: date | None = Query(default=None),
@@ -145,9 +169,10 @@ def simulate_removal(
     6. Return before/after stats and impact deltas.
 
     Impact dict includes:
-        - betweenness_avg_delta (positive = network more stressed)
-        - components_delta (positive = more isolated clusters)
-        - node_removed_degree (how many edges the removed employee had)
+        - cross_dept_loss_pct: % of cross-department edges that disappear
+        - avg_path_increase: increase in avg shortest path between colleagues
+        - components_delta: new isolated clusters formed (positive = splits)
+        - node_removed_degree: direct collaboration links this employee held
     """
     # Resolve the latest snapshot date to use as the window anchor
     latest_date = queries.fetch_latest_snapshot_date(conn)
@@ -174,18 +199,31 @@ def simulate_removal(
 
     before_stats = _graph_health_stats(G)
     degree_before = G.degree(body.remove_employee_id)
+    cross_before = _cross_dept_edges(G)
+    path_before = _avg_path_length(G)
 
     G_after = G.copy()
     G_after.remove_node(body.remove_employee_id)
     after_stats = _graph_health_stats(G_after)
+    cross_after = _cross_dept_edges(G_after)
+    path_after = _avg_path_length(G_after)
+
+    cross_dept_loss_pct = round(
+        (cross_before - cross_after) / max(cross_before, 1) * 100, 1
+    )
 
     impact = {
-        "betweenness_avg_delta": round(
-            after_stats.avg_betweenness - before_stats.avg_betweenness, 6
-        ),
         "components_delta": after_stats.weakly_connected_components
-        - before_stats.weakly_connected_components,
+            - before_stats.weakly_connected_components,
         "node_removed_degree": degree_before,
+        "cross_dept_edges_before": cross_before,
+        "cross_dept_edges_after": cross_after,
+        "cross_dept_loss_pct": cross_dept_loss_pct,
+        "avg_path_length_before": path_before,
+        "avg_path_length_after": path_after,
+        "avg_path_increase": round(path_after - path_before, 3),
+        "max_betweenness_before": round(before_stats.max_betweenness, 4),
+        "max_betweenness_after": round(after_stats.max_betweenness, 4),
     }
 
     logger.info(

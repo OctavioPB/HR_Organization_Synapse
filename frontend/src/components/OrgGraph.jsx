@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Graph from "graphology";
 import { SigmaContainer, useLoadGraph, useRegisterEvents } from "@react-sigma/core";
@@ -17,7 +17,7 @@ function spofSize(betweenness) {
   return 4 + betweenness * 20;
 }
 
-function GraphLoader({ nodes, edges, onNodeClick }) {
+function GraphLoader({ nodes, edges }) {
   const loadGraph = useLoadGraph();
   const registerEvents = useRegisterEvents();
   const navigate = useNavigate();
@@ -25,14 +25,14 @@ function GraphLoader({ nodes, edges, onNodeClick }) {
   useEffect(() => {
     const graph = new Graph({ type: "directed", multi: false });
 
-    nodes.forEach((n) => {
+    nodes.forEach((n, idx) => {
+      const angle = (idx / Math.max(nodes.length, 1)) * 2 * Math.PI;
       graph.addNode(n.employee_id, {
         label: n.name,
         size: spofSize(n.betweenness ?? 0),
         color: spofColor(n.spof_score ?? 0),
-        x: Math.random() * 200 - 100,
-        y: Math.random() * 200 - 100,
-        // store for click handler
+        x: Math.cos(angle) * 50,
+        y: Math.sin(angle) * 50,
         employeeId: n.employee_id,
       });
     });
@@ -64,14 +64,24 @@ function GraphLoader({ nodes, edges, onNodeClick }) {
   return null;
 }
 
+// FA2Controller has no callbacks — its lifecycle is self-contained.
+// The overlay in OrgGraph is driven by its own timer (6500ms), which is
+// 500ms longer than the FA2 run (6000ms) so positions are fully frozen
+// before the graph is revealed.
 function FA2Controller() {
-  const { start, stop, isRunning } = useWorkerLayoutForceAtlas2({
-    settings: { gravity: 1, scalingRatio: 2, slowDown: 5 },
+  const { start, stop } = useWorkerLayoutForceAtlas2({
+    settings: {
+      gravity: 8,
+      scalingRatio: 1,
+      linLogMode: true,
+      slowDown: 3,
+      barnesHutOptimize: true,
+    },
   });
 
   useEffect(() => {
     start();
-    const timer = setTimeout(() => stop(), 3000);
+    const timer = setTimeout(() => stop(), 6000);
     return () => {
       clearTimeout(timer);
       stop();
@@ -82,6 +92,22 @@ function FA2Controller() {
 }
 
 export default function OrgGraph({ nodes = [], edges = [], style }) {
+  const [layoutDone, setLayoutDone] = useState(false);
+
+  // graphId changes only when new data is loaded (different seed / navigation).
+  // Using the first node's UUID is stable across re-renders and resets the
+  // overlay exactly when the graph data actually changes.
+  const graphId = nodes.length > 0 ? nodes[0].employee_id : null;
+
+  useEffect(() => {
+    if (!graphId) return;
+    setLayoutDone(false);
+    // 6500ms: 500ms after FA2Controller calls stop(), ensuring positions
+    // are fully frozen before we remove the overlay and fade in.
+    const timer = setTimeout(() => setLayoutDone(true), 6500);
+    return () => clearTimeout(timer);
+  }, [graphId]);
+
   if (!nodes.length) {
     return (
       <div
@@ -103,8 +129,15 @@ export default function OrgGraph({ nodes = [], edges = [], style }) {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", ...style }}>
+      {/* Sigma renders behind the overlay while FA2 runs, then fades in */}
       <SigmaContainer
-        style={{ width: "100%", height: "100%", background: "var(--white)" }}
+        style={{
+          width: "100%",
+          height: "100%",
+          background: "var(--white)",
+          opacity: layoutDone ? 1 : 0,
+          transition: layoutDone ? "opacity 0.5s ease" : "none",
+        }}
         settings={{
           nodeProgramClasses: {},
           defaultEdgeType: "arrow",
@@ -121,6 +154,45 @@ export default function OrgGraph({ nodes = [], edges = [], style }) {
         <FA2Controller />
       </SigmaContainer>
 
+      {/* Loading overlay — removed once layout settles */}
+      {!layoutDone && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "var(--white)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "12px",
+            zIndex: 1,
+          }}
+        >
+          <style>{`@keyframes fa2spin { to { transform: rotate(360deg); } }`}</style>
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              border: "2px solid var(--primary-10)",
+              borderTop: "2px solid var(--primary)",
+              borderRadius: "50%",
+              animation: "fa2spin 0.8s linear infinite",
+            }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--fb)",
+              fontSize: "12px",
+              color: "var(--mid)",
+              letterSpacing: "1px",
+            }}
+          >
+            Calculating layout…
+          </span>
+        </div>
+      )}
+
       {/* Legend */}
       <div
         style={{
@@ -135,6 +207,7 @@ export default function OrgGraph({ nodes = [], edges = [], style }) {
           display: "flex",
           flexDirection: "column",
           gap: "6px",
+          zIndex: 2,
         }}
       >
         <span
@@ -155,10 +228,7 @@ export default function OrgGraph({ nodes = [], edges = [], style }) {
           { color: "#F07020", label: "High  (0.5–0.75)" },
           { color: "#E03448", label: "Critical  (> 0.75)" },
         ].map(({ color, label }) => (
-          <div
-            key={label}
-            style={{ display: "flex", alignItems: "center", gap: "8px" }}
-          >
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span
               style={{
                 width: "10px",
@@ -168,13 +238,7 @@ export default function OrgGraph({ nodes = [], edges = [], style }) {
                 flexShrink: 0,
               }}
             />
-            <span
-              style={{
-                fontFamily: "var(--fb)",
-                fontSize: "11px",
-                color: "var(--dark)",
-              }}
-            >
+            <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "var(--dark)" }}>
               {label}
             </span>
           </div>

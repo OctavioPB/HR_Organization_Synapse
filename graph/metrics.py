@@ -149,13 +149,33 @@ def compute_community(
     """
     U = G.to_undirected()
 
-    if not _LOUVAIN_AVAILABLE or U.number_of_nodes() == 0:
-        logger.warning("python-louvain not installed — falling back to connected components")
-        communities: dict[str, int] = {}
-        for comm_id, component in enumerate(nx.connected_components(U)):
-            for node in component:
-                communities[node] = comm_id
-        return communities
+    if U.number_of_nodes() == 0:
+        return {}
+
+    if not _LOUVAIN_AVAILABLE:
+        # python-louvain not installed — use NetworkX built-in Louvain (nx >= 3.0)
+        try:
+            community_sets = nx.community.louvain_communities(U, seed=random_state)
+            communities: dict[str, int] = {}
+            for comm_id, members in enumerate(community_sets):
+                for node in members:
+                    communities[node] = comm_id
+            logger.info(
+                "python-louvain unavailable — used NetworkX Louvain: %d communities",
+                len(community_sets),
+            )
+            return communities
+        except AttributeError:
+            # NetworkX < 3.0: last resort — connected components
+            logger.warning(
+                "NetworkX Louvain unavailable (nx < 3.0) — falling back to "
+                "connected components. Upgrade networkx for meaningful communities."
+            )
+            communities = {}
+            for comm_id, component in enumerate(nx.connected_components(U)):
+                for node in component:
+                    communities[node] = comm_id
+            return communities
 
     n = U.number_of_nodes()
     if _JOBLIB_AVAILABLE and n > BETWEENNESS_EXACT_THRESHOLD:

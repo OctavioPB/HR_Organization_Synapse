@@ -317,7 +317,7 @@ function SiloDiagram() {
 /* ─── Feature cards ──────────────────────────────────────────────────────────── */
 const FEATURES = [
   {
-    tag: "Data Pipeline",    abbr: "RT", color: "#336699",
+    tag: "Data Pipeline",    abbr: "RT", color: "#003366",
     title: "Real-Time Ingestion",
     body: "Metadata from Slack, Teams, Jira, GitHub, Calendar, and Confluence streams continuously via Apache Kafka. Only collaboration metadata is captured — who interacted with whom, on which channel, and when. Message content is never read.",
   },
@@ -327,47 +327,47 @@ const FEATURES = [
     body: "Every interaction becomes a weighted edge in a directed graph updated daily by Airflow. The graph reveals the true shape of how work gets done — typically very different from the org chart. NetworkX and Neo4j power all graph computation.",
   },
   {
-    tag: "Risk Scoring",     abbr: "SP", color: "#E03448",
+    tag: "Risk Scoring",     abbr: "SP", color: "#003366",
     title: "SPOF Risk Scoring",
     body: "A composite score (0–1) quantifies how much organizational disruption would result from each employee's departure. Four weighted factors — bridge score, cross-department reach, clustering inverse, and entropy trend — are combined into a single actionable number.",
   },
   {
-    tag: "Fragmentation",    abbr: "SI", color: "#F07020",
+    tag: "Fragmentation",    abbr: "SI", color: "#003366",
     title: "Silo Detection",
     body: "The Louvain community detection algorithm identifies organic team clusters. When a cluster's internal-to-external communication ratio exceeds a configurable threshold, a silo alert fires. Alerts include affected departments, community membership, and severity.",
   },
   {
-    tag: "Knowledge Risk",   abbr: "KR", color: "#C9A84C",
+    tag: "Knowledge Risk",   abbr: "KR", color: "#003366",
     title: "Knowledge Concentration",
     body: "Employees who are sole authors of critical documentation or the only contributors to key repositories represent a knowledge risk independent of their graph position. Org Synapse surfaces these concentrations by integrating Confluence and Notion edit histories.",
   },
   {
-    tag: "Continuity",       abbr: "SU", color: "#0d7a5c",
+    tag: "Continuity",       abbr: "SU", color: "#003366",
     title: "Succession Planning",
     body: "For every critical node, the platform automatically ranks the top 5 internal candidates best positioned to absorb that role — scored on structural overlap, shared collaborators, and domain knowledge. Plans are regenerated every time the graph snapshot updates.",
   },
   {
-    tag: "Alerting",         abbr: "AL", color: "#E03448",
+    tag: "Alerting",         abbr: "AL", color: "#003366",
     title: "Real-Time Alert Engine",
     body: "Threshold-based alerts fire the moment a risk signal crosses into warning or critical territory. HR teams receive notifications via the dashboard, email, or Slack. All alerts carry timestamp, severity, affected employees, and recommended action.",
   },
   {
-    tag: "NL Interface",     abbr: "NL", color: "#5b3fa6",
+    tag: "NL Interface",     abbr: "NL", color: "#003366",
     title: "Natural Language Queries",
     body: 'Ask the live graph plain-English questions: "Who in Engineering would create the most disruption if they left?" or "Which teams are isolated from Product?" Claude (claude-sonnet-4-6) translates intent into graph queries and returns structured answers.',
   },
   {
-    tag: "Executive View",   abbr: "OH", color: "#27B97C",
+    tag: "Executive View",   abbr: "OH", color: "#003366",
     title: "Org Health Score",
     body: "A single 0–100 composite score summarizes organizational health across silo density (20%), SPOF concentration (35%), engagement entropy (20%), and network fragmentation (25%). A formatted executive briefing is auto-generated weekly and delivered via email or Slack.",
   },
   {
-    tag: "Compliance",       abbr: "GD", color: "#1a4d80",
+    tag: "Compliance",       abbr: "GD", color: "#003366",
     title: "GDPR & Data Compliance",
     body: "Every personal data table is catalogued with sensitivity level and legal basis. Retention policies are enforced automatically (raw events: 90 days, graph snapshots: 365 days). Employees can request a full Article 20 data export. Every consent change is logged to an immutable audit trail.",
   },
   {
-    tag: "Multi-Tenant",     abbr: "MT", color: "#6b7c93",
+    tag: "Multi-Tenant",     abbr: "MT", color: "#003366",
     title: "Multi-Tenant SaaS",
     body: "The platform supports multiple client organizations on a single deployment. Each tenant's data is isolated at the PostgreSQL schema level. Tenant-aware Kafka topics ensure zero cross-contamination. Admin API endpoints manage provisioning, billing (Stripe), and configuration.",
   },

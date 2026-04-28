@@ -57,6 +57,11 @@ export async function fetchSiloAlerts() {
   return data;
 }
 
+export async function fetchSiloMembers(alertId) {
+  const { data } = await client.get(`/alerts/silos/${alertId}/members`);
+  return data;
+}
+
 export async function fetchEntropyAlerts() {
   const { data } = await client.get("/alerts/entropy");
   return data;

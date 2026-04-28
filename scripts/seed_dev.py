@@ -55,7 +55,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Seed dev database with synthetic data.")
     parser.add_argument("--employees",     type=int, default=120)
     parser.add_argument("--days",          type=int, default=60)
-    parser.add_argument("--connectors",    type=int, default=2)
+    parser.add_argument("--connectors",    type=int, default=3)
     parser.add_argument("--seed",          type=int, default=42)
     parser.add_argument("--skip-generate", action="store_true",
                         help="Skip data generation (use existing raw_events)")
@@ -86,6 +86,19 @@ def main() -> None:
             tzinfo=timezone.utc,
         ) - timedelta(days=args.days)
 
+        # Build 2 demo silos: all non-connector HR employees + all non-connector
+        # Sales employees get cross_prob = 0.03 (nearly isolated clusters).
+        # This guarantees Louvain detects them as siloed communities.
+        silo_depts = {"HR", "Sales"}
+        silo_ids: set[str] = {
+            e.employee_id for e in employees
+            if e.department in silo_depts and e.employee_id not in connector_ids
+        }
+        log.info(
+            "  → Silo groups: %d employees in %s (cross_prob=0.03)",
+            len(silo_ids), sorted(silo_depts),
+        )
+
         edges = generate_edges(
             employees=employees,
             n_days=args.days,
@@ -93,6 +106,7 @@ def main() -> None:
             connector_ids=connector_ids,
             withdrawing_id=withdrawing_id,
             start_date=start_dt,
+            silo_ids=silo_ids,
         )
 
         p = _db_params()
@@ -146,8 +160,28 @@ def main() -> None:
     write_scores(scores, {}, snapshot_date)
     log.info("  → %d employees scored", len(scores))
 
+    # Backfill weekly historical scores so the risk trend chart has data
+    backfill_dates = list(range(7, args.days, 7))
+    for back_days in backfill_dates:
+        past_date = snapshot_date - timedelta(days=back_days)
+        varied = {
+            emp_id: float(np.clip(s + rng.normal(0, 0.03), 0.0, 1.0))
+            for emp_id, s in scores.items()
+        }
+        write_scores(varied, {}, past_date)
+    log.info("  → Backfilled %d historical score snapshots", len(backfill_dates))
+
     critical = sum(1 for s in scores.values() if s >= 0.7)
     warning  = sum(1 for s in scores.values() if 0.5 <= s < 0.7)
+
+    # Flush Redis cache so the API serves fresh data immediately
+    try:
+        from api.cache import flush_all
+        n = flush_all()
+        if n:
+            log.info("  → Flushed %d Redis cache key(s)", n)
+    except Exception:
+        pass  # Redis unavailable — not a blocking error
 
     log.info("")
     log.info("✓  Seed complete.")

@@ -130,6 +130,27 @@ def invalidate_snapshot(snapshot_date: str) -> None:
         logger.debug("Cache invalidation error for %s: %s", snapshot_date, exc)
 
 
+def flush_all() -> int:
+    """Delete every org-synapse cache key. Call after a DB reset or full reseed.
+
+    Returns the number of keys deleted (0 if Redis is unavailable).
+    """
+    r = _get_client()
+    if r is None:
+        return 0
+    try:
+        pattern = f"org-synapse:{CACHE_VERSION}:*"
+        keys = r.keys(pattern)
+        if keys:
+            count = r.delete(*keys)
+            logger.info("Cache: flushed %d keys", count)
+            return int(count)
+        return 0
+    except Exception as exc:
+        logger.debug("Cache flush error: %s", exc)
+        return 0
+
+
 def health() -> dict:
     """Return a cache health dict suitable for inclusion in /health responses."""
     r = _get_client()

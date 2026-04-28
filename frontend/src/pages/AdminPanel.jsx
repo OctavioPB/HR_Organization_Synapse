@@ -252,6 +252,255 @@ function CreateTenantForm({ onCreate }) {
   );
 }
 
+// ─── Dev Tools panel ─────────────────────────────────────────────────────────
+
+function DevToolsPanel() {
+  const [employees, setEmployees] = useState(120);
+  const [days,      setDays]      = useState(60);
+  const [seedState, setSeedState] = useState("idle");   // idle | loading | done | error
+  const [resetState, setResetState] = useState("idle"); // idle | confirm | loading | done | error
+  const [log, setLog]             = useState(null);     // { action, text }
+
+  const inputStyle = {
+    border: `1px solid ${T.primary10}`, borderRadius: 6, padding: "6px 10px",
+    fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif",
+    width: "80px", textAlign: "center", outline: "none",
+  };
+
+  const parseResp = async (resp) => {
+    const text = await resp.text();
+    try { return { ok: resp.ok, status: resp.status, data: JSON.parse(text) }; }
+    catch { return { ok: resp.ok, status: resp.status, data: null, raw: text }; }
+  };
+
+  const handleSeed = async () => {
+    setSeedState("loading");
+    setLog(null);
+    try {
+      const resp = await adminFetch(
+        `/admin/dev/seed?employees=${employees}&days=${days}`,
+        { method: "POST" },
+      );
+      const { ok, status, data, raw } = await parseResp(resp);
+      if (!ok) throw new Error(data?.detail ?? raw ?? `HTTP ${status}`);
+      setLog({ action: "seed", text: data.output });
+      setSeedState("done");
+    } catch (e) {
+      setLog({ action: "seed", text: e.message });
+      setSeedState("error");
+    }
+  };
+
+  const handleResetClick = () => {
+    setResetState(s => s === "confirm" ? "idle" : "confirm");
+  };
+
+  const handleResetConfirm = async () => {
+    setResetState("loading");
+    setLog(null);
+    try {
+      const resp = await adminFetch("/admin/dev/reset", { method: "POST" });
+      const { ok, status, data, raw } = await parseResp(resp);
+      if (!ok) throw new Error(data?.detail ?? raw ?? `HTTP ${status}`);
+      setLog({ action: "reset", text: data.output });
+      setResetState("done");
+    } catch (e) {
+      setLog({ action: "reset", text: e.message });
+      setResetState("error");
+    }
+  };
+
+  const isBusy = seedState === "loading" || resetState === "loading";
+
+  return (
+    <div>
+      <GoldEyebrow label="Developer Tools" />
+      <p style={{ fontSize: 13, color: T.mid, margin: "0 0 20px" }}>
+        Local and demo use only. These operations run directly against the connected database.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+        {/* Seed card */}
+        <div style={{
+          background: T.white, borderRadius: 12, overflow: "hidden",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        }}>
+          <div style={{ height: 3, background: T.gold }} />
+          <div style={{ padding: "20px 24px 24px" }}>
+            <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 400, color: T.dark, marginBottom: 6 }}>
+              Generate Demo Data
+            </div>
+            <p style={{ fontSize: 12, color: T.mid, margin: "0 0 16px", lineHeight: 1.6 }}>
+              Synthesises employees, collaboration events, and a full graph snapshot including SPOF scores, community detection, and silo alerts.
+            </p>
+
+            {/* Controls */}
+            <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 600, color: T.mid, textTransform: "uppercase", letterSpacing: 2 }}>Employees</span>
+                <input
+                  type="number" min={10} max={2000} value={employees} style={inputStyle}
+                  onChange={e => setEmployees(Math.max(10, Math.min(2000, +e.target.value)))}
+                  disabled={isBusy}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 600, color: T.mid, textTransform: "uppercase", letterSpacing: 2 }}>Days of events</span>
+                <input
+                  type="number" min={7} max={365} value={days} style={inputStyle}
+                  onChange={e => setDays(Math.max(7, Math.min(365, +e.target.value)))}
+                  disabled={isBusy}
+                />
+              </label>
+            </div>
+
+            <button
+              onClick={handleSeed}
+              disabled={isBusy}
+              style={{
+                background: isBusy ? T.mid : T.primary,
+                color: T.white, border: "none", borderRadius: 6,
+                padding: "9px 20px", fontSize: 13, fontWeight: 600,
+                cursor: isBusy ? "not-allowed" : "pointer",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                display: "flex", alignItems: "center", gap: 8,
+              }}
+            >
+              {seedState === "loading" ? (
+                <>
+                  <span style={{
+                    display: "inline-block", width: 12, height: 12,
+                    border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff",
+                    borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                  }} />
+                  Generating…
+                </>
+              ) : "Generate Data →"}
+            </button>
+
+            {seedState === "done" && (
+              <p style={{ fontSize: 12, color: T.greenText, marginTop: 10, fontWeight: 600 }}>
+                Done. Refresh the dashboard to see the new data.
+              </p>
+            )}
+            {seedState === "error" && (
+              <p style={{ fontSize: 12, color: T.red, marginTop: 10 }}>
+                Seed failed — see log below.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Reset card */}
+        <div style={{
+          background: T.white, borderRadius: 12, overflow: "hidden",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        }}>
+          <div style={{ height: 3, background: T.primary }} />
+          <div style={{ padding: "20px 24px 24px" }}>
+            <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 400, color: T.dark, marginBottom: 6 }}>
+              Clean Database
+            </div>
+            <p style={{ fontSize: 12, color: T.mid, margin: "0 0 16px", lineHeight: 1.6 }}>
+              Truncates all 20 application tables with CASCADE. Schema and indexes are preserved. This action cannot be undone.
+            </p>
+
+            {resetState === "confirm" ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  onClick={handleResetConfirm}
+                  disabled={isBusy}
+                  style={{
+                    background: T.red, color: T.white, border: "none", borderRadius: 6,
+                    padding: "9px 16px", fontSize: 13, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                >
+                  Yes, delete all data
+                </button>
+                <button
+                  onClick={() => setResetState("idle")}
+                  style={{
+                    background: "none", color: T.mid, border: `1px solid ${T.primary10}`,
+                    borderRadius: 6, padding: "9px 14px", fontSize: 13,
+                    cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleResetClick}
+                disabled={isBusy}
+                style={{
+                  background: "none",
+                  color: resetState === "loading" ? T.mid : T.primary,
+                  border: `1px solid ${resetState === "loading" ? T.mid : T.primary}`,
+                  borderRadius: 6, padding: "9px 20px", fontSize: 13, fontWeight: 600,
+                  cursor: isBusy ? "not-allowed" : "pointer",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  display: "flex", alignItems: "center", gap: 8,
+                }}
+              >
+                {resetState === "loading" ? (
+                  <>
+                    <span style={{
+                      display: "inline-block", width: 12, height: 12,
+                      border: `2px solid rgba(0,51,102,.3)`, borderTopColor: T.primary,
+                      borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                    }} />
+                    Cleaning…
+                  </>
+                ) : "Clean Database"}
+              </button>
+            )}
+
+            {resetState === "done" && (
+              <p style={{ fontSize: 12, color: T.greenText, marginTop: 10, fontWeight: 600 }}>
+                Database cleared. Run Generate Data to repopulate.
+              </p>
+            )}
+            {resetState === "error" && (
+              <p style={{ fontSize: 12, color: T.red, marginTop: 10 }}>
+                Reset failed — see log below.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Output log */}
+      {log && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 600, color: T.mid,
+            textTransform: "uppercase", letterSpacing: 2, marginBottom: 6,
+          }}>
+            {log.action === "seed" ? "Seed" : "Reset"} output
+          </div>
+          <pre style={{
+            background: "var(--primary)", color: "rgba(255,255,255,.88)",
+            borderRadius: 8, padding: "16px 20px",
+            fontSize: 11, lineHeight: 1.7,
+            overflowX: "auto", overflowY: "auto",
+            maxHeight: 320, margin: 0,
+            fontFamily: "Consolas, 'Courier New', monospace",
+            whiteSpace: "pre-wrap", wordBreak: "break-word",
+          }}>
+            {log.text}
+          </pre>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminPanel() {
@@ -328,6 +577,12 @@ export default function AdminPanel() {
           </div>
 
         </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: T.primary10, margin: "40px 0" }} />
+
+        {/* Developer tools */}
+        <DevToolsPanel />
 
         {/* Divider */}
         <div style={{ height: 1, background: T.primary10, margin: "40px 0" }} />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { format } from "date-fns";
 
 function SeverityBadge({ severity }) {
@@ -51,7 +52,7 @@ function AlertRow({ alert, isOpen, onToggle }) {
           >
             {alert.type === "silo" ? "Silo Detected" : alert.type.replace(/_/g, " ")}
           </span>
-          {entities.community_id !== undefined && (
+          {(entities.departments?.length > 0 || entities.member_count !== undefined) && (
             <span
               style={{
                 fontFamily: "var(--fb)",
@@ -59,7 +60,9 @@ function AlertRow({ alert, isOpen, onToggle }) {
                 color: "var(--mid)",
               }}
             >
-              Community {entities.community_id}
+              {entities.departments?.length > 0
+                ? `${entities.departments[0]} Dept.`
+                : `Community ${entities.community_id}`}
               {entities.member_count !== undefined && ` · ${entities.member_count} members`}
             </span>
           )}
@@ -110,20 +113,8 @@ function AlertRow({ alert, isOpen, onToggle }) {
               {alert.details}
             </p>
           )}
-          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            <span
-              style={{
-                fontFamily: "var(--fb)",
-                fontSize: "11px",
-                color: "var(--mid)",
-              }}
-            >
-              Status:{" "}
-              <strong style={{ color: alert.resolved ? "#27B97C" : "#E03448" }}>
-                {alert.resolved ? "Resolved" : "Active"}
-              </strong>
-            </span>
-            {alert.resolved_at && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
               <span
                 style={{
                   fontFamily: "var(--fb)",
@@ -131,8 +122,41 @@ function AlertRow({ alert, isOpen, onToggle }) {
                   color: "var(--mid)",
                 }}
               >
-                Resolved: {format(new Date(alert.resolved_at), "MMM d, yyyy HH:mm")}
+                Status:{" "}
+                <strong style={{ color: alert.resolved ? "#27B97C" : "#E03448" }}>
+                  {alert.resolved ? "Resolved" : "Active"}
+                </strong>
               </span>
+              {alert.resolved_at && (
+                <span
+                  style={{
+                    fontFamily: "var(--fb)",
+                    fontSize: "11px",
+                    color: "var(--mid)",
+                  }}
+                >
+                  Resolved: {format(new Date(alert.resolved_at), "MMM d, yyyy HH:mm")}
+                </span>
+              )}
+            </div>
+            {!alert.resolved && (
+              <Link
+                to={`/silo/${alert.id}`}
+                style={{
+                  fontFamily: "var(--fb)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--white)",
+                  background: "var(--primary)",
+                  border: "none",
+                  borderRadius: "7px",
+                  padding: "7px 14px",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                View affected employees →
+              </Link>
             )}
           </div>
         </div>
@@ -155,7 +179,7 @@ export default function SiloAlert({ alerts = [], loading = false }) {
         overflow: "hidden",
       }}
     >
-      <div className="card-accent" style={{ background: "#E03448" }} />
+      <div className="card-accent" />
 
       <div style={{ padding: "24px 24px 16px" }}>
         <div className="eyebrow">Alert registry</div>

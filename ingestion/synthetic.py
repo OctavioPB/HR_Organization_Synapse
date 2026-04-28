@@ -205,13 +205,15 @@ def generate_edges(
     connector_ids: set[str],
     withdrawing_id: str,
     start_date: datetime,
+    silo_ids: set[str] | None = None,
 ) -> list[EdgeRecord]:
     """Generate collaboration edges with behavioral properties.
 
     Properties encoded:
       - Power-law (Pareto α=2) degree distribution for normal employees.
-      - Connectors: 25 events/day mean, 70% cross-department probability.
+      - Connectors: 6 events/day mean, 85% cross-department probability.
       - Withdrawing employee: 30% of normal activity in last 15 days (70% decay).
+      - Silo employees: 3% cross-department probability (nearly isolated cluster).
 
     Args:
         employees: Full employee list produced by generate_employees().
@@ -220,6 +222,8 @@ def generate_edges(
         connector_ids: Employee IDs with high cross-dept activity.
         withdrawing_id: Employee ID with activity decay at the end.
         start_date: First simulated day (UTC).
+        silo_ids: Employee IDs that form isolated clusters (very low cross-dept
+                  probability). Produces detectable silo alerts in the graph.
 
     Returns:
         EdgeRecord list sorted by ascending timestamp.
@@ -232,6 +236,7 @@ def generate_edges(
     base_rates = rng.pareto(2.0, n) + 0.2  # heavy tail, minimum 0.2 events/day
 
     # Scale normal employees to mean ≈ 0.7 events/day
+    _silo_ids: set[str] = silo_ids or set()
     special_ids = connector_ids | {withdrawing_id}
     normal_idx = [i for i, e in enumerate(employees) if e.employee_id not in special_ids]
     if normal_idx:
@@ -241,7 +246,7 @@ def generate_edges(
     # Override special employees
     for i, emp in enumerate(employees):
         if emp.employee_id in connector_ids:
-            base_rates[i] = 25.0
+            base_rates[i] = 6.0
         elif emp.employee_id == withdrawing_id:
             base_rates[i] = 1.2
 
@@ -260,7 +265,8 @@ def generate_edges(
 
             for _ in range(n_interactions):
                 is_connector = emp.employee_id in connector_ids
-                cross_prob = 0.7 if is_connector else 0.2
+                is_silo     = emp.employee_id in _silo_ids
+                cross_prob  = 0.85 if is_connector else (0.03 if is_silo else 0.08)
 
                 if rng.random() < cross_prob:
                     other_depts = [d for d in emp_by_dept if d != emp.department]

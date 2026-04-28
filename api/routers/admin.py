@@ -6,11 +6,15 @@ Only accessible from internal networks in production deployments.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import subprocess
+import sys
 from datetime import date
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.deps import get_admin_db
@@ -271,3 +275,95 @@ def get_all_usage(
         rows = [dict(r) for r in cur.fetchall()]
 
     return {"total_tenants": len(rows), "tenants": rows}
+
+
+# ─── Dev / demo tools ─────────────────────────────────────────────────────────
+
+_SCRIPTS_DIR = Path(__file__).parents[2] / "scripts"
+_SCRIPT_TIMEOUT = 180  # seconds
+
+
+def _require_admin(
+    x_admin_key: str = Header(default="", alias="X-Admin-Key"),
+) -> None:
+    """Auth-only variant of get_admin_db (no DB connection needed)."""
+    secret = os.environ.get("ADMIN_SECRET_KEY", "")
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin API is disabled — set ADMIN_SECRET_KEY to enable.",
+        )
+    if not x_admin_key or x_admin_key != secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or missing X-Admin-Key header.",
+        )
+
+
+async def _run_script(args: list[str]) -> str:
+    """Run a Python script in a thread-pool executor and return its combined output.
+
+    Uses subprocess.run (blocking) inside run_in_executor so the event loop is
+    not blocked and asyncio.create_subprocess_exec Windows compatibility is not
+    a factor.
+    """
+    loop = asyncio.get_running_loop()
+
+    def _blocking() -> tuple[int, str]:
+        result = subprocess.run(
+            [sys.executable, *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=_SCRIPT_TIMEOUT,
+        )
+        return result.returncode, result.stdout.decode("utf-8", errors="replace")
+
+    try:
+        returncode, output = await asyncio.wait_for(
+            loop.run_in_executor(None, _blocking),
+            timeout=_SCRIPT_TIMEOUT + 10,
+        )
+    except (asyncio.TimeoutError, subprocess.TimeoutExpired):
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"Script timed out after {_SCRIPT_TIMEOUT}s.",
+        )
+
+    if returncode != 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=output or "Script exited with non-zero status.",
+        )
+    return output
+
+
+@router.post("/dev/seed")
+async def dev_seed(
+    employees: int = 120,
+    days: int = 60,
+    _: None = Depends(_require_admin),
+) -> dict:
+    """Generate synthetic employees, events, and graph data.
+
+    Runs scripts/seed_dev.py in a subprocess. For local development and demo
+    use only — do not expose in production.
+    """
+    script = str(_SCRIPTS_DIR / "seed_dev.py")
+    output = await _run_script([script, "--employees", str(employees), "--days", str(days)])
+    logger.info("dev/seed completed: employees=%d days=%d", employees, days)
+    return {"ok": True, "employees": employees, "days": days, "output": output}
+
+
+@router.post("/dev/reset")
+async def dev_reset(
+    _: None = Depends(_require_admin),
+) -> dict:
+    """Truncate all 20 application tables (cascade).
+
+    Runs scripts/reset_db.py --yes in a subprocess. For local development and
+    demo use only — do not expose in production.
+    """
+    script = str(_SCRIPTS_DIR / "reset_db.py")
+    output = await _run_script([script, "--yes"])
+    logger.warning("dev/reset executed — all application data cleared")
+    return {"ok": True, "output": output}

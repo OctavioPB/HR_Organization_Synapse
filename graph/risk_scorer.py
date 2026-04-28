@@ -1,12 +1,14 @@
 """SPOF risk scoring: computes Single-Point-of-Failure scores per employee.
 
 Formula:
-    SPOF = α × betweenness
+    SPOF = α × norm_betweenness
          + β × cross_dept_ratio
          + γ × (1 − clustering)
          − δ × entropy_trend      (negative trend = withdrawing → increases SPOF)
 
-All component metrics are normalised to [0, 1]. Weights sum to 1.0.
+betweenness is min-max normalized within the graph before weighting so that
+the most central employee always scores 1.0 on this component.  All other
+components are already in [0, 1] by definition.  Weights sum to 1.0.
 Weights are configurable via environment variables (SPOF_ALPHA, _BETA, _GAMMA, _DELTA).
 
 Public functions:
@@ -83,6 +85,22 @@ def compute_spof_score(
     )
 
 
+def _minmax_normalize(values: dict[str, float]) -> dict[str, float]:
+    """Rescale a dict of floats to [0, 1] using min-max normalization.
+
+    Returns the original values unchanged when all values are equal
+    (avoids division by zero and preserves a flat distribution as all-zero).
+    """
+    if not values:
+        return {}
+    lo = min(values.values())
+    hi = max(values.values())
+    span = hi - lo
+    if span == 0:
+        return {k: 0.0 for k in values}
+    return {k: (v - lo) / span for k, v in values.items()}
+
+
 def score_all(
     G: nx.DiGraph,
     betweenness: dict[str, float],
@@ -92,24 +110,34 @@ def score_all(
 ) -> dict[str, float]:
     """Compute SPOF scores for all employees in the graph.
 
+    Betweenness centrality is min-max normalized within the graph before
+    weighting.  NetworkX normalizes betweenness by 1/((n-1)(n-2)), which
+    produces very small absolute values in dense graphs (e.g. 0.001–0.15 for
+    120 nodes).  Without rescaling, the betweenness term contributes almost
+    nothing to the score, collapsing all employees to a narrow low band.
+    Relative normalization correctly asks "who is the biggest bridge in this
+    org?" rather than measuring against an absolute scale.
+
     Args:
         G: Directed collaboration graph with 'department' node attributes.
-        betweenness: Per-employee betweenness centrality.
+        betweenness: Per-employee betweenness centrality (raw NetworkX values).
         clustering: Per-employee clustering coefficient.
         entropy_trends: Per-employee entropy trend (defaults to 0.0 if absent).
         weights: Alpha/beta/gamma/delta dict (defaults to env-var weights).
 
     Returns:
-        Dict mapping employee_id → SPOF score.
+        Dict mapping employee_id → SPOF score ∈ [0, 1].
     """
     w = weights or _DEFAULT_WEIGHTS
     trends = entropy_trends or {}
     cross_dept = compute_cross_dept_ratio(G)
 
+    norm_betweenness = _minmax_normalize(betweenness)
+
     scores: dict[str, float] = {}
     for node in G.nodes():
         scores[node] = compute_spof_score(
-            betweenness=betweenness.get(node, 0.0),
+            betweenness=norm_betweenness.get(node, 0.0),
             cross_dept_ratio=cross_dept.get(node, 0.0),
             clustering=clustering.get(node, 0.0),
             entropy_trend=trends.get(node, 0.0),

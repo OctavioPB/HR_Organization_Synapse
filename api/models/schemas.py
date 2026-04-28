@@ -554,3 +554,22 @@ class AlertItem(BaseModel):
 class AlertsResponse(BaseModel):
     total: int
     alerts: list[AlertItem]
+
+
+class SiloMember(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    role: str
+    betweenness: float = 0.0
+    degree_in: float = 0.0
+    degree_out: float = 0.0
+    spof_score: float = 0.0
+
+
+class SiloMembersResponse(BaseModel):
+    alert_id: str
+    department: str
+    isolation_ratio: float
+    member_count: int
+    members: list[SiloMember]

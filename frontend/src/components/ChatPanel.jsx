@@ -25,16 +25,16 @@ const STYLES = {
     height: "100%",
     minHeight: 480,
     maxHeight: 720,
-    border: "1px solid #e2e8f0",
+    border: "1px solid var(--primary-10)",
     borderRadius: 10,
-    background: "#fff",
+    background: "var(--white)",
     overflow: "hidden",
     fontFamily: "inherit",
   },
   header: {
     padding: "12px 16px",
-    borderBottom: "1px solid #e2e8f0",
-    background: "#f8fafc",
+    borderBottom: "1px solid var(--primary-10)",
+    background: "var(--light)",
     display: "flex",
     alignItems: "center",
     gap: 8,
@@ -42,14 +42,14 @@ const STYLES = {
   headerTitle: {
     fontWeight: 600,
     fontSize: 14,
-    color: "#1e293b",
+    color: "var(--dark)",
     flex: 1,
   },
   headerBadge: {
     fontSize: 11,
-    color: "#64748b",
-    background: "#f1f5f9",
-    border: "1px solid #e2e8f0",
+    color: "var(--mid)",
+    background: "var(--primary-10)",
+    border: "1px solid var(--primary-10)",
     borderRadius: 4,
     padding: "2px 7px",
   },
@@ -62,14 +62,14 @@ const STYLES = {
     gap: 12,
   },
   inputRow: {
-    borderTop: "1px solid #e2e8f0",
+    borderTop: "1px solid var(--primary-10)",
     padding: "10px 12px",
     display: "flex",
     gap: 8,
   },
   input: {
     flex: 1,
-    border: "1px solid #e2e8f0",
+    border: "1px solid var(--primary-10)",
     borderRadius: 6,
     padding: "8px 12px",
     fontSize: 14,
@@ -79,8 +79,8 @@ const STYLES = {
     lineHeight: 1.4,
   },
   sendBtn: {
-    background: "#1e293b",
-    color: "#f8fafc",
+    background: "var(--primary)",
+    color: "var(--white)",
     border: "none",
     borderRadius: 6,
     padding: "8px 16px",
@@ -90,7 +90,7 @@ const STYLES = {
     alignSelf: "flex-end",
   },
   sendBtnDisabled: {
-    background: "#94a3b8",
+    background: "var(--primary-30)",
     cursor: "not-allowed",
   },
 };
@@ -102,8 +102,8 @@ function UserBubble({ text }) {
     <div style={{ display: "flex", justifyContent: "flex-end" }}>
       <div
         style={{
-          background: "#1e293b",
-          color: "#f8fafc",
+          background: "var(--primary)",
+          color: "var(--white)",
           borderRadius: "10px 10px 2px 10px",
           padding: "8px 12px",
           maxWidth: "75%",
@@ -128,7 +128,7 @@ function ToolCallRow({ tool }) {
           background: "none",
           border: "none",
           cursor: "pointer",
-          color: "#64748b",
+          color: "var(--mid)",
           fontSize: 11,
           padding: 0,
           display: "flex",
@@ -138,15 +138,15 @@ function ToolCallRow({ tool }) {
       >
         <span>{open ? "▾" : "▸"}</span>
         <span style={{ fontFamily: "monospace" }}>{tool.name}</span>
-        <span style={{ color: "#94a3b8" }}>— {tool.result_summary}</span>
+        <span style={{ color: "var(--mid)", opacity: 0.7 }}>— {tool.result_summary}</span>
       </button>
       {open && (
         <pre
           style={{
             margin: "4px 0 0 16px",
             padding: "6px 8px",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
+            background: "var(--light)",
+            border: "1px solid var(--primary-10)",
             borderRadius: 4,
             fontSize: 11,
             overflowX: "auto",
@@ -168,8 +168,8 @@ function AssistantBubble({ message }) {
       <div style={{ maxWidth: "85%" }}>
         <div
           style={{
-            background: "#f1f5f9",
-            color: "#1e293b",
+            background: "var(--primary-10)",
+            color: "var(--dark)",
             borderRadius: "10px 10px 10px 2px",
             padding: "8px 12px",
             fontSize: 14,
@@ -186,7 +186,7 @@ function AssistantBubble({ message }) {
             ))}
           </div>
         )}
-        <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 3, paddingLeft: 2 }}>
+        <div style={{ fontSize: 10, color: "var(--mid)", marginTop: 3, paddingLeft: 2 }}>
           {latency_ms}ms · {turns} turn{turns !== 1 ? "s" : ""}
         </div>
       </div>
@@ -199,12 +199,12 @@ function ThinkingBubble() {
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
       <div
         style={{
-          background: "#f1f5f9",
+          background: "var(--primary-10)",
           borderRadius: "10px 10px 10px 2px",
           padding: "10px 14px",
           fontSize: 20,
           letterSpacing: 4,
-          color: "#94a3b8",
+          color: "var(--mid)",
         }}
       >
         ···
@@ -218,9 +218,9 @@ function ErrorBubble({ text }) {
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
       <div
         style={{
-          background: "#fef2f2",
-          border: "1px solid #fca5a5",
-          color: "#b91c1c",
+          background: "#FDEAEA",
+          border: "1px solid #E03448",
+          color: "#7A1020",
           borderRadius: "10px 10px 10px 2px",
           padding: "8px 12px",
           fontSize: 13,
@@ -304,7 +304,7 @@ export function ChatPanel() {
       {/* Messages */}
       <div style={STYLES.messages}>
         {isEmpty && (
-          <div style={{ textAlign: "center", color: "#94a3b8", paddingTop: 32 }}>
+          <div style={{ textAlign: "center", color: "var(--mid)", paddingTop: 32 }}>
             <p style={{ fontSize: 13, marginBottom: 16 }}>
               Ask anything about your organisation's collaboration health.
             </p>
@@ -314,12 +314,12 @@ export function ChatPanel() {
                   key={s}
                   onClick={() => send(s)}
                   style={{
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
+                    background: "var(--white)",
+                    border: "1px solid var(--primary-10)",
                     borderRadius: 6,
                     padding: "5px 10px",
                     fontSize: 12,
-                    color: "#475569",
+                    color: "var(--dark)",
                     cursor: "pointer",
                   }}
                 >
@@ -353,7 +353,7 @@ export function ChatPanel() {
           disabled={loading}
           style={{
             ...STYLES.input,
-            background: loading ? "#f8fafc" : "#fff",
+            background: loading ? "var(--light)" : "var(--white)",
           }}
         />
         <button

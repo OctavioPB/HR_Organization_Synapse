@@ -379,6 +379,110 @@ def fetch_alert_history(days: int, conn) -> list[dict]:
         return [dict(r) for r in cur.fetchall()]
 
 
+def fetch_silo_members(alert_id: str, conn) -> list[dict]:
+    """Return employee records for every member of a silo alert.
+
+    Joins the alert's member_ids (stored in affected_entities) with employees,
+    the most recent graph_snapshots row, and the most recent risk_scores row.
+    Falls back to a department-based lookup when member_ids is absent (legacy rows).
+    """
+    with conn.cursor() as cur:
+        # Read the alert and extract member_ids + departments for fallback
+        cur.execute(
+            """
+            SELECT affected_entities
+            FROM alerts
+            WHERE id = %s::uuid AND type = 'silo'
+            """,
+            (alert_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return []
+
+        entities = row["affected_entities"] or {}
+        member_ids: list[str] | None = entities.get("member_ids")
+
+        if member_ids:
+            cur.execute(
+                """
+                WITH latest_snap AS (
+                    SELECT DISTINCT ON (employee_id)
+                        employee_id,
+                        betweenness,
+                        degree_in,
+                        degree_out,
+                        clustering
+                    FROM graph_snapshots
+                    ORDER BY employee_id, snapshot_date DESC
+                ),
+                latest_risk AS (
+                    SELECT DISTINCT ON (employee_id)
+                        employee_id,
+                        spof_score
+                    FROM risk_scores
+                    ORDER BY employee_id, scored_at DESC
+                )
+                SELECT
+                    e.id::text           AS employee_id,
+                    e.name,
+                    e.department,
+                    e.role,
+                    COALESCE(s.betweenness, 0)  AS betweenness,
+                    COALESCE(s.degree_in,  0)   AS degree_in,
+                    COALESCE(s.degree_out, 0)   AS degree_out,
+                    COALESCE(r.spof_score, 0)   AS spof_score
+                FROM employees e
+                LEFT JOIN latest_snap s ON s.employee_id = e.id
+                LEFT JOIN latest_risk r ON r.employee_id = e.id
+                WHERE e.id = ANY(%s::uuid[])
+                ORDER BY COALESCE(r.spof_score, 0) DESC
+                """,
+                (member_ids,),
+            )
+        else:
+            # Fallback: query all employees in the alert's departments
+            departments: list[str] = entities.get("departments", [])
+            cur.execute(
+                """
+                WITH latest_snap AS (
+                    SELECT DISTINCT ON (employee_id)
+                        employee_id,
+                        betweenness,
+                        degree_in,
+                        degree_out,
+                        clustering
+                    FROM graph_snapshots
+                    ORDER BY employee_id, snapshot_date DESC
+                ),
+                latest_risk AS (
+                    SELECT DISTINCT ON (employee_id)
+                        employee_id,
+                        spof_score
+                    FROM risk_scores
+                    ORDER BY employee_id, scored_at DESC
+                )
+                SELECT
+                    e.id::text           AS employee_id,
+                    e.name,
+                    e.department,
+                    e.role,
+                    COALESCE(s.betweenness, 0)  AS betweenness,
+                    COALESCE(s.degree_in,  0)   AS degree_in,
+                    COALESCE(s.degree_out, 0)   AS degree_out,
+                    COALESCE(r.spof_score, 0)   AS spof_score
+                FROM employees e
+                LEFT JOIN latest_snap s ON s.employee_id = e.id
+                LEFT JOIN latest_risk r ON r.employee_id = e.id
+                WHERE e.department = ANY(%s)
+                ORDER BY COALESCE(r.spof_score, 0) DESC
+                """,
+                (departments,),
+            )
+
+        return [dict(r) for r in cur.fetchall()]
+
+
 # ─── Churn risk ───────────────────────────────────────────────────────────────
 
 

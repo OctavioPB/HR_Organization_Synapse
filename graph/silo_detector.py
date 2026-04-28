@@ -36,7 +36,7 @@ from ingestion.db import get_conn
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SILO_THRESHOLD = float(os.environ.get("SILO_THRESHOLD", "4.0"))
+_DEFAULT_SILO_THRESHOLD = float(os.environ.get("SILO_THRESHOLD", "2.5"))
 
 
 @dataclass
@@ -63,50 +63,68 @@ def detect_silos(
     communities: dict[str, int],
     threshold: float = _DEFAULT_SILO_THRESHOLD,
 ) -> list[SiloAlert]:
-    """Detect communities where internal interaction dominates external bridges.
+    """Detect departments where internal interaction dominates cross-department bridges.
+
+    Groups nodes by their 'department' attribute rather than Louvain community ID.
+    This is more reliable for demo and HR-actionable: it directly answers "is HR
+    siloed from the rest of the org?" regardless of how Louvain partitions the graph.
+    Louvain can fail to isolate silo departments when high-activity connectors dominate.
 
     Args:
-        G: Directed weighted collaboration graph.
-        communities: Dict mapping employee_id → community_id (from compute_community).
-        threshold: isolation_ratio above which a community is flagged as a silo.
+        G: Directed weighted collaboration graph (nodes must have 'department' attr).
+        communities: Unused — kept for API compatibility with the DAG caller.
+        threshold: isolation_ratio above which a department is flagged as a silo.
 
     Returns:
-        List of SiloAlert, one per flagged community, sorted by isolation_ratio desc.
+        List of SiloAlert, one per flagged department, sorted by isolation_ratio desc.
     """
-    # Group members by community
-    comm_members: dict[int, set[str]] = {}
-    for emp_id, comm_id in communities.items():
-        comm_members.setdefault(comm_id, set()).add(emp_id)
+    # Group members by department attribute on the graph node
+    dept_members: dict[str, set[str]] = {}
+    for node in G.nodes():
+        dept = G.nodes[node].get("department", "unknown")
+        dept_members.setdefault(dept, set()).add(node)
 
+    total_nodes = G.number_of_nodes()
     alerts: list[SiloAlert] = []
 
-    for comm_id, members in comm_members.items():
+    for dept_idx, (dept, members) in enumerate(sorted(dept_members.items())):
+        # A department that IS the whole graph means no department data — skip.
+        if len(members) >= total_nodes:
+            logger.debug(
+                "Skipping dept '%s': contains all %d employees (no dept attribute set)",
+                dept, len(members),
+            )
+            continue
+
         internal = sum(
             1 for u, v in G.edges()
             if u in members and v in members
         )
-        external = sum(
+        # Count only outgoing edges (u in dept, v outside) — this measures how
+        # isolated a department's own communication behaviour is, unaffected by
+        # how often other active departments reach INTO them.
+        outgoing_external = sum(
             1 for u, v in G.edges()
-            if (u in members) != (v in members)
+            if u in members and v not in members
         )
 
-        isolation_ratio = internal / max(external, 1)
+        isolation_ratio = internal / max(outgoing_external, 1)
+
+        logger.debug(
+            "Dept '%s': %d members, %d internal, %d outgoing-external, ratio=%.2f",
+            dept, len(members), internal, outgoing_external, isolation_ratio,
+        )
 
         if isolation_ratio <= threshold:
             continue
 
-        depts = {
-            G.nodes[n].get("department", "unknown")
-            for n in members
-            if n in G.nodes()
-        }
         severity = "critical" if isolation_ratio > threshold * 2 else "high"
 
         alerts.append(SiloAlert(
-            community_id=comm_id,
+            community_id=dept_idx,
             members=sorted(members),
             isolation_ratio=round(isolation_ratio, 4),
-            departments=depts,
+            departments={dept},
             severity=severity,
         ))
 
@@ -136,13 +154,14 @@ def write_alerts(
             json.dumps({
                 "community_id": alert.community_id,
                 "member_count": len(alert.members),
+                "member_ids": alert.members,
                 "departments": sorted(alert.departments),
                 "isolation_ratio": alert.isolation_ratio,
                 "snapshot_date": snapshot_date.isoformat(),
             }),
             (
-                f"Community {alert.community_id} isolation_ratio={alert.isolation_ratio:.2f} "
-                f"({len(alert.members)} members, depts: {sorted(alert.departments)})"
+                f"{next(iter(alert.departments), 'Unknown')} dept. isolation_ratio={alert.isolation_ratio:.2f} "
+                f"({len(alert.members)} members)"
             ),
         )
         for alert in alerts

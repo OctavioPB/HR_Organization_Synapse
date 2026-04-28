@@ -65,6 +65,20 @@ function StatPill({ label, value, unit = "" }) {
   );
 }
 
+const IMPACT_COLORS = { critical: "#E03448", warning: "#F07020", ok: "#27B97C", neutral: "var(--dark)" };
+
+function ImpactRow({ label, value, note, severity = "neutral" }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+        <span style={{ fontFamily: "var(--fb)", fontSize: "13px", color: "var(--dark)" }}>{label}:</span>
+        <strong style={{ fontFamily: "var(--fb)", fontSize: "14px", color: IMPACT_COLORS[severity] }}>{value}</strong>
+      </div>
+      {note && <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "var(--mid)", paddingLeft: "2px" }}>{note}</span>}
+    </div>
+  );
+}
+
 function SpofBadge({ flag }) {
   const cls =
     flag === "critical"
@@ -150,6 +164,7 @@ function SimulatePanel({ employeeId }) {
           <div style={{ marginTop: "20px" }}>
             <hr className="section-divider" style={{ marginBottom: "16px" }} />
 
+            {/* Before / After key stats */}
             <div
               style={{
                 display: "grid",
@@ -158,60 +173,23 @@ function SimulatePanel({ employeeId }) {
                 marginBottom: "16px",
               }}
             >
-              <div>
-                <div
-                  style={{
-                    fontFamily: "var(--fb)",
-                    fontSize: "10px",
-                    letterSpacing: "2px",
-                    textTransform: "uppercase",
-                    color: "var(--mid)",
-                    marginBottom: "8px",
-                  }}
-                >
-                  Before
+              {[
+                { label: "Before", cross: data.impact.cross_dept_edges_before, path: data.impact.avg_path_length_before, nodes: data.before.node_count },
+                { label: "After",  cross: data.impact.cross_dept_edges_after,  path: data.impact.avg_path_length_after,  nodes: data.after.node_count  },
+              ].map(({ label, cross, path, nodes }) => (
+                <div key={label}>
+                  <div style={{ fontFamily: "var(--fb)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--mid)", marginBottom: "8px" }}>
+                    {label}
+                  </div>
+                  <StatPill label="Employees" value={nodes} />
+                  <div style={{ marginTop: "8px" }}>
+                    <StatPill label="Cross-dept edges" value={cross} />
+                  </div>
+                  <div style={{ marginTop: "8px" }}>
+                    <StatPill label="Avg path length" value={path} />
+                  </div>
                 </div>
-                <StatPill label="Nodes" value={data.before.node_count} />
-                <div style={{ marginTop: "8px" }}>
-                  <StatPill
-                    label="Avg betweenness"
-                    value={data.before.avg_betweenness}
-                  />
-                </div>
-                <div style={{ marginTop: "8px" }}>
-                  <StatPill
-                    label="Components"
-                    value={data.before.weakly_connected_components}
-                  />
-                </div>
-              </div>
-              <div>
-                <div
-                  style={{
-                    fontFamily: "var(--fb)",
-                    fontSize: "10px",
-                    letterSpacing: "2px",
-                    textTransform: "uppercase",
-                    color: "var(--mid)",
-                    marginBottom: "8px",
-                  }}
-                >
-                  After
-                </div>
-                <StatPill label="Nodes" value={data.after.node_count} />
-                <div style={{ marginTop: "8px" }}>
-                  <StatPill
-                    label="Avg betweenness"
-                    value={data.after.avg_betweenness}
-                  />
-                </div>
-                <div style={{ marginTop: "8px" }}>
-                  <StatPill
-                    label="Components"
-                    value={data.after.weakly_connected_components}
-                  />
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Impact summary */}
@@ -220,74 +198,43 @@ function SimulatePanel({ employeeId }) {
                 background: "var(--primary-10)",
                 borderRadius: "8px",
                 padding: "14px 16px",
-                borderLeft: "3px solid var(--gold)",
+                borderLeft: `3px solid ${data.impact.cross_dept_loss_pct > 20 ? "#E03448" : "var(--gold)"}`,
               }}
             >
-              <div
-                style={{
-                  fontFamily: "var(--fb)",
-                  fontSize: "11px",
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
-                  color: "var(--mid)",
-                  marginBottom: "8px",
-                }}
-              >
+              <div style={{ fontFamily: "var(--fb)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--mid)", marginBottom: "10px" }}>
                 Impact
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span
-                  style={{
-                    fontFamily: "var(--fb)",
-                    fontSize: "13px",
-                    color: "var(--dark)",
-                  }}
-                >
-                  Network fragments added:{" "}
-                  <strong
-                    style={{
-                      color:
-                        data.impact.components_delta > 0
-                          ? "#E03448"
-                          : data.impact.components_delta < 0
-                          ? "#27B97C"
-                          : "var(--mid)",
-                    }}
-                  >
-                    {data.impact.components_delta > 0 ? "+" : ""}
-                    {data.impact.components_delta}
-                  </strong>
-                  {data.impact.components_delta > 0 && (
-                    <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "#E03448", marginLeft: "6px" }}>
-                      — network splits into disconnected groups
-                    </span>
-                  )}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--fb)",
-                    fontSize: "13px",
-                    color: "var(--dark)",
-                  }}
-                >
-                  Avg. bridge load change:{" "}
-                  <strong>
-                    {data.impact.betweenness_avg_delta >= 0 ? "+" : ""}
-                    {data.impact.betweenness_avg_delta.toFixed(6)}
-                  </strong>
-                  <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "var(--mid)", marginLeft: "6px" }}>per remaining employee</span>
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--fb)",
-                    fontSize: "13px",
-                    color: "var(--dark)",
-                  }}
-                >
-                  Collaboration links severed:{" "}
-                  <strong>{data.impact.node_removed_degree}</strong>
-                  <span style={{ fontFamily: "var(--fb)", fontSize: "11px", color: "var(--mid)", marginLeft: "6px" }}>direct connections lost</span>
-                </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+
+                <ImpactRow
+                  label="Cross-dept connectivity lost"
+                  value={`−${data.impact.cross_dept_loss_pct}%`}
+                  note={`${data.impact.cross_dept_edges_before - data.impact.cross_dept_edges_after} of ${data.impact.cross_dept_edges_before} cross-department edges removed`}
+                  severity={data.impact.cross_dept_loss_pct > 30 ? "critical" : data.impact.cross_dept_loss_pct > 15 ? "warning" : "ok"}
+                />
+
+                <ImpactRow
+                  label="Avg hops between colleagues"
+                  value={data.impact.avg_path_increase > 0 ? `+${data.impact.avg_path_increase} hops` : "unchanged"}
+                  note={`${data.impact.avg_path_length_before} → ${data.impact.avg_path_length_after} hops on average`}
+                  severity={data.impact.avg_path_increase > 1 ? "critical" : data.impact.avg_path_increase > 0.3 ? "warning" : "ok"}
+                />
+
+                <ImpactRow
+                  label="Direct connections severed"
+                  value={data.impact.node_removed_degree}
+                  note="collaboration links this employee held"
+                  severity="neutral"
+                />
+
+                {data.impact.components_delta > 0 && (
+                  <ImpactRow
+                    label="Network fragments created"
+                    value={`+${data.impact.components_delta}`}
+                    note="teams that lose all paths to each other"
+                    severity="critical"
+                  />
+                )}
               </div>
             </div>
           </div>

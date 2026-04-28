@@ -76,7 +76,7 @@ export default function Dashboard() {
 
   const { data: riskData, isLoading: loadingRisk } = useQuery({
     queryKey: ["risk-scores"],
-    queryFn: () => fetchRiskScores(10),
+    queryFn: () => fetchRiskScores(500),
     retry: 1,
   });
 
@@ -92,11 +92,15 @@ export default function Dashboard() {
     retry: 1,
   });
 
-  const nodes = snapshot?.nodes ?? [];
+  const rawNodes = snapshot?.nodes ?? [];
   const edges = snapshot?.edges ?? [];
   const scores = riskData?.scores ?? [];
   const siloAlerts = siloData?.alerts ?? [];
   const criticalCount = scores.filter((s) => s.flag === "critical").length;
+
+  // Merge spof_score from risk_scores into graph nodes for color coding
+  const scoreMap = Object.fromEntries(scores.map((s) => [s.employee_id, s.spof_score]));
+  const nodes = rawNodes.map((n) => ({ ...n, spof_score: scoreMap[n.employee_id] ?? 0 }));
   const communityCount = communityData?.community_count ?? "—";
   const siloCount = communityData?.communities?.filter((c) => c.is_silo).length ?? "—";
 
