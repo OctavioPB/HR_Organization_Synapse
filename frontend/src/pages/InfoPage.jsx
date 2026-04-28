@@ -334,7 +334,7 @@ const FEATURES = [
   {
     tag: "Fragmentation",    abbr: "SI", color: "#003366",
     title: "Silo Detection",
-    body: "The Louvain community detection algorithm identifies organic team clusters. When a cluster's internal-to-external communication ratio exceeds a configurable threshold, a silo alert fires. Alerts include affected departments, community membership, and severity.",
+    body: "Department-based silo detection measures the ratio of internal to outbound communication for each team. When a department's isolation ratio exceeds the configurable threshold (default 2.5×), a silo alert fires with affected department, member list, and severity tier.",
   },
   {
     tag: "Knowledge Risk",   abbr: "KR", color: "#003366",
@@ -374,7 +374,7 @@ const FEATURES = [
   {
     tag: "Simulation",       abbr: "WI", color: "#003366",
     title: "What-If Simulation",
-    body: "Before restructuring or a departure, HR can model the precise impact: how many collaboration links would break, how many isolated groups would form, and by how much the average bridge load would shift onto remaining employees. Results are available in seconds.",
+    body: "Before restructuring or a departure, HR can model the precise impact: what percentage of cross-department connectivity disappears, by how many hops the average path between colleagues increases, and how many direct collaboration links are severed. Results are available in seconds.",
   },
 ];
 
@@ -628,9 +628,9 @@ export default function InfoPage() {
           <Eyebrow>Fragmentation Detection</Eyebrow>
           <SectionTitle>How silos are identified</SectionTitle>
           <Body style={{ maxWidth: 640, marginBottom: 32 }}>
-            Louvain community detection identifies organic team clusters from collaboration
-            patterns. A silo alert fires when a cluster's ratio of internal to external
-            edges exceeds a configurable threshold — typically 4.0× for a 30-person team.
+            Department-based silo detection measures each team's outbound communication
+            ratio. A silo alert fires when a department sends more than a configurable
+            multiple of messages internally versus externally — default threshold 2.5×.
           </Body>
           <div style={{
             background: "var(--white)", borderRadius: 12,
@@ -646,8 +646,8 @@ export default function InfoPage() {
                 isolation_ratio = internal_edges ÷ max(external_edges, 1)
               </code>
               <p style={{ fontFamily: FB, fontSize: 11, color: "var(--mid)", margin: "6px 0 0" }}>
-                Default silo threshold: 4.0. Configurable via <code>SILO_THRESHOLD</code> environment variable.
-                Alerts include community ID, member count, isolation ratio, and severity tier.
+                Default silo threshold: 2.5×. Configurable via <code>SILO_THRESHOLD</code> environment variable.
+                Alerts include department name, member count, isolation ratio, and severity tier.
               </p>
             </div>
           </div>

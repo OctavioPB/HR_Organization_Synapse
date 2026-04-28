@@ -19,7 +19,7 @@ The system ingests collaboration metadata (Slack, Teams, Jira, GitHub, Confluenc
 | **Churn risk** | GNN-based churn probability with `low / medium / high / critical` tiers |
 | **Succession plans** | Top-N candidates for each critical SPOF employee, ranked by structural, clustering, and domain compatibility |
 | **Org health score** | Composite 0–100 score with weekly trend and AI-generated executive briefing |
-| **What-If simulation** | Recalculates graph health after removing a single employee; shows component fragmentation and betweenness deltas |
+| **What-If simulation** | Recalculates graph health after removing a single employee; shows cross-department connectivity loss %, average path length increase, and direct links severed |
 | **NL query interface** | Ask questions in plain English — a Claude agentic loop calls graph and risk tools and returns a grounded answer |
 | **Compliance reports** | GDPR/CCPA data audit, Article 20 export, consent management, retention purge, quarterly HTML report |
 
@@ -209,7 +209,7 @@ docker-compose up -d
 
 ```bash
 pip install -r requirements.txt
-python data/synthetic/generate_org_data.py --employees 200 --days 90
+python data/synthetic/generate_org_data.py --employees 120 --days 60
 ```
 
 ### 4. Seed the graph
@@ -428,15 +428,14 @@ All unit tests mock the database entirely via `dependency_overrides` and `unitte
 ## Demo scenario
 
 ```bash
-python data/synthetic/generate_org_data.py \
-  --employees 120 --days 90 --connectors 2 --withdrawal-days 30
+python data/synthetic/generate_org_data.py --employees 120 --days 60
 ```
 
-Expected trajectory over 4 weeks:
-- **Week 1–2:** both bridge employees appear in top 5 SPOF scores
-- **Week 3:** the withdrawing connector enters `critical` flag; knowledge risk score rises
-- **Week 4:** silo alert fires for Engineering; succession plan auto-generates for the connector
-- **What-If:** removing the connector raises weakly connected components by 2–4 and average betweenness by ~15%
+Expected outcomes:
+- **SPOF scores:** both bridge employees surface in top 5; gap vs normal employees is large because only 8% of normal interactions cross department boundaries, making connectors the primary cross-dept bridges
+- **Silo alerts:** HR and Sales departments fire silo alerts (isolation ratio > 2.5×); Engineering does not
+- **Withdrawing employee:** enters `critical` flag in the final 15 days of the window as entropy trend declines
+- **What-If (removing a connector):** ~30–50% of all cross-department edges disappear; average path length between colleagues increases by 1–3 hops
 - **NL query:** "Who are the critical connectors between Engineering and Sales?" returns a grounded, tool-backed answer
 
 ---
