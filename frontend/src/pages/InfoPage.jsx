@@ -418,6 +418,147 @@ function FeatureCard({ tag, abbr, color, title, body }) {
   );
 }
 
+/* ─── What-If metric explainer ──────────────────────────────────────────────── */
+
+const WHATIF_METRICS = [
+  {
+    id: "cross",
+    abbr: "CD",
+    label: "Cross-dept connectivity lost",
+    example: "−23%",
+    exampleSub: "70 of 304 cross-department edges removed",
+    thresholds: [
+      { label: "> 30%", color: "#E03448", text: "Critical" },
+      { label: "15–30%", color: "#F07020", text: "Warning" },
+      { label: "< 15%", color: "#336699", text: "Low" },
+    ],
+    desc: "The share of all cross-department collaboration edges that ran through this employee. When they leave, these are the bridges between Engineering and Sales or between Product and HR that disappear entirely. A high percentage means this person is the primary channel between departments — not just an active communicator, but a structural necessity.",
+  },
+  {
+    id: "path",
+    abbr: "PL",
+    label: "Avg hops between colleagues",
+    example: "+0.032 hops",
+    exampleSub: "1.809 → 1.841 hops on average",
+    thresholds: [
+      { label: "> 1.0", color: "#E03448", text: "Critical" },
+      { label: "> 0.3", color: "#F07020", text: "Warning" },
+      { label: "< 0.3", color: "#336699", text: "Low" },
+    ],
+    desc: "The change in average shortest path length across all employee pairs in the graph. Every added hop is an intermediary who must relay information, coordinate decisions, or broker introductions. The global average obscures the real impact: even a small number like +0.03 represents specific department pairs whose direct route disappears and must now route through four or five people instead of two.",
+  },
+  {
+    id: "degree",
+    abbr: "DS",
+    label: "Direct connections severed",
+    example: "100",
+    exampleSub: "collaboration links this employee held",
+    thresholds: [
+      { label: "High vs org avg", color: "#E03448", text: "Critical" },
+      { label: "Moderate", color: "#F07020", text: "Warning" },
+      { label: "Near avg", color: "#336699", text: "Low" },
+    ],
+    desc: "The number of unique direct collaboration links this employee maintained. Raw degree is only meaningful in context: a connector with 100 cross-department links is far more critical than a manager with 100 links entirely within their own team. Combine with the cross-dept loss percentage to understand whether this person's edges are bridges or just volume.",
+  },
+];
+
+function WhatIfExplainer() {
+  return (
+    <div>
+      {/* Metric rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {WHATIF_METRICS.map((m) => (
+          <div
+            key={m.id}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "200px 1fr",
+              gap: 24,
+              alignItems: "start",
+            }}
+          >
+            {/* Example value card */}
+            <div style={{
+              background: "var(--primary)",
+              borderRadius: 10,
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}>
+              <div style={{
+                fontFamily: "var(--fb)", fontSize: 9, letterSpacing: "2px",
+                textTransform: "uppercase", color: "rgba(255,255,255,.45)",
+                marginBottom: 2,
+              }}>
+                {m.abbr} · example
+              </div>
+              <div style={{
+                fontFamily: "var(--fd)", fontSize: 28, fontWeight: 300,
+                color: "var(--gold-light)", lineHeight: 1,
+              }}>
+                {m.example}
+              </div>
+              <div style={{
+                fontFamily: "var(--fb)", fontSize: 10,
+                color: "rgba(255,255,255,.5)", lineHeight: 1.5,
+              }}>
+                {m.exampleSub}
+              </div>
+            </div>
+
+            {/* Label + thresholds + description */}
+            <div>
+              <div style={{
+                fontFamily: FB, fontSize: 14, fontWeight: 700,
+                color: "var(--dark)", marginBottom: 8,
+              }}>
+                {m.label}
+              </div>
+
+              {/* Threshold pills */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                {m.thresholds.map((t) => (
+                  <span key={t.label} style={{
+                    fontFamily: FB, fontSize: 10, fontWeight: 600,
+                    padding: "3px 8px", borderRadius: 4,
+                    border: `1px solid ${t.color}`,
+                    color: t.color,
+                    whiteSpace: "nowrap",
+                  }}>
+                    {t.label} — {t.text}
+                  </span>
+                ))}
+              </div>
+
+              <p style={{
+                fontFamily: FB, fontSize: 13, color: "var(--mid)",
+                margin: 0, lineHeight: 1.7,
+              }}>
+                {m.desc}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Network fragments note */}
+      <div style={{
+        marginTop: 28, padding: "14px 16px",
+        background: "var(--primary-10)", borderRadius: 8,
+        borderLeft: "3px solid var(--gold)",
+      }}>
+        <div style={{ fontFamily: FB, fontSize: 11, fontWeight: 700, color: "var(--dark)", marginBottom: 4 }}>
+          Network fragments created
+        </div>
+        <p style={{ fontFamily: FB, fontSize: 12, color: "var(--mid)", margin: 0, lineHeight: 1.6 }}>
+          A fourth metric fires only when removal causes complete disconnection — teams that lose every path to another team, not just a slower route. This is rare in well-connected organisations but becomes likely when a single employee is the sole bridge between two departments. When it appears, it is the most severe signal the simulation can produce.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Privacy principles ─────────────────────────────────────────────────────── */
 const PRIVACY_POINTS = [
   {
@@ -650,6 +791,26 @@ export default function InfoPage() {
                 Alerts include department name, member count, isolation ratio, and severity tier.
               </p>
             </div>
+          </div>
+        </div>
+
+        <hr className="section-divider" style={{ marginBottom: 56 }} />
+
+        {/* ── What-If deep-dive ────────────────────────────────────────────────── */}
+        <div style={{ marginBottom: 64 }}>
+          <Eyebrow>Departure Simulation</Eyebrow>
+          <SectionTitle>Reading the What-If results</SectionTitle>
+          <Body style={{ maxWidth: 640, marginBottom: 32 }}>
+            The simulation removes one employee from the live collaboration graph and
+            recomputes three structural metrics. Each measures a different dimension
+            of network damage — and they tell different stories depending on the
+            person's role in the organisation.
+          </Body>
+          <div style={{
+            background: "var(--white)", borderRadius: 12,
+            boxShadow: "0 1px 4px rgba(0,0,0,.08)", padding: "32px",
+          }}>
+            <WhatIfExplainer />
           </div>
         </div>
 
