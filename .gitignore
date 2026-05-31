@@ -16,6 +16,7 @@ env/
 .env
 *.egg-link
 pip-wheel-metadata/
+/planning
 
 # Testing
 .pytest_cache/

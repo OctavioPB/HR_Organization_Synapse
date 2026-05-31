@@ -25,48 +25,59 @@ export default function Navbar() {
         padding: "0 32px",
       }}
     >
-      {/* Left: OPB monogram + nav links */}
-      <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
+      {/* Left: OPB monogram + project name */}
+      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
         <span
           style={{
             fontFamily: "'Fraunces', Georgia, serif",
             fontSize: "20px",
             fontWeight: 300,
-            textDecoration: "none",
           }}
         >
           <span style={{ color: "#ffffff" }}>O</span>
           <em style={{ color: "var(--gold-light)", fontStyle: "italic" }}>PB</em>
         </span>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          {NAV_LINKS.map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end
-              style={({ isActive }) => ({
-                fontFamily: "var(--fb)",
-                fontSize: "13px",
-                fontWeight: 500,
-                letterSpacing: "0.5px",
-                textDecoration: "none",
-                paddingBottom: "4px",
-                color: isActive ? "var(--gold)" : "rgba(255,255,255,.5)",
-                borderBottom: isActive
-                  ? "2px solid var(--gold)"
-                  : "2px solid transparent",
-                transition: "color 150ms, border-color 150ms",
-              })}
-            >
-              {label}
-            </NavLink>
-          ))}
-        </div>
+        <span style={{ width: "1px", height: "18px", background: "rgba(255,255,255,.15)" }} />
+
+        <span
+          style={{
+            fontFamily: "'Fraunces', Georgia, serif",
+            fontSize: "15px",
+            fontWeight: 300,
+            letterSpacing: "0.2px",
+          }}
+        >
+          <span style={{ color: "rgba(255,255,255,.85)" }}>Org </span>
+          <em style={{ color: "var(--gold-light)", fontStyle: "italic" }}>Synapse</em>
+        </span>
       </div>
 
-      {/* Right: external links + wordmark */}
-      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+      {/* Right: nav links + API Docs */}
+      <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+        {NAV_LINKS.map(({ to, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end
+            style={({ isActive }) => ({
+              fontFamily: "var(--fb)",
+              fontSize: "13px",
+              fontWeight: 500,
+              letterSpacing: "0.5px",
+              textDecoration: "none",
+              paddingBottom: "4px",
+              color: isActive ? "var(--gold)" : "rgba(255,255,255,.5)",
+              borderBottom: isActive
+                ? "2px solid var(--gold)"
+                : "2px solid transparent",
+              transition: "color 150ms, border-color 150ms",
+            })}
+          >
+            {label}
+          </NavLink>
+        ))}
+
         <a
           href={`${API_BASE}/docs`}
           target="_blank"
@@ -76,25 +87,14 @@ export default function Navbar() {
             fontSize: "11px",
             letterSpacing: "1px",
             textDecoration: "none",
-            color: "rgba(255,255,255,.45)",
+            color: "rgba(255,255,255,.35)",
             transition: "color 150ms",
           }}
-          onMouseEnter={e => e.target.style.color = "rgba(255,255,255,.8)"}
-          onMouseLeave={e => e.target.style.color = "rgba(255,255,255,.45)"}
+          onMouseEnter={e => e.target.style.color = "rgba(255,255,255,.75)"}
+          onMouseLeave={e => e.target.style.color = "rgba(255,255,255,.35)"}
         >
           API Docs ↗
         </a>
-        <span
-          style={{
-            fontFamily: "var(--fb)",
-            fontSize: "9px",
-            letterSpacing: "3px",
-            textTransform: "uppercase",
-            color: "rgba(255,255,255,.25)",
-          }}
-        >
-          Org Synapse · ONA Platform
-        </span>
       </div>
     </nav>
   );

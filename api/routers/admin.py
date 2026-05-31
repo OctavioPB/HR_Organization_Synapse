@@ -142,7 +142,7 @@ def update_tenant_plan(
     return {"tenant_id": tenant_id, "plan": plan}
 
 
-@router.delete("/tenants/{tenant_id}", status_code=204)
+@router.delete("/tenants/{tenant_id}", status_code=204, response_model=None)
 def deactivate_tenant(
     tenant_id: str,
     drop_schema: bool = False,
@@ -210,7 +210,7 @@ def create_api_key(
     )
 
 
-@router.delete("/tenants/{tenant_id}/api-keys/{key_id}", status_code=204)
+@router.delete("/tenants/{tenant_id}/api-keys/{key_id}", status_code=204, response_model=None)
 def revoke_api_key(
     tenant_id: str,
     key_id: str,
