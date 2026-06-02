@@ -100,7 +100,8 @@ class ChurnGAT(nn.Module):
         x: torch.Tensor,
         edge_index: torch.Tensor,
         edge_weight: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+        return_attention: bool = False,
+    ):
         """Forward pass.
 
         Args:
@@ -108,11 +109,28 @@ class ChurnGAT(nn.Module):
             edge_index: COO edge index, shape (2, E).
             edge_weight: Optional per-edge weights, shape (E,).  Ignored by
                          GATConv internally but accepted for API consistency.
+            return_attention: If True, also return the first-layer attention
+                coefficients so callers can explain each employee's risk by the
+                neighbors that drive it (MODEL.md §7.4.2).
 
         Returns:
             Logit per node, shape (N,).  Apply sigmoid for probabilities.
+            When ``return_attention`` is True, returns a tuple
+            ``(logits, (att_edge_index, att_weights))`` where ``att_weights`` has
+            shape (E', heads) over the (self-loop-augmented) edge set.
         """
         x = F.dropout(x, p=self.dropout, training=self.training)
+
+        if return_attention:
+            h, attention = self.conv1(
+                x, edge_index, return_attention_weights=True
+            )
+            h = F.elu(h)
+            h = F.dropout(h, p=self.dropout, training=self.training)
+            h = F.elu(self.conv2(h, edge_index))
+            logits = self.classifier(h).squeeze(-1)
+            return logits, attention
+
         x = F.elu(self.conv1(x, edge_index))
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = F.elu(self.conv2(x, edge_index))

@@ -9,12 +9,67 @@ from __future__ import annotations
 
 import logging
 import os
+from collections import defaultdict
 from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
 _COHORT_ALERT_DAY = int(os.environ.get("ONBOARDING_ALERT_DAY", "60"))
 _ONBOARDING_WINDOW = int(os.environ.get("ONBOARDING_WINDOW_DAYS", "180"))
+# Minimum CS_overlap (Jaccard of community membership across weeks) for an
+# onboarding cohort to be considered structurally stable (MODEL.md §9.1).
+_CS_OVERLAP_THRESHOLD = float(os.environ.get("CS_OVERLAP_THRESHOLD", "0.6"))
+
+
+def _load_community_membership(snapshot_date: date, conn) -> dict[int, set[str]]:
+    """Return community_id → set of employee_ids in that community at *snapshot_date*.
+
+    Used to compute neighborhood community overlap.  Community *IDs* are not
+    comparable across runs (Louvain is non-deterministic and labels are
+    arbitrary), so we compare the *membership sets* themselves.
+    """
+    members: dict[int, set[str]] = defaultdict(set)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT employee_id::text, community_id
+            FROM graph_snapshots
+            WHERE snapshot_date = %s AND community_id IS NOT NULL
+            """,
+            (snapshot_date,),
+        )
+        for emp_id, cid in cur.fetchall():
+            members[int(cid)].add(str(emp_id))
+    return dict(members)
+
+
+def compute_cs_overlap(
+    emp_id: str,
+    cid_curr: int | None,
+    cid_prev: int | None,
+    curr_members: dict[int, set[str]],
+    prev_members: dict[int, set[str]],
+) -> float:
+    """Neighborhood Community Overlap CS_overlap(v, t) (MODEL.md §9.1).
+
+    Jaccard similarity between the set of people in v's community this week and
+    the set in v's community last week:
+
+        CS_overlap(v, t) = |Com(v, t) ∩ Com(v, t−7d)| / |Com(v, t) ∪ Com(v, t−7d)|
+
+    This measures whether the *people* around v are stable, rather than whether
+    an arbitrary integer community label happens to match across runs.
+
+    Returns 0.0 when either week's community membership is unavailable.
+    """
+    if cid_curr is None or cid_prev is None:
+        return 0.0
+    com_curr = curr_members.get(int(cid_curr), set())
+    com_prev = prev_members.get(int(cid_prev), set())
+    union = com_curr | com_prev
+    if not union:
+        return 0.0
+    return len(com_curr & com_prev) / len(union)
 
 
 def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
@@ -76,8 +131,15 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
         logger.info("No new hires found in the last %d days.", _ONBOARDING_WINDOW)
         return {"processed": 0}
 
+    # Load community membership sets for this week and last week once, so
+    # CS_overlap is computed against stable membership rather than arbitrary IDs.
+    prev_date = snapshot_date - timedelta(days=7)
+    curr_members = _load_community_membership(snapshot_date, conn)
+    prev_members = _load_community_membership(prev_date, conn)
+
     upserted = 0
     alerts_fired = 0
+    stable_count = 0  # cohorts with CS_overlap ≥ threshold (MODEL.md §9.1)
 
     with conn.cursor() as cur:
         for row in rows:
@@ -105,7 +167,8 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
             )
             cross_dept = int(cur.fetchone()["cnt"] or 0)
 
-            # Community stability (same community as 7 days ago)
+            # Neighborhood Community Overlap (CS_overlap) — Jaccard of community
+            # membership this week vs last week (MODEL.md §9.1).
             cur.execute(
                 """
                 SELECT community_id FROM graph_snapshots
@@ -120,12 +183,15 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
                 (emp_id, snapshot_date),
             )
             curr = cur.fetchone()
-            community_stability = (
-                1.0 if (prev and curr and prev["community_id"] == curr["community_id"])
-                else 0.0
+            cid_prev = prev["community_id"] if prev else None
+            cid_curr = curr["community_id"] if curr else None
+            community_stability = compute_cs_overlap(
+                emp_id, cid_curr, cid_prev, curr_members, prev_members
             )
+            if community_stability >= _CS_OVERLAP_THRESHOLD:
+                stable_count += 1
 
-            # Integration score: 50% degree percentile, 30% cross-dept, 20% community stability
+            # Integration score: 50% degree percentile, 30% cross-dept, 20% CS_overlap
             degree_pct_norm = min(degree_total / max(median_degree, 1), 1.0)
             cross_dept_norm = min(cross_dept / 5.0, 1.0)
             integration_score = (
@@ -152,7 +218,7 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
                   below_cohort_threshold = EXCLUDED.below_cohort_threshold
                 """,
                 (emp_id, snapshot_date, round(integration_score, 4),
-                 round(degree_pct_norm, 4), cross_dept, community_stability,
+                 round(degree_pct_norm, 4), cross_dept, round(community_stability, 4),
                  cohort_size, below_threshold),
             )
             upserted += 1
@@ -181,5 +247,13 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
                 alerts_fired += 1
 
     conn.commit()
-    logger.info("Onboarding: %d scores upserted, %d alerts fired.", upserted, alerts_fired)
-    return {"processed": upserted, "alerts_fired": alerts_fired, "snapshot_date": snapshot_date_str}
+    logger.info(
+        "Onboarding: %d scores upserted, %d alerts fired, %d cohorts structurally stable (CS_overlap ≥ %.2f).",
+        upserted, alerts_fired, stable_count, _CS_OVERLAP_THRESHOLD,
+    )
+    return {
+        "processed": upserted,
+        "alerts_fired": alerts_fired,
+        "stable_count": stable_count,
+        "snapshot_date": snapshot_date_str,
+    }

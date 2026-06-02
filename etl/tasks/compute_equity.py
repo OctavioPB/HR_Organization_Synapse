@@ -8,12 +8,25 @@ at the aggregate level — no individual demographic attributes leave this modul
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date
 
 logger = logging.getLogger(__name__)
 
 _DIMENSIONS = ["gender_group", "tenure_band", "level_band"]
 _METRICS    = ["betweenness", "degree", "cross_dept_ratio"]
+
+# Disparity ratio that triggers a `below_org_median` flag (MODEL.md §11.1).
+#
+# This 0.8 ratio is adapted *by analogy* from the EEOC four-fifths rule
+# (29 C.F.R. § 1607.4D), which applies to employment *selection rates*.
+# Betweenness/degree centrality are NOT selection rates, so here the threshold
+# is an INVESTIGATIVE HEURISTIC, not a legal standard: a flag means a group's
+# median structural position is far enough below the org median to warrant
+# qualitative human investigation of whether structural barriers exist. It is
+# not evidence of discrimination or legal liability. Configurable so it is never
+# mistaken for a fixed legal line.
+_DISPARITY_RATIO = float(os.environ.get("EQUITY_DISPARITY_RATIO", "0.8"))
 
 
 def task_compute_equity(snapshot_date_str: str, conn) -> dict:
@@ -91,7 +104,7 @@ def task_compute_equity(snapshot_date_str: str, conn) -> dict:
                     ("degree",      row["med_deg"], row["p25_deg"], row["p75_deg"], global_med_deg),
                 ]:
                     below = (median_v is not None and global_med is not None
-                             and median_v < global_med * 0.8)
+                             and median_v < global_med * _DISPARITY_RATIO)
                     cur.execute(
                         """
                         INSERT INTO structural_equity_scores

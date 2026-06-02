@@ -10,7 +10,9 @@ For each high-SPOF employee (source S), the algorithm:
                  + w_clust  * clustering_score
                  + w_domain * domain_overlap
 
-   structural_overlap — Jaccard(neighbors(S), neighbors(candidate))
+   structural_overlap — normalized weighted Jaccard of neighbor sets (MODEL.md §8.1):
+                        Tanimoto coefficient on proportional interaction weights,
+                        which removes the tenure/volume bias of raw edge weights
    clustering_score   — candidate's clustering coefficient [0, 1]
    domain_overlap     — |domains(S) ∩ domains(candidate)| / max(|domains(S)|, 1)
 
@@ -69,15 +71,65 @@ _WINDOW_DAYS      = int(os.environ.get("GRAPH_WINDOW_DAYS",           "30"))
 # ─── Pure computation ─────────────────────────────────────────────────────────
 
 
+def _proportional_neighbor_weights(node: str, G: nx.DiGraph, exclude: str) -> dict[str, float]:
+    """Return each neighbor's proportional share of *node*'s interaction volume.
+
+    Combines both directions (in + out edge weight) into an undirected
+    interaction weight per neighbor, then normalises so the shares sum to 1.0
+    (MODEL.md §8.1):
+
+        w_norm(node, u) = w(node, u) / Σ_x w(node, x)
+
+    Normalising removes the tenure/volume bias of raw accumulated weights: a
+    5-year employee no longer scores higher simply because their absolute edge
+    weights are larger.  Missing 'weight' attributes default to 1.0.
+
+    Args:
+        node: Employee whose neighborhood is measured.
+        G: Directed collaboration graph.
+        exclude: Counterpart employee to drop from the neighbor set (so the pair
+                 are not scored as each other's neighbors).
+
+    Returns:
+        Map neighbor_id → proportional weight ∈ (0, 1]; empty if no neighbors.
+    """
+    combined: dict[str, float] = {}
+    for u in G.successors(node):
+        if u == exclude:
+            continue
+        combined[u] = combined.get(u, 0.0) + float(G[node][u].get("weight", 1.0))
+    for u in G.predecessors(node):
+        if u == exclude:
+            continue
+        combined[u] = combined.get(u, 0.0) + float(G[u][node].get("weight", 1.0))
+
+    total = sum(combined.values())
+    if total <= 0:
+        return {}
+    return {u: w / total for u, w in combined.items()}
+
+
 def compute_structural_overlap(
     source_id: str,
     candidate_id: str,
     G: nx.DiGraph,
 ) -> float:
-    """Jaccard similarity of undirected neighbor sets for source and candidate.
+    """Normalized weighted Jaccard of source and candidate neighborhoods.
 
-    High overlap → candidate already knows most of source's network,
-    making them easier to position as a bridge replacement.
+    CORRECTION (MODEL.md §8.1, v2): the original used raw accumulated edge
+    weights (an unweighted set Jaccard in practice), which biases toward senior,
+    high-volume employees whose weights are numerically larger irrespective of
+    interaction *intensity*.  This version converts each employee's edge weights
+    to proportional interaction shares first, then computes the Tanimoto
+    coefficient on those proportions:
+
+        jaccard_weighted_norm =
+            Σ_{u ∈ N(s) ∩ N(c)} min(w_norm(s,u), w_norm(c,u))
+          / Σ_{u ∈ N(s) ∪ N(c)} max(w_norm(s,u), w_norm(c,u))
+
+    It measures whether s and c allocate similar *proportions* of their
+    interaction budget to the same colleagues, regardless of tenure. With
+    uniform edge weights it reduces to the classic set Jaccard.
 
     Args:
         source_id: SPOF employee UUID string.
@@ -87,14 +139,18 @@ def compute_structural_overlap(
     Returns:
         Float in [0, 1]. Returns 0.0 if neither node has any neighbors.
     """
-    src_neighbors = set(G.predecessors(source_id)) | set(G.successors(source_id))
-    cand_neighbors = set(G.predecessors(candidate_id)) | set(G.successors(candidate_id))
-    src_neighbors.discard(candidate_id)
-    cand_neighbors.discard(source_id)
-    union = src_neighbors | cand_neighbors
+    src_w = _proportional_neighbor_weights(source_id, G, exclude=candidate_id)
+    cand_w = _proportional_neighbor_weights(candidate_id, G, exclude=source_id)
+
+    union = set(src_w) | set(cand_w)
     if not union:
         return 0.0
-    return len(src_neighbors & cand_neighbors) / len(union)
+
+    numerator = sum(min(src_w.get(u, 0.0), cand_w.get(u, 0.0)) for u in union)
+    denominator = sum(max(src_w.get(u, 0.0), cand_w.get(u, 0.0)) for u in union)
+    if denominator <= 0:
+        return 0.0
+    return numerator / denominator
 
 
 def compute_domain_overlap(

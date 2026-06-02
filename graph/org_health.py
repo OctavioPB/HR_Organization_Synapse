@@ -18,6 +18,7 @@ so ops teams can tune sensitivity without a code deploy.
 from __future__ import annotations
 
 import logging
+import math
 import os
 from datetime import date
 from typing import Any
@@ -31,10 +32,29 @@ _W_SPOF    = float(os.environ.get("HEALTH_W_SPOF",       "0.35"))
 _W_ENTROPY = float(os.environ.get("HEALTH_W_ENTROPY",    "0.20"))
 _W_FRAG    = float(os.environ.get("HEALTH_W_FRAG",       "0.25"))
 
-# 10 active silos → maximum silo risk; calibrate up for large orgs
-_SILO_REF      = int(float(os.environ.get("HEALTH_SILO_REF",     "10")))
+# Silo risk denominator scales with organisation structure (MODEL.md §12.1):
+# maximum tolerable silo count ≈ one silo per SILO_THRESHOLD_RATIO departments,
+# with a floor of 2.  This replaces the deprecated fixed HEALTH_SILO_REF=10,
+# which was organisation-size invariant in the wrong direction.
+_SILO_THRESHOLD_RATIO = float(os.environ.get("SILO_THRESHOLD_RATIO", "3.0"))
+# Convex fragmentation penalty steepness (MODEL.md §12.2): higher λ punishes the
+# first disconnection (WCC 1→2) harder.  λ=1.5 ⇒ WCC=2 maps to risk ≈ 0.78.
+_FRAG_LAMBDA = float(os.environ.get("FRAGMENTATION_LAMBDA", "1.5"))
 # Entropy slope magnitude that maps to maximum entropy risk
 _ENTROPY_SCALE = float(os.environ.get("HEALTH_ENTROPY_SCALE", "0.05"))
+
+
+def silo_threshold(dept_count: int | None) -> int:
+    """Maximum tolerable active-silo count for an org with *dept_count* departments.
+
+    silo_threshold(d) = max(floor(d / SILO_THRESHOLD_RATIO), 2)  (MODEL.md §12.1)
+
+    The floor of 2 keeps the denominator sane for very small organisations.
+    When the department count is unknown, falls back to the floor of 2.
+    """
+    if not dept_count or dept_count <= 0:
+        return 2
+    return max(int(math.floor(dept_count / _SILO_THRESHOLD_RATIO)), 2)
 
 # ─── Tier thresholds (score, tier) — evaluated top-down ───────────────────────
 
@@ -63,6 +83,7 @@ def compute_org_health(
     avg_entropy_trend: float | None,
     wcc_count: int,
     node_count: int,
+    dept_count: int | None = None,
 ) -> dict[str, Any]:
     """Return health score dict from pre-aggregated inputs.
 
@@ -75,12 +96,17 @@ def compute_org_health(
         avg_entropy_trend: Mean entropy slope (negative = withdrawal). None if unavailable.
         wcc_count: Weakly-connected components in the collaboration graph.
         node_count: Total employees (graph nodes) in the snapshot.
+        dept_count: Distinct departments — scales the silo-risk denominator
+            (MODEL.md §12.1).  When None the denominator falls back to its floor.
 
     Returns:
         Dict with keys: score, tier, component_scores, silo_count,
         avg_spof_score, avg_entropy_trend, wcc_count, node_count.
     """
-    silo_risk = min(silo_count / max(_SILO_REF, 1), 1.0)
+    # Silo risk: denominator scales with org structure rather than a fixed 10
+    # (MODEL.md §12.1) — 10 silos in a 50-person org is catastrophic but
+    # negligible in a 5,000-person org.
+    silo_risk = min(silo_count / silo_threshold(dept_count), 1.0)
     spof_risk = max(0.0, min(1.0, avg_spof_score))
 
     if avg_entropy_trend is not None:
@@ -89,9 +115,11 @@ def compute_org_health(
     else:
         entropy_risk = 0.0  # no data → neutral assumption
 
-    # Each isolated component beyond the first is a fragmentation signal
+    # Convex (exponential) fragmentation penalty (MODEL.md §12.2): the first
+    # disconnection (WCC 1→2) severs the org graph and deserves near-maximum
+    # risk immediately, rather than the negligible ~1/n the old linear form gave.
     extra_components = max(0, wcc_count - 1)
-    frag_risk = min(extra_components / max(node_count, 1), 1.0)
+    frag_risk = 1.0 - math.exp(-_FRAG_LAMBDA * extra_components)
 
     composite_risk = (
         _W_SILO    * silo_risk
@@ -163,7 +191,15 @@ def compute_and_persist(snapshot_date: date, conn) -> dict[str, Any]:
         else None
     )
 
-    # 3. WCC count from the collaboration graph for this snapshot window
+    # 3. Distinct departments among active employees — scales silo-risk denominator
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(DISTINCT department)::int AS d FROM employees WHERE active = true"
+        )
+        drow = cur.fetchone()
+    dept_count = int(drow["d"] or 0) if drow else 0
+
+    # 4. WCC count from the collaboration graph for this snapshot window
     raw_edges = load_raw_edges(snapshot_date, window_days=30)
     if raw_edges:
         G = build_graph(raw_edges)
@@ -173,17 +209,18 @@ def compute_and_persist(snapshot_date: date, conn) -> dict[str, Any]:
     else:
         wcc_count = 1
 
-    # 4. Score
+    # 5. Score
     health = compute_org_health(
         silo_count=silo_count,
         avg_spof_score=avg_spof,
         avg_entropy_trend=avg_entropy,
         wcc_count=wcc_count,
         node_count=node_count,
+        dept_count=dept_count,
     )
     health["computed_at"] = snapshot_date
 
-    # 5. Persist
+    # 6. Persist
     queries.persist_org_health(health, conn)
     conn.commit()
 

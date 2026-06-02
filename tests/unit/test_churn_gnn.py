@@ -292,8 +292,10 @@ def test_auroc_perfect():
 
 
 def test_auroc_worst():
+    # Worst case: the positives receive the LOWEST scores, so every negative is
+    # ranked above every positive → AUROC = 0.0.
     y_true  = np.array([1, 1, 0, 0], dtype=float)
-    y_score = np.array([0.8, 0.9, 0.1, 0.2])  # reversed
+    y_score = np.array([0.1, 0.2, 0.8, 0.9])  # positives scored lowest
     assert abs(_auroc(y_true, y_score) - 0.0) < 1e-9
 
 

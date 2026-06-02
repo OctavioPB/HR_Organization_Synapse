@@ -139,6 +139,39 @@ class TestComputeOrgHealth:
         high = compute_org_health(0, 0.0, None, 10, 100)
         assert high["component_scores"]["frag"] > low["component_scores"]["frag"]
 
+    def test_fragmentation_convex_first_split_is_severe(self):
+        """MODEL.md §12.2: first disconnection (WCC 1→2) ≈ 0.78 risk, not ~1/n."""
+        from graph.org_health import compute_org_health
+
+        # n is large; the old linear form gave ~0.005 — convex form gives ~0.777.
+        result = compute_org_health(0, 0.0, None, 2, 200)
+        assert result["component_scores"]["frag"] == pytest.approx(0.777, abs=0.01)
+
+    def test_fragmentation_size_invariant(self):
+        """Convex fragmentation depends on WCC count, not org size."""
+        from graph.org_health import compute_org_health
+
+        small = compute_org_health(0, 0.0, None, 3, 20)["component_scores"]["frag"]
+        large = compute_org_health(0, 0.0, None, 3, 5000)["component_scores"]["frag"]
+        assert small == pytest.approx(large)
+
+    def test_silo_risk_denominator_scales_with_departments(self):
+        """MODEL.md §12.1: same silo count is riskier in a department-poor org."""
+        from graph.org_health import compute_org_health
+
+        # 3 silos, threshold = max(floor(d/3), 2)
+        few_depts  = compute_org_health(3, 0.0, None, 1, 100, dept_count=3)   # thr=2 → capped 1.0
+        many_depts = compute_org_health(3, 0.0, None, 1, 100, dept_count=30)  # thr=10 → 0.3
+        assert few_depts["component_scores"]["silo"] > many_depts["component_scores"]["silo"]
+
+    def test_silo_threshold_floor_is_two(self):
+        from graph.org_health import silo_threshold
+
+        assert silo_threshold(0) == 2
+        assert silo_threshold(None) == 2
+        assert silo_threshold(3) == 2
+        assert silo_threshold(30) == 10
+
     def test_returns_correct_keys(self):
         from graph.org_health import compute_org_health
 

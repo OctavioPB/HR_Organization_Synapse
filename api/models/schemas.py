@@ -164,6 +164,11 @@ class KnowledgeIslandsResponse(BaseModel):
 # ─── Churn risk ───────────────────────────────────────────────────────────────
 
 
+class ChurnInfluenceNeighbor(BaseModel):
+    employee_id: str
+    attention: float = Field(..., description="GAT attention weight (averaged over heads)")
+
+
 class ChurnScore(BaseModel):
     employee_id: str
     name: str
@@ -172,6 +177,17 @@ class ChurnScore(BaseModel):
     risk_tier: Literal["high", "medium", "low"]
     model_version: str
     scored_at: date
+    # MODEL.md §7.4 — turnover contagion + explainability (optional; older rows omit)
+    peer_churn_rate: float | None = Field(
+        default=None, description="Fraction of peers departed in trailing window (§7.4.1)"
+    )
+    peer_contagion_risk: bool | None = Field(
+        default=None, description="Peer churn rate exceeds the contagion threshold"
+    )
+    influence_neighbors: list[ChurnInfluenceNeighbor] = Field(
+        default_factory=list,
+        description="Top neighbors driving this employee's churn score (§7.4.2)",
+    )
 
 
 class ChurnScoresResponse(BaseModel):

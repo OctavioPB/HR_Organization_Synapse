@@ -87,9 +87,9 @@ function EquityChart({ data, metric }) {
       {/* Below-median groups alert */}
       {data.groups.some(g => g.below_org_median) && (
         <div style={{ marginTop: "16px", background: "#FDEAEA", borderLeft: "3px solid #E03448", borderRadius: "0 8px 8px 0", padding: "12px 16px" }}>
-          <div style={{ fontFamily: "var(--fb)", fontSize: "13px", color: "#7A1020", fontWeight: 600 }}>Structural gap detected</div>
+          <div style={{ fontFamily: "var(--fb)", fontSize: "13px", color: "#7A1020", fontWeight: 600 }}>Investigation trigger</div>
           <div style={{ fontFamily: "var(--fb)", fontSize: "13px", color: "#7A1020", marginTop: "4px" }}>
-            {data.groups.filter(g => g.below_org_median).map(g => g.group_value).join(", ")} — below 80% of the organisational median for {metric}. Consider deliberate cross-functional assignments or bridging role investments for this group.
+            {data.groups.filter(g => g.below_org_median).map(g => g.group_value).join(", ")} — below 80% of the organisational median for {metric}. This is a heuristic flag for qualitative human review of whether structural barriers exist — not evidence of discrimination or a legal determination. A possible response is deliberate cross-functional assignments or bridging-role investments for this group.
           </div>
         </div>
       )}

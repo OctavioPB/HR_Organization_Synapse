@@ -57,7 +57,7 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
     """
     from graph.builder import build_graph, load_raw_edges
     from graph.metrics import compute_betweenness, compute_clustering
-    from graph.risk_scorer import score_all, write_scores
+    from graph.risk_scorer import score_all_with_bands, write_scores
     from ml.features.feature_extractor import compute_entropy_trends
 
     d = date.fromisoformat(snapshot_date_str)
@@ -70,21 +70,27 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
             "snapshot_date": snapshot_date_str,
             "employee_count": 0,
             "critical_count": 0,
+            "critical_uncertain_count": 0,
             "warning_count": 0,
         }
 
     betweenness = compute_betweenness(G)
     clustering = compute_clustering(G)
     entropy_trends = compute_entropy_trends(d, window_days)
-    scores = score_all(G, betweenness, clustering, entropy_trends=entropy_trends)
-    write_scores(scores, entropy_trends, d)
+    bands = score_all_with_bands(G, betweenness, clustering, entropy_trends=entropy_trends)
+    scores = {node: detail["score"] for node, detail in bands.items()}
+    write_scores(scores, entropy_trends, d, bands=bands)
 
-    critical = sum(1 for s in scores.values() if s >= 0.7)
+    # Robust criticals fire automatic alerts; weight-sensitive ones are held for
+    # qualitative review (MODEL.md §5.3, §5.5).
+    critical = sum(1 for b in bands.values() if b["robust_critical"])
+    critical_uncertain = sum(1 for b in bands.values() if b["weight_sensitive"])
     warning = sum(1 for s in scores.values() if 0.5 <= s < 0.7)
     stats = {
         "snapshot_date": snapshot_date_str,
         "employee_count": len(scores),
         "critical_count": critical,
+        "critical_uncertain_count": critical_uncertain,
         "warning_count": warning,
     }
     logger.info("task_score_risks: %s", stats)
@@ -93,6 +99,11 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
 
 def task_flag_spof_critical(snapshot_date_str: str) -> dict:
     """Read risk_scores for snapshot_date and insert spof_critical alerts for critical employees.
+
+    Only ``critical`` (robust under weight perturbation) employees fire automatic
+    alerts.  ``critical_uncertain`` (weight-sensitive) employees are intentionally
+    excluded — per MODEL.md §5.3/§5.5 they require qualitative review before any
+    succession action and should not generate an automatic critical alert.
 
     Idempotent: only inserts alerts for employees not already alerted on this date.
 

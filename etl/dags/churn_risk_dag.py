@@ -164,8 +164,26 @@ def churn_gnn_score_dag():
             "low": low_count,
         }
 
+    @task()
+    def peer_contagion(ds: str | None = None, **context) -> dict:
+        """Rule-based turnover-contagion alert layer (MODEL.md §7.4.1).
+
+        Runs after scoring; needs no checkpoint, so it still fires even when the
+        GNN has not been trained yet.  Enriches today's churn_scores with
+        peer_churn_rate and raises peer_contagion_risk alerts.
+        """
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+        from etl.tasks.compute_peer_contagion import task_compute_peer_contagion
+
+        snapshot_date = ds or date.today().isoformat()
+        return task_compute_peer_contagion(snapshot_date, window_days=30)
+
     score_task = score_employees()
-    wait_for_graph >> score_task  # type: ignore[operator]
+    contagion_task = peer_contagion()
+    wait_for_graph >> score_task >> contagion_task  # type: ignore[operator]
 
 
 churn_gnn_score_dag()

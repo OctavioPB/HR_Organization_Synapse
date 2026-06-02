@@ -90,9 +90,18 @@ def build_graph(
     edge_weights: dict[tuple[str, str], float] = {}
     node_dept: dict[str, str] = {}
 
-    for source_id, target_id, weight, source_dept, target_dept in raw_edges:
+    for row in raw_edges:
+        # Accept both plain tuples (default cursor) and mapping rows such as
+        # psycopg2 RealDictRow (used by the API connection).  Unpacking a dict
+        # directly would yield its keys — the column-name strings — instead of
+        # the values, which silently corrupts the weight into 'weight'.
+        if hasattr(row, "keys"):
+            source_id, target_id, weight, source_dept, target_dept = tuple(row.values())[:5]
+        else:
+            source_id, target_id, weight, source_dept, target_dept = row
+
         edge_weights[(source_id, target_id)] = (
-            edge_weights.get((source_id, target_id), 0.0) + weight
+            edge_weights.get((source_id, target_id), 0.0) + float(weight)
         )
         node_dept[source_id] = source_dept
         node_dept[target_id] = target_dept

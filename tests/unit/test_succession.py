@@ -109,6 +109,38 @@ class TestComputeStructuralOverlap:
         # neighbors(s) = {n1, n2}, neighbors(c) = {n1, n2} → Jaccard = 1
         assert result == pytest.approx(1.0)
 
+    def test_weight_normalization_removes_volume_bias(self):
+        """MODEL.md §8.1: proportional weights make a low-volume candidate who
+        allocates the *same share* of attention score as high as a high-volume one."""
+        G = nx.DiGraph()
+        # s splits attention 50/50 between n1 and n2.
+        G.add_edge("s", "n1", weight=10.0)
+        G.add_edge("s", "n2", weight=10.0)
+        # senior candidate: huge absolute weights, same 50/50 proportions.
+        G.add_edge("senior", "n1", weight=500.0)
+        G.add_edge("senior", "n2", weight=500.0)
+        # junior candidate: tiny absolute weights, same 50/50 proportions.
+        G.add_edge("junior", "n1", weight=1.0)
+        G.add_edge("junior", "n2", weight=1.0)
+
+        senior = compute_structural_overlap("s", "senior", G)
+        junior = compute_structural_overlap("s", "junior", G)
+        # Both allocate identical proportions → identical structural overlap (1.0),
+        # so tenure/volume no longer biases the score.
+        assert senior == pytest.approx(junior)
+        assert senior == pytest.approx(1.0)
+
+    def test_weighted_jaccard_reflects_proportions(self):
+        """A candidate whose interaction *shares* differ scores below 1.0."""
+        G = nx.DiGraph()
+        G.add_edge("s", "n1", weight=9.0)   # s: 90% n1, 10% n2
+        G.add_edge("s", "n2", weight=1.0)
+        G.add_edge("c", "n1", weight=1.0)   # c: 10% n1, 90% n2
+        G.add_edge("c", "n2", weight=9.0)
+        result = compute_structural_overlap("s", "c", G)
+        # min/max Tanimoto: (0.1+0.1)/(0.9+0.9) = 0.2/1.8 ≈ 0.111
+        assert result == pytest.approx(0.2 / 1.8, abs=1e-6)
+
 
 # ─── compute_domain_overlap ───────────────────────────────────────────────────
 

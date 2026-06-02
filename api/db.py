@@ -509,6 +509,9 @@ def fetch_churn_scores(
                 cs.churn_prob,
                 cs.risk_tier,
                 cs.model_version,
+                cs.peer_churn_rate,
+                cs.peer_contagion_risk,
+                cs.influence_neighbors,
                 cs.scored_at
             FROM churn_scores cs
             JOIN employees e ON cs.employee_id = e.id
