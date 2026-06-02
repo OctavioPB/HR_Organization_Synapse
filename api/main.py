@@ -19,8 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.middleware.tenant_middleware import TenantMiddleware
 
 from api.routers import (
-    admin, alerts, billing, compliance, connectors, graph, internal,
-    knowledge, org_health, query, risk, succession, ws,
+    admin, alerts, billing, compliance, connectors, equity, graph, internal,
+    knowledge, manager, onboarding, org_health, query, risk, scenarios, succession, teams, ws,
 )
 
 try:
@@ -101,6 +101,11 @@ app.include_router(org_health.router)  # GET /org-health/* (F9)
 app.include_router(query.router)       # POST /query/natural (F7)
 app.include_router(compliance.router)  # GET /compliance/* (F8)
 app.include_router(ws.router)          # WS /alerts/live
+app.include_router(manager.router)     # GET /manager/team, /manager/team/{id}/suggestions
+app.include_router(onboarding.router)  # GET /onboarding/cohort, /onboarding/employee/{id}/history
+app.include_router(scenarios.router)   # CRUD /scenarios + /scenarios/{id}/compute
+app.include_router(teams.router)       # POST /teams/optimize, GET /teams/departments, /teams/domains
+app.include_router(equity.router)      # GET /equity/centrality-distribution, /equity/succession-check
 app.include_router(internal.router)   # POST /internal/alerts/broadcast
 
 # ─── Prometheus metrics ───────────────────────────────────────────────────────

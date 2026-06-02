@@ -172,3 +172,56 @@ async def compliance_report(conn=Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Report generation failed: {exc}") from exc
     return HTMLResponse(content=html)
+
+
+@router.get(
+    "/departure/{employee_id}",
+    summary="Departure impact report for one employee",
+)
+def get_departure_impact_report(employee_id: str, conn=Depends(get_db)) -> dict:
+    """Return the full departure impact report for a given employee.
+
+    Includes predicted scores, actual structural impact, and AI narrative.
+    Requires hr_admin role in production.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                dr.id::text,
+                dr.employee_id::text,
+                e.name,
+                e.department,
+                dr.departure_date,
+                dr.generated_at,
+                dr.impact_json,
+                dr.narrative_text,
+                dr.status
+            FROM departure_impact_reports dr
+            JOIN employees e ON e.id = dr.employee_id
+            WHERE dr.employee_id = %s::uuid
+            ORDER BY dr.generated_at DESC
+            LIMIT 1
+            """,
+            (employee_id,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No departure impact report found for employee {employee_id}.",
+        )
+
+    row = dict(row)
+    return {
+        "report_id":      row["id"],
+        "employee_id":    row["employee_id"],
+        "name":           row["name"],
+        "department":     row["department"],
+        "departure_date": str(row["departure_date"]),
+        "generated_at":   str(row["generated_at"]),
+        "impact_json":    row["impact_json"],
+        "narrative_text": row["narrative_text"],
+        "status":         row["status"],
+    }

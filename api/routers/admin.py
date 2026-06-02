@@ -367,3 +367,95 @@ async def dev_reset(
     output = await _run_script([script, "--yes"])
     logger.warning("dev/reset executed — all application data cleared")
     return {"ok": True, "output": output}
+
+
+# ─── Digest configuration (Feature 9) ────────────────────────────────────────
+
+
+class DigestConfigBody(BaseModel):
+    email_recipients: list[str] = Field(default_factory=list)
+    slack_webhook_url: str | None = None
+    enabled_email: bool = False
+    enabled_slack: bool = False
+    timezone: str = "UTC"
+
+
+class DigestConfigResponse(BaseModel):
+    email_recipients: list[str]
+    slack_webhook_url_set: bool
+    enabled_email: bool
+    enabled_slack: bool
+    timezone: str
+    updated_at: str | None = None
+
+
+@router.get("/digest-config", response_model=DigestConfigResponse)
+def get_digest_config(conn=Depends(get_admin_db)) -> DigestConfigResponse:
+    """Return current digest configuration (redacts webhook URL)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT email_recipients, slack_webhook_url, enabled_email, enabled_slack, timezone, updated_at FROM digest_config LIMIT 1"
+        )
+        row = cur.fetchone()
+    if not row:
+        return DigestConfigResponse(
+            email_recipients=[], slack_webhook_url_set=False,
+            enabled_email=False, enabled_slack=False, timezone="UTC",
+        )
+    row = dict(row)
+    return DigestConfigResponse(
+        email_recipients=row["email_recipients"] or [],
+        slack_webhook_url_set=bool(row["slack_webhook_url"]),
+        enabled_email=row["enabled_email"],
+        enabled_slack=row["enabled_slack"],
+        timezone=row["timezone"],
+        updated_at=str(row["updated_at"]) if row["updated_at"] else None,
+    )
+
+
+@router.post("/digest-config", response_model=DigestConfigResponse)
+def upsert_digest_config(
+    body: DigestConfigBody,
+    conn=Depends(get_admin_db),
+) -> DigestConfigResponse:
+    """Create or update the digest configuration."""
+    import re as _re
+    email_re = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    bad = [e for e in body.email_recipients if not email_re.match(e)]
+    if bad:
+        raise HTTPException(status_code=422, detail=f"Invalid email addresses: {bad}")
+
+    import zoneinfo
+    try:
+        zoneinfo.ZoneInfo(body.timezone)
+    except Exception:
+        raise HTTPException(status_code=422, detail=f"Invalid IANA timezone: {body.timezone}")
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO digest_config (email_recipients, slack_webhook_url, enabled_email, enabled_slack, timezone, updated_at)
+            VALUES (%s::jsonb, %s, %s, %s, %s, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+              email_recipients  = EXCLUDED.email_recipients,
+              slack_webhook_url = EXCLUDED.slack_webhook_url,
+              enabled_email     = EXCLUDED.enabled_email,
+              enabled_slack     = EXCLUDED.enabled_slack,
+              timezone          = EXCLUDED.timezone,
+              updated_at        = NOW()
+            """,
+            (
+                __import__("json").dumps(body.email_recipients),
+                body.slack_webhook_url,
+                body.enabled_email,
+                body.enabled_slack,
+                body.timezone,
+            ),
+        )
+    return DigestConfigResponse(
+        email_recipients=body.email_recipients,
+        slack_webhook_url_set=bool(body.slack_webhook_url),
+        enabled_email=body.enabled_email,
+        enabled_slack=body.enabled_slack,
+        timezone=body.timezone,
+    )

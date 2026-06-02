@@ -19,6 +19,7 @@ import psycopg2
 import psycopg2.extensions
 import psycopg2.extras
 from fastapi import Depends, Header, HTTPException, Request, status
+from typing import Callable
 
 
 # ─── Connection factory ───────────────────────────────────────────────────────
@@ -114,6 +115,30 @@ def get_tenant_db(
     finally:
         if not conn.closed:
             conn.close()
+
+
+# ─── Role-based access helpers ───────────────────────────────────────────────
+
+
+def get_current_role(request: Request) -> str:
+    """Return the role associated with the current API key (from TenantContext)."""
+    tenant = getattr(request.state, "tenant", None)
+    if tenant is None:
+        return "hr_admin"
+    return getattr(tenant, "role", "hr_admin")
+
+
+def require_role(*roles: str) -> Callable:
+    """Dependency factory: raises HTTP 403 if the caller's role is not in *roles*."""
+    def _check(request: Request) -> str:
+        role = get_current_role(request)
+        if role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role '{role}' is not authorised for this endpoint. Required: {list(roles)}",
+            )
+        return role
+    return _check
 
 
 # ─── Admin dependency (F6) ───────────────────────────────────────────────────

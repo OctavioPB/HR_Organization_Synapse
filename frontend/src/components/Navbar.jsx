@@ -1,9 +1,14 @@
 import { NavLink } from "react-router-dom";
 
 const NAV_LINKS = [
-  { to: "/",      label: "Dashboard" },
-  { to: "/info",  label: "Platform" },
-  { to: "/admin", label: "Admin" },
+  { to: "/",           label: "Dashboard" },
+  { to: "/manager",    label: "My Team" },
+  { to: "/onboarding", label: "Onboarding" },
+  { to: "/scenarios",  label: "Scenarios" },
+  { to: "/equity",     label: "Equity" },
+  { to: "/teams",      label: "Team Builder" },
+  { to: "/info",       label: "Platform" },
+  { to: "/admin",      label: "Admin" },
 ];
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";

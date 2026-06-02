@@ -59,6 +59,27 @@ def _on_failure_callback(context: dict) -> None:
 def graph_builder_dag():
 
     @task(on_failure_callback=_on_failure_callback)
+    def sync_hris_data(**context) -> dict:
+        """Sync HRIS enrichment fields into employees table (skipped if not configured)."""
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+        enable_hris = os.environ.get("ENABLE_HRIS", "false").lower() == "true"
+        if not enable_hris:
+            logger.info("HRIS sync disabled (ENABLE_HRIS != true). Skipping.")
+            return {"skipped": True, "rows_updated": 0}
+
+        from ingestion.connectors.hris_connector import sync_all
+        from ingestion.db import get_conn
+
+        with get_conn() as conn:
+            rows_updated = sync_all(conn)
+
+        logger.info("HRIS sync complete: %d employees updated.", rows_updated)
+        return {"skipped": False, "rows_updated": rows_updated}
+
+    @task(on_failure_callback=_on_failure_callback)
     def check_raw_events(**context) -> int:
         from etl.tasks.build_graph import check_raw_events as _check
 
@@ -80,6 +101,14 @@ def graph_builder_dag():
         # Invalidate the Redis snapshot cache so the API serves fresh data immediately
         invalidate_snapshot(context["ds"])
         return result
+
+    @task(on_failure_callback=_on_failure_callback)
+    def compute_onboarding(**context) -> dict:
+        from etl.tasks.compute_onboarding import task_compute_onboarding
+        from ingestion.db import get_conn
+
+        with get_conn() as conn:
+            return task_compute_onboarding(context["ds"], conn)
 
     @task(on_failure_callback=_on_failure_callback)
     def detect_silos(**context) -> dict:
@@ -168,17 +197,18 @@ def graph_builder_dag():
             logger.warning("broadcast_alerts: HTTP call failed (%s) — skipping", exc)
             return {"broadcast": 0, "connections": 0}
 
-    # Chain: each task passes its return value downstream (XCom) but
-    # dependencies are explicit to guarantee execution order.
-    raw_count = check_raw_events()
-    graph_stats = build_graph()
+    # Chain
+    hris_result  = sync_hris_data()
+    raw_count    = check_raw_events()
+    graph_stats  = build_graph()
     metric_stats = compute_metrics()
-    silo_stats = detect_silos()
-    risk_stats = score_risks()
-    spof_stats = flag_spof_critical()
-    ws_result = broadcast_alerts()
+    onboard_stats = compute_onboarding()
+    silo_stats   = detect_silos()
+    risk_stats   = score_risks()
+    spof_stats   = flag_spof_critical()
+    ws_result    = broadcast_alerts()
 
-    raw_count >> graph_stats >> metric_stats >> silo_stats >> risk_stats >> spof_stats >> trigger_neo4j
+    hris_result >> raw_count >> graph_stats >> metric_stats >> onboard_stats >> silo_stats >> risk_stats >> spof_stats >> trigger_neo4j
     spof_stats >> ws_result
 
 

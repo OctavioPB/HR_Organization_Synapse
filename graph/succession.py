@@ -291,11 +291,11 @@ def _load_raw_edges_from_conn(
         cur.execute(
             """
             SELECT
-                re.source_id::text,
-                re.target_id::text,
-                re.weight,
-                es.department,
-                et.department
+                re.source_id::text   AS source_id,
+                re.target_id::text   AS target_id,
+                re.weight            AS weight,
+                es.department        AS dept_source,
+                et.department        AS dept_target
             FROM raw_events re
             JOIN employees es ON re.source_id = es.id
             JOIN employees et ON re.target_id = et.id
@@ -307,7 +307,14 @@ def _load_raw_edges_from_conn(
             """,
             (start_ts, end_ts),
         )
-        return list(cur.fetchall())
+        # Explicitly convert to tuples so build_graph works regardless of cursor type
+        # (RealDictCursor and standard cursor both produce correct 5-tuples this way)
+        return [
+            (r["source_id"], r["target_id"], float(r["weight"]), r["dept_source"], r["dept_target"])
+            if hasattr(r, "keys")
+            else (str(r[0]), str(r[1]), float(r[2]), r[3], r[4])
+            for r in cur.fetchall()
+        ]
 
 
 def _load_top_spof(

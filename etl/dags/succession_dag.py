@@ -90,7 +90,22 @@ def succession_dag():
                 dt, n,
             )
 
-    result = compute_succession()
+    @task()
+    def generate_transfer_plans(result: dict, ds: str | None = None, **context) -> dict:
+        """Generate 90-day knowledge transfer plans for high-SPOF employees."""
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+        from etl.tasks.generate_transfer_plans import task_generate_transfer_plans
+        from ingestion.db import get_conn
+
+        snapshot_date = ds or str(date.today())
+        with get_conn() as conn:
+            return task_generate_transfer_plans(snapshot_date, conn)
+
+    result      = compute_succession()
+    plans       = generate_transfer_plans(result)
     wait_for_graph >> result
     log_summary(result)
 

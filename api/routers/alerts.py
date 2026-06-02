@@ -64,6 +64,57 @@ def get_silo_members(alert_id: str, conn=Depends(get_db)) -> SiloMembersResponse
     )
 
 
+@router.get("/departures")
+def get_departure_reports(
+    top: int = Query(default=20, ge=1, le=100),
+    conn=Depends(get_db),
+) -> dict:
+    """Return the most recent departure impact reports (ready status only)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                dr.id::text,
+                dr.employee_id::text,
+                e.name,
+                e.department,
+                dr.departure_date,
+                dr.generated_at,
+                dr.impact_json->>'predicted_spof_flag'          AS spof_flag,
+                (dr.impact_json->>'predicted_spof_score')::float AS predicted_spof_score,
+                (dr.impact_json->>'graph_diameter_delta_pct')::float AS graph_diameter_delta_pct,
+                dr.impact_json->>'recovery_trajectory'          AS recovery_trajectory,
+                dr.status
+            FROM departure_impact_reports dr
+            JOIN employees e ON e.id = dr.employee_id
+            WHERE dr.status = 'ready'
+            ORDER BY dr.generated_at DESC
+            LIMIT %s
+            """,
+            (top,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    return {
+        "total": len(rows),
+        "reports": [
+            {
+                "report_id": r["id"],
+                "employee_id": r["employee_id"],
+                "name": r["name"],
+                "department": r["department"],
+                "departure_date": str(r["departure_date"]),
+                "generated_at": str(r["generated_at"]),
+                "predicted_spof_score": r["predicted_spof_score"],
+                "spof_flag": r["spof_flag"],
+                "graph_diameter_delta_pct": r["graph_diameter_delta_pct"],
+                "recovery_trajectory": r["recovery_trajectory"],
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/history", response_model=AlertsResponse)
 def get_alert_history(
     days: int = Query(default=30, ge=1, le=365),

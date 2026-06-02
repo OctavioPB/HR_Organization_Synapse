@@ -214,6 +214,7 @@ class TenantContext:
     schema_name: str
     plan: str
     active: bool
+    role: str = "hr_admin"
     stripe_customer_id: str | None = None
 
 
@@ -261,7 +262,8 @@ def resolve_tenant(tenant_id: str, api_key: str, conn) -> TenantContext | None:
             """
             SELECT t.id::text, t.slug, t.name, t.schema_name, t.plan,
                    t.active, t.stripe_customer_id,
-                   k.id AS key_id, k.key_hash
+                   k.id AS key_id, k.key_hash,
+                   COALESCE(k.role, 'hr_admin') AS role
             FROM public.tenants t
             JOIN public.tenant_api_keys k ON k.tenant_id = t.id
             WHERE t.id = %s::uuid
@@ -291,6 +293,7 @@ def resolve_tenant(tenant_id: str, api_key: str, conn) -> TenantContext | None:
                 schema_name=row["schema_name"],
                 plan=row["plan"],
                 active=row["active"],
+                role=row["role"],
                 stripe_customer_id=row["stripe_customer_id"],
             )
     return None

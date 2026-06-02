@@ -18,6 +18,7 @@ import {
   simulateRemoval,
 } from "../lib/api.js";
 import OrgGraph from "../components/OrgGraph.jsx";
+import TransferPlanPanel from "../components/TransferPlanPanel.jsx";
 
 function StatPill({ label, value, unit = "" }) {
   return (
@@ -615,6 +616,26 @@ export default function EmployeeDetail() {
 
             {/* What-If simulation */}
             <SimulatePanel employeeId={id} />
+
+            {/* Knowledge Transfer Plan */}
+            <div style={{
+              background: "#fff",
+              borderRadius: "12px",
+              padding: "24px",
+              boxShadow: "0 1px 4px rgba(0,0,0,.07)",
+              marginTop: "8px",
+            }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                marginBottom: "16px",
+              }}>
+                <span style={{ width: "24px", height: "1px", background: "var(--gold)", display: "block" }} />
+                <span style={{ fontFamily: "var(--fb)", fontSize: "9px", fontWeight: 500, letterSpacing: "4px", textTransform: "uppercase", color: "var(--gold)" }}>
+                  Transfer Plan
+                </span>
+              </div>
+              <TransferPlanPanel employeeId={id} />
+            </div>
           </div>
         </div>
       </div>

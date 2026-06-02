@@ -3,7 +3,11 @@
 import logging
 from datetime import date
 
+import io
+import json as _json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from api import db as queries
 from api.deps import get_db
@@ -108,3 +112,96 @@ def get_employee_succession(
             ),
         )
     return _build_recommendation(data)
+
+
+# ─── Knowledge Transfer Plan endpoints (Feature 6) ───────────────────────────
+
+
+@router.get("/{employee_id}/transfer-plan", summary="Knowledge transfer plan for a SPOF employee")
+def get_transfer_plan(employee_id: str, conn=Depends(get_db)) -> dict:
+    """Return the generated 90-day transfer plan targeting top succession candidates."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                ktp.id::text,
+                ktp.spof_employee_id::text,
+                ktp.candidate_id::text,
+                ec.name AS candidate_name,
+                ec.department AS candidate_dept,
+                ktp.plan_json,
+                ktp.generated_at,
+                ktp.status
+            FROM knowledge_transfer_plans ktp
+            JOIN employees ec ON ec.id = ktp.candidate_id
+            WHERE ktp.spof_employee_id = %s::uuid
+              AND ktp.status = 'active'
+            ORDER BY ktp.generated_at DESC
+            LIMIT 2
+            """,
+            (employee_id,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No transfer plan for employee {employee_id}. Run the succession_dag first.",
+        )
+
+    return {
+        "spof_employee_id": employee_id,
+        "plans": [
+            {
+                "plan_id":        r["id"],
+                "candidate_id":   r["candidate_id"],
+                "candidate_name": r["candidate_name"],
+                "candidate_dept": r["candidate_dept"],
+                "generated_at":   str(r["generated_at"]),
+                "status":         r["status"],
+                "plan_json":      r["plan_json"],
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/{employee_id}/transfer-plan/export.csv", summary="Export transfer plan as CSV")
+def export_transfer_plan_csv(employee_id: str, conn=Depends(get_db)) -> StreamingResponse:
+    """Export all transfer plan actions as a downloadable CSV."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT plan_json, candidate_id::text
+            FROM knowledge_transfer_plans
+            WHERE spof_employee_id = %s::uuid AND status = 'active'
+            ORDER BY generated_at DESC
+            LIMIT 2
+            """,
+            (employee_id,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No transfer plan found.")
+
+    lines = ["week_range,action_type,description,candidate_id"]
+    for row in rows:
+        plan = row["plan_json"] or {}
+        cand_id = row["candidate_id"]
+        for action in plan.get("weeks_1_4", []):
+            desc = action.get("description", "").replace('"', '""')
+            lines.append(f'"Weeks 1-4","introduction","{desc}","{cand_id}"')
+        for action in plan.get("weeks_5_8", []):
+            desc = action.get("description", "").replace('"', '""')
+            lines.append(f'"Weeks 5-8","document_review","{desc}","{cand_id}"')
+        for action in plan.get("weeks_9_12", []):
+            desc = action.get("description", "").replace('"', '""')
+            lines.append(f'"Weeks 9-12","shadow","{desc}","{cand_id}"')
+
+    csv_content = "\n".join(lines)
+    return StreamingResponse(
+        io.BytesIO(csv_content.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=transfer_plan_{employee_id}.csv"},
+    )

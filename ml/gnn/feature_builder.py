@@ -77,17 +77,17 @@ def _build_node_features(
     for i, emp in enumerate(employees):
         emp_id = str(emp["id"])
 
-        # HR features
+        # HR features — use hire_date if available, else tenure_months_hris from HRIS
         hire_date = emp.get("hire_date")
-        tenure = (
-            (snapshot_date - hire_date).days
-            if hire_date is not None
-            else 0.0
-        )
+        if hire_date is not None:
+            tenure = float((snapshot_date - hire_date).days)
+        else:
+            tenure_months_hris = emp.get("tenure_months_hris") or 0
+            tenure = float(tenure_months_hris * 30)
         role_level = emp.get("role_level") or 0
         pto = emp.get("pto_days_used") or 0
 
-        x[i, 0] = _safe_div(float(tenure), _MAX_TENURE_DAYS)
+        x[i, 0] = _safe_div(tenure, _MAX_TENURE_DAYS)
         x[i, 1] = _safe_div(float(role_level), _MAX_ROLE_LEVEL)
         x[i, 2] = _safe_div(float(pto), _MAX_PTO_DAYS)
 
@@ -195,10 +195,15 @@ def build_graph_data(
 
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # Active employees only
+            # Active employees — prefer HRIS-enriched columns when available
             cur.execute(
                 """
-                SELECT id, hire_date, role_level, pto_days_used
+                SELECT
+                    id,
+                    hire_date,
+                    COALESCE(reporting_level, role_level, 0)                AS role_level,
+                    COALESCE(pto_days_ytd,   pto_days_used, 0)              AS pto_days_used,
+                    COALESCE(tenure_months, 0)                              AS tenure_months_hris
                 FROM employees
                 WHERE active = true
                 ORDER BY id
@@ -208,8 +213,9 @@ def build_graph_data(
                 {
                     "id": row[0],
                     "hire_date": row[1],
-                    "role_level": row[2],
+                    "role_level": row[2] or 0,
                     "pto_days_used": row[3] or 0,
+                    "tenure_months_hris": row[4] or 0,
                 }
                 for row in cur.fetchall()
             ]

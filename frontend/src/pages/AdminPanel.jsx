@@ -13,6 +13,10 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import DigestConfigPanel from "../components/DigestConfigPanel.jsx";
+
+const _adminQueryClient = new QueryClient();
 
 const API_BASE  = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? "";
@@ -583,6 +587,25 @@ export default function AdminPanel() {
 
         {/* Developer tools */}
         <DevToolsPanel />
+
+        {/* Divider */}
+        <div style={{ height: 1, background: T.primary10, margin: "40px 0" }} />
+
+        {/* Weekly Digest Configuration */}
+        <div>
+          <GoldEyebrow label="Weekly Digest" />
+          <h2 style={{ fontFamily: "'Fraunces',Georgia,serif", fontWeight: 300, fontSize: "22px", color: T.dark, margin: "8px 0 4px" }}>
+            Email & Slack <em style={{ fontStyle: "italic", color: T.gold }}>notifications</em>
+          </h2>
+          <p style={{ fontSize: 13, color: T.mid, margin: "0 0 20px" }}>
+            Configure the Monday morning digest sent to HR administrators.
+          </p>
+          <div style={{ background: T.white, borderRadius: "12px", padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,.07)" }}>
+            <QueryClientProvider client={_adminQueryClient}>
+              <DigestConfigPanel />
+            </QueryClientProvider>
+          </div>
+        </div>
 
         {/* Divider */}
         <div style={{ height: 1, background: T.primary10, margin: "40px 0" }} />

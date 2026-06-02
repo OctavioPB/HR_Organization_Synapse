@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Org Synapse — Weekly Digest</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300;1,9..144,400&display=swap');
+  body { margin:0; padding:0; background:#F4F6F9; font-family:'Plus Jakarta Sans',sans-serif; }
+  .wrapper { max-width:640px; margin:32px auto; }
+
+  .header {
+    background:#003366;
+    background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size:48px 48px;
+    padding:32px 40px;
+    border-radius:12px 12px 0 0;
+  }
+  .header-brand { font-family:'Fraunces',Georgia,serif; font-size:20px; font-weight:300; color:#fff; }
+  .header-brand em { color:#E8C46A; font-style:italic; }
+  .header-title { font-family:'Fraunces',Georgia,serif; font-size:28px; font-weight:300; color:#fff; margin-top:16px; }
+  .header-title em { color:#E8C46A; font-style:italic; }
+  .header-meta { font-family:'Plus Jakarta Sans',sans-serif; font-size:12px; color:rgba(255,255,255,.5); margin-top:8px; letter-spacing:1px; }
+
+  .body { background:#fff; padding:40px; }
+  .accent-bar { height:3px; background:#C8982A; border-radius:0; margin-bottom:32px; }
+
+  .eyebrow {
+    font-size:9px; letter-spacing:4px; text-transform:uppercase; color:#C8982A;
+    display:flex; align-items:center; gap:8px; margin-bottom:8px;
+  }
+  .eyebrow::before { content:''; display:block; width:24px; height:1px; background:#C8982A; }
+
+  .kpi-row { display:flex; gap:16px; margin:24px 0; }
+  .kpi-card {
+    flex:1; background:#F4F6F9; border-radius:12px; padding:20px;
+    text-align:center; border-top:3px solid #C8982A;
+  }
+  .kpi-value { font-family:'Fraunces',Georgia,serif; font-size:28px; font-weight:300; color:#1C1C2E; }
+  .kpi-label { font-family:'Plus Jakarta Sans',sans-serif; font-size:10px; font-weight:500; letter-spacing:3px; text-transform:uppercase; color:#6B7280; margin-top:6px; }
+
+  .tier-badge {
+    display:inline-block; padding:4px 14px; border-radius:20px;
+    font-family:'Plus Jakarta Sans',sans-serif; font-size:10px; font-weight:500; letter-spacing:2px; text-transform:uppercase;
+  }
+  .tier-healthy  { background:#E0F7EF; color:#0D5C3A; }
+  .tier-caution  { background:#FEF0E6; color:#7A3800; }
+  .tier-at_risk  { background:#FDEAEA; color:#7A1020; }
+  .tier-critical { background:#FDEAEA; color:#7A1020; font-weight:700; }
+
+  .section-divider { height:1px; background:#E0EAF4; margin:28px 0; }
+
+  .narrative-card {
+    border-left:3px solid #C8982A; padding:16px 20px;
+    background:#F4F6F9; border-radius:0 8px 8px 0;
+    font-family:'Plus Jakarta Sans',sans-serif; font-size:14px; color:#1C1C2E; line-height:1.7;
+  }
+
+  .risk-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 0; border-bottom:1px solid #E0EAF4;
+    font-family:'Plus Jakarta Sans',sans-serif; font-size:14px; color:#1C1C2E;
+  }
+  .risk-badge-critical { background:#FDEAEA; color:#7A1020; padding:3px 10px; border-radius:20px; font-size:10px; letter-spacing:1px; }
+  .risk-badge-warning  { background:#FEF0E6; color:#7A3800; padding:3px 10px; border-radius:20px; font-size:10px; letter-spacing:1px; }
+
+  .cta {
+    display:block; background:#003366; color:#fff; text-decoration:none;
+    text-align:center; border-radius:8px; padding:14px;
+    font-family:'Plus Jakarta Sans',sans-serif; font-size:14px; font-weight:600;
+    margin-top:32px;
+  }
+
+  .footer {
+    background:#003366; padding:24px 40px; border-radius:0 0 12px 12px;
+    font-family:'Plus Jakarta Sans',sans-serif; font-size:9px; letter-spacing:3px;
+    text-transform:uppercase; color:rgba(255,255,255,.35); text-align:center;
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">O<em>PB</em> &nbsp;·&nbsp; Org <em>Synapse</em></div>
+    <div class="header-title">Weekly <em>Intelligence</em> Digest</div>
+    <div class="header-meta">{{ week_label }} &nbsp;·&nbsp; Generated {{ generated_at }}</div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <div class="accent-bar"></div>
+
+    <!-- Org Health Score -->
+    <div class="eyebrow">Org Health</div>
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-value">{{ score }}</div>
+        <div class="kpi-label">Health Score</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value" style="font-size:20px; padding-top:4px;">
+          <span class="tier-badge tier-{{ tier }}">{{ tier | replace("_", " ") | title }}</span>
+        </div>
+        <div class="kpi-label">Tier</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value" style="color: {{ 'var(--green,#27B97C)' if delta >= 0 else '#E03448' }}">
+          {{ '+' if delta > 0 else '' }}{{ delta | round(1) }}
+        </div>
+        <div class="kpi-label">vs Last Week</div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Active Signals -->
+    <div class="eyebrow">Active Signals</div>
+    <div style="margin-top:12px;">
+      <div class="risk-row">
+        <span>Active silos</span>
+        <span class="{{ 'risk-badge-critical' if silo_count > 2 else 'risk-badge-warning' if silo_count > 0 else '' }}">{{ silo_count }}</span>
+      </div>
+      <div class="risk-row">
+        <span>Critical SPOF employees</span>
+        <span class="{{ 'risk-badge-critical' if critical_spof_count > 3 else 'risk-badge-warning' if critical_spof_count > 0 else '' }}">{{ critical_spof_count }}</span>
+      </div>
+      {% if onboarding_risk_count > 0 %}
+      <div class="risk-row">
+        <span>New hires below integration threshold</span>
+        <span class="risk-badge-warning">{{ onboarding_risk_count }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if top_risks %}
+    <div class="section-divider"></div>
+    <div class="eyebrow">Top Risk Departments</div>
+    <div style="margin-top:12px;">
+      {% for risk in top_risks %}
+      <div class="risk-row">
+        <span>{{ risk.department }}</span>
+        <span class="risk-badge-critical">SPOF {{ (risk.avg_spof * 100) | round | int }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="section-divider"></div>
+
+    <!-- AI Recommendation -->
+    <div class="eyebrow">This Week's Recommendation</div>
+    <div class="narrative-card" style="margin-top:12px;">
+      {{ narrative }}
+    </div>
+
+    <a href="{{ dashboard_url }}" class="cta">Open Dashboard →</a>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Org Synapse &nbsp;·&nbsp; People Analytics &nbsp;·&nbsp; Metadata only — no message content
+  </div>
+</div>
+</body>
+</html>

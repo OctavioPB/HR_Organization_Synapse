@@ -378,27 +378,42 @@ Write-Ok "Browser opened at http://localhost:5173"
 # STEP 10 -- Summary
 # =============================================================================
 
-$div = "  " + ("-" * 56)
+$div  = "  " + ("-" * 66)
+$div2 = "  " + ("-" * 66)
 
 Write-Host ""
-Write-Host $div                                                                    -ForegroundColor DarkGray
-Write-Host "  Service                    URL"                                      -ForegroundColor White
-Write-Host $div                                                                    -ForegroundColor DarkGray
-Write-Host "  Dashboard (Vite)           http://localhost:5173"                    -ForegroundColor Green
-Write-Host "  API (FastAPI)              http://localhost:8000"                    -ForegroundColor Green
-Write-Host "  API docs (Swagger)         http://localhost:8000/docs"               -ForegroundColor Green
-Write-Host "  API docs (ReDoc)           http://localhost:8000/redoc"              -ForegroundColor Green
-Write-Host $div                                                                    -ForegroundColor DarkGray
-Write-Host "  Airflow                    http://localhost:8088  (admin/admin)"     -ForegroundColor Cyan
-Write-Host "  Grafana                    http://localhost:3000  (admin/admin)"     -ForegroundColor Cyan
-Write-Host "  Prometheus                 http://localhost:9090"                    -ForegroundColor DarkGray
-Write-Host "  Neo4j Browser              http://localhost:7474  (neo4j/changeme)"  -ForegroundColor DarkGray
-Write-Host "  Adminer (DB UI)            http://localhost:8081"                    -ForegroundColor DarkGray
-Write-Host "  Kafka                      localhost:9092  (KRaft mode)"             -ForegroundColor DarkGray
-Write-Host "  PostgreSQL                 localhost:5433"                           -ForegroundColor DarkGray
-Write-Host "  Redis                      localhost:6380"                           -ForegroundColor DarkGray
-Write-Host $div                                                                    -ForegroundColor DarkGray
+Write-Host $div -ForegroundColor DarkCyan
+Write-Host "  Service                         URL" -ForegroundColor White
+Write-Host $div -ForegroundColor DarkCyan
+
+Write-Host "  Dashboard                       http://localhost:5173"                         -ForegroundColor Green
+Write-Host "  My Team (manager view)          http://localhost:5173/manager"                 -ForegroundColor Green
+Write-Host "  Onboarding Tracker              http://localhost:5173/onboarding"              -ForegroundColor Green
+Write-Host "  Reorg Scenario Planner          http://localhost:5173/scenarios"               -ForegroundColor Green
+Write-Host "  Team Composition Optimizer      http://localhost:5173/teams"                   -ForegroundColor Green
+Write-Host "  DEI Equity Analytics            http://localhost:5173/equity"                  -ForegroundColor Green
+Write-Host "  Platform Info                   http://localhost:5173/info"                    -ForegroundColor Green
+Write-Host "  Admin Panel                     http://localhost:5173/admin"                   -ForegroundColor Green
+
+Write-Host $div2 -ForegroundColor DarkGray
+Write-Host "  API (FastAPI)                   http://localhost:8000"                         -ForegroundColor Cyan
+Write-Host "  API docs (Swagger)              http://localhost:8000/docs"                    -ForegroundColor Cyan
+Write-Host "  API docs (ReDoc)                http://localhost:8000/redoc"                   -ForegroundColor Cyan
+
+Write-Host $div2 -ForegroundColor DarkGray
+Write-Host "  Airflow (DAG monitor)           http://localhost:8088  (admin/admin)"          -ForegroundColor DarkGray
+Write-Host "  Grafana (metrics dashboard)     http://localhost:3000  (admin/admin)"          -ForegroundColor DarkGray
+Write-Host "  Prometheus                      http://localhost:9090"                         -ForegroundColor DarkGray
+Write-Host "  Neo4j Browser                   http://localhost:7474  (neo4j/changeme)"       -ForegroundColor DarkGray
+Write-Host "  Adminer (DB UI)                 http://localhost:8081"                         -ForegroundColor DarkGray
+Write-Host "  Kafka                           localhost:9092  (KRaft mode)"                  -ForegroundColor DarkGray
+Write-Host "  PostgreSQL                      localhost:5433"                                -ForegroundColor DarkGray
+Write-Host "  Redis                           localhost:6380"                                -ForegroundColor DarkGray
+
+Write-Host $div2 -ForegroundColor DarkGray
+Write-Host "  Seed all demo data:"                                                           -ForegroundColor White
+Write-Host "    python scripts/seed_dev.py --employees 120 --days 60"                       -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  Stop Docker services:  docker compose -p org-synapse down"           -ForegroundColor Gray
-Write-Host "  Remove volumes too:    docker compose -p org-synapse down -v"        -ForegroundColor Gray
+Write-Host "  Stop Docker services:  docker compose -p org-synapse down"                    -ForegroundColor Gray
+Write-Host "  Remove volumes too:    docker compose -p org-synapse down -v"                 -ForegroundColor Gray
 Write-Host ""
