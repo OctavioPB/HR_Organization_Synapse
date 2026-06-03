@@ -13,9 +13,8 @@ Tests cover:
 
 from __future__ import annotations
 
-import json
-from datetime import date, datetime, timezone
-from unittest.mock import MagicMock, call, patch
+from datetime import date, datetime, UTC
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -467,7 +466,7 @@ class TestPurgeHistoryEndpoint:
     def test_returns_200_with_entries(self, api_client):
         client, conn, cursor = api_client
         rows = [{
-            "purged_at": datetime(2025, 1, 1, 8, 0, tzinfo=timezone.utc),
+            "purged_at": datetime(2025, 1, 1, 8, 0, tzinfo=UTC),
             "table_name": "raw_events",
             "rows_deleted": 200,
             "cutoff_date": date(2024, 10, 3),

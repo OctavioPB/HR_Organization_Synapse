@@ -8,7 +8,7 @@ is a thin wrapper around this module.
 import csv
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
 
@@ -161,7 +161,7 @@ def select_connectors(
         dept_map.setdefault(e.department, []).append(e)
 
     connector_ids: set[str] = set()
-    for dept, emps in list(dept_map.items()):
+    for _dept, emps in list(dept_map.items()):
         if len(connector_ids) >= n_connectors:
             break
         idx = int(rng.integers(len(emps)))

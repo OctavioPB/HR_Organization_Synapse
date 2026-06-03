@@ -19,10 +19,8 @@ import hmac
 import json
 import logging
 import os
-from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from fastapi.responses import JSONResponse
 
 from api.deps import get_tenant_db
 from api.models.schemas import BillingUsageResponse, UsageMonth

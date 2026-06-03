@@ -51,9 +51,6 @@ from ml.gnn.feature_builder import (
     _build_edge_index,
     _build_labels,
     _build_node_features,
-    _MAX_PTO_DAYS,
-    _MAX_ROLE_LEVEL,
-    _MAX_TENURE_DAYS,
 )
 
 

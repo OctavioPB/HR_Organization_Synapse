@@ -11,7 +11,7 @@ import hmac
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from unittest.mock import patch
 
 import pytest
@@ -242,7 +242,7 @@ def test_slack_producer_enqueue_and_stream():
         direction="sent",
         department_source="Eng",
         department_target="Sales",
-        timestamp=datetime.now(tz=timezone.utc),
+        timestamp=datetime.now(tz=UTC),
     )
     producer.enqueue_webhook_event(fake_event)
 

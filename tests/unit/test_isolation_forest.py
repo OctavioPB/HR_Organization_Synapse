@@ -4,7 +4,6 @@ Tests cover run_isolation_forest() with synthetic feature dicts.
 write_anomaly_alerts() is not tested here (requires DB; covered by integration tests).
 """
 
-import pytest
 
 from ml.anomaly.isolation_forest import FEATURE_KEYS, run_isolation_forest
 

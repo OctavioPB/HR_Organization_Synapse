@@ -21,8 +21,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Iterator
+from datetime import datetime, timedelta, UTC
+from collections.abc import Iterator
 
 import httpx
 
@@ -84,7 +84,7 @@ class NotionConnector:
         and sorts by last_edited_time descending.
         """
         since = (
-            datetime.now(tz=timezone.utc) - timedelta(days=self._lookback_days)
+            datetime.now(tz=UTC) - timedelta(days=self._lookback_days)
         ).isoformat()
 
         cursor: str | None = None
@@ -216,9 +216,9 @@ class NotionConnector:
             try:
                 modified_at = datetime.fromisoformat(
                     modified_str.replace("Z", "+00:00")
-                ) if modified_str else datetime.now(tz=timezone.utc)
+                ) if modified_str else datetime.now(tz=UTC)
             except ValueError:
-                modified_at = datetime.now(tz=timezone.utc)
+                modified_at = datetime.now(tz=UTC)
 
             try:
                 with conn.cursor() as cur:

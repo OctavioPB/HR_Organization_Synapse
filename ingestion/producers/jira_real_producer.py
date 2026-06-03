@@ -26,8 +26,8 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Iterator
+from datetime import datetime, timedelta, UTC
+from collections.abc import Iterator
 
 import httpx
 
@@ -69,7 +69,7 @@ class JiraRealProducer(BaseProducer):
         self._http: httpx.Client | None = None
         self._running = False
         # Watermark: only pull issues updated after this timestamp
-        self._since: datetime = datetime.now(tz=timezone.utc) - timedelta(
+        self._since: datetime = datetime.now(tz=UTC) - timedelta(
             minutes=_DEFAULT_LOOKBACK_MINUTES
         )
 
@@ -81,7 +81,7 @@ class JiraRealProducer(BaseProducer):
             raise ValueError("JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN must all be set")
 
         token = base64.b64encode(
-            f"{self._email}:{self._api_token}".encode("utf-8")
+            f"{self._email}:{self._api_token}".encode()
         ).decode("utf-8")
 
         self._http = httpx.Client(
@@ -144,7 +144,7 @@ class JiraRealProducer(BaseProducer):
 
         start_at = 0
         max_results = 100
-        poll_start = datetime.now(tz=timezone.utc)
+        poll_start = datetime.now(tz=UTC)
 
         while True:
             resp = self._http.post(
@@ -179,7 +179,7 @@ class JiraRealProducer(BaseProducer):
         try:
             ts = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
-            ts = datetime.now(tz=timezone.utc)
+            ts = datetime.now(tz=UTC)
 
         assignee_id = (fields.get("assignee") or {}).get("accountId")
         reporter_id = (fields.get("reporter") or {}).get("accountId")

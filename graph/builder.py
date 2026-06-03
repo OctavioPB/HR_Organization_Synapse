@@ -9,7 +9,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +37,7 @@ def load_raw_edges(
     Returns:
         List of (source_id, target_id, weight, source_dept, target_dept) tuples.
     """
-    end_ts = datetime.combine(snapshot_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    end_ts = datetime.combine(snapshot_date, datetime.max.time()).replace(tzinfo=UTC)
     start_ts = end_ts - timedelta(days=window_days)
 
     with get_conn() as conn:
@@ -96,7 +96,7 @@ def build_graph(
         # directly would yield its keys — the column-name strings — instead of
         # the values, which silently corrupts the weight into 'weight'.
         if hasattr(row, "keys"):
-            source_id, target_id, weight, source_dept, target_dept = tuple(row.values())[:5]
+            source_id, target_id, weight, source_dept, target_dept = tuple(row.values())[:5]  # type: ignore[attr-defined]
         else:
             source_id, target_id, weight, source_dept, target_dept = row
 

@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 from pydantic import ValidationError
 
 from ingestion.schemas.collaboration_event import CollaborationEvent
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 _VALID_KWARGS = {
     "source_employee_id": "emp-001",

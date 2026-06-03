@@ -9,7 +9,6 @@ Tests cover:
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import networkx as nx

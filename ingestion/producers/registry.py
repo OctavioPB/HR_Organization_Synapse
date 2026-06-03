@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import os
 import threading
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, UTC
 from typing import ClassVar
 
 
@@ -95,7 +95,7 @@ class ConnectorRegistry:
             entry = self._state.get(channel)
             if entry is not None:
                 entry.events_published += 1
-                entry.last_event_at = datetime.now(tz=timezone.utc)
+                entry.last_event_at = datetime.now(tz=UTC)
 
     # ── Queries ───────────────────────────────────────────────────────────────
 

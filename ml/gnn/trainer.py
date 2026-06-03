@@ -30,7 +30,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 import sys
 
@@ -59,11 +59,11 @@ _CHECKPOINT_DIR  = os.environ.get("GNN_CHECKPOINT_DIR", "checkpoints")
 
 
 def _temporal_masks(
-    y: "np.ndarray",  # noqa: F821
+    y: np.ndarray,  # noqa: F821
     label_dates: list[date],
     test_days: int,
     val_days: int,
-) -> tuple["np.ndarray", "np.ndarray", "np.ndarray"]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return boolean masks for train/val/test nodes.
 
     Nodes without a label (y == NaN) are excluded from all splits.
@@ -104,7 +104,7 @@ def _temporal_masks(
 # ─── AUROC (pure numpy, no sklearn dependency at import time) ─────────────────
 
 
-def _auroc(y_true: "np.ndarray", y_score: "np.ndarray") -> float:
+def _auroc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     """Compute AUROC without sklearn (trapezoid rule)."""
     # Sort by descending score
     order = np.argsort(-y_score)
@@ -150,7 +150,6 @@ def train(
         (checkpoint_path, metrics_dict)
     """
     import torch
-    from torch_geometric.data import Data
     from ml.gnn.feature_builder import build_graph_data
     from ml.gnn.model import ChurnGAT, save_checkpoint
 

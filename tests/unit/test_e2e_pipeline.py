@@ -12,7 +12,7 @@ Validates the "demo scenario" invariants documented in CLAUDE.md and README:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import numpy as np
 import pytest
@@ -37,7 +37,7 @@ from ml.features.feature_extractor import compute_entropy
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-_START = datetime(2025, 1, 1, tzinfo=timezone.utc)
+_START = datetime(2025, 1, 1, tzinfo=UTC)
 _DEPT_FRACTIONS = {"Engineering": 0.5, "Sales": 0.33, "HR": 0.17}
 
 
@@ -168,7 +168,7 @@ def test_connectors_have_highest_betweenness(pipeline):
     """Connectors must rank in the top 10% by betweenness centrality."""
     connector_ids = pipeline["connector_ids"]
     betweenness = pipeline["betweenness"]
-    G = pipeline["G"]
+    _ = pipeline["G"]
 
     sorted_nodes = sorted(betweenness, key=betweenness.get, reverse=True)
     top_10pct = set(sorted_nodes[: max(1, len(sorted_nodes) // 10)])

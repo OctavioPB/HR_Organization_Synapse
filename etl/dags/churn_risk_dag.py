@@ -23,7 +23,6 @@ import logging
 from datetime import date, datetime, timedelta
 
 from airflow.decorators import dag, task
-from airflow.operators.python import PythonOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 
 logger = logging.getLogger(__name__)

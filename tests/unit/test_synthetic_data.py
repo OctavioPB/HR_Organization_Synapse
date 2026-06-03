@@ -1,13 +1,12 @@
 """Unit tests for ingestion.synthetic — no database or Kafka required."""
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import numpy as np
 import pytest
 
 from ingestion.synthetic import (
-    Employee,
     EdgeRecord,
     generate_edges,
     generate_employees,
@@ -15,7 +14,7 @@ from ingestion.synthetic import (
     select_withdrawing,
 )
 
-_START_DATE = datetime(2025, 1, 1, tzinfo=timezone.utc)
+_START_DATE = datetime(2025, 1, 1, tzinfo=UTC)
 _DEPT_FRACTIONS = {"Engineering": 0.5, "Sales": 0.33, "HR": 0.17}
 
 

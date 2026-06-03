@@ -65,7 +65,6 @@ def task_generate_transfer_plans(snapshot_date_str: str, conn) -> dict:
 
     # Load graph for neighbor computation
     try:
-        from graph.builder import build_graph
         from graph.scenario_simulator import load_current_graph
         G = load_current_graph(conn)
     except Exception as exc:

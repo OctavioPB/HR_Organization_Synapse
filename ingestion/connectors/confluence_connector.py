@@ -25,9 +25,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Iterator
-from uuid import UUID
+from datetime import datetime, timedelta, UTC
+from collections.abc import Iterator
 
 import httpx
 
@@ -98,7 +97,7 @@ class ConfluenceConnector:
         the cursor returned in each response.
         """
         since = (
-            datetime.now(tz=timezone.utc) - timedelta(days=self._lookback_days)
+            datetime.now(tz=UTC) - timedelta(days=self._lookback_days)
         ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         params: dict = {
@@ -238,14 +237,14 @@ class ConfluenceConnector:
                 modified_str = (
                     page.get("version", {}).get("createdAt")
                     or page.get("createdAt", "")
-                ) or datetime.now(tz=timezone.utc).isoformat()
+                ) or datetime.now(tz=UTC).isoformat()
 
                 try:
                     modified_at = datetime.fromisoformat(
                         modified_str.replace("Z", "+00:00")
                     )
                 except ValueError:
-                    modified_at = datetime.now(tz=timezone.utc)
+                    modified_at = datetime.now(tz=UTC)
 
                 try:
                     with conn.cursor() as cur:

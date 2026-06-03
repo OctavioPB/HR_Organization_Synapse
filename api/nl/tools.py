@@ -18,7 +18,7 @@ Available tools:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -399,7 +399,7 @@ def _simulate_removal(inp: dict, conn) -> dict:
         return {"error": "No snapshot data available."}
 
     # Load raw edges using the provided conn
-    end_ts = datetime.combine(snapshot_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    end_ts = datetime.combine(snapshot_date, datetime.max.time()).replace(tzinfo=UTC)
     start_ts = end_ts - timedelta(days=window_days)
     with conn.cursor() as cur:
         cur.execute(

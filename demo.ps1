@@ -60,7 +60,7 @@ Write-Host ""
 # stack is not disrupted between demo runs.
 # =============================================================================
 
-$AppPorts = @(8000, 5173)
+$AppPorts = @(8000, 8001, 5173)
 
 Write-Step "Clearing app ports: $($AppPorts -join '  ')"
 
@@ -301,21 +301,24 @@ function Start-EncodedWindow {
 }
 
 # =============================================================================
-# STEP 7 -- FastAPI server  (port 8000)
+# STEP 7 -- FastAPI server  (port 8001)
 #
+# Port 8001 is used instead of the documented 8000 to avoid ghost TCP sockets
+# left by crashed uvicorn sessions on Windows (Errno 10048 / WSAEADDRINUSE).
+# vite.config.js proxies /api/* to port 8001 accordingly.
 # PYTHONPATH is set to the repo root so that `api.main` resolves
 # without needing an editable install.
 # =============================================================================
 
-Write-Step "Opening FastAPI server window  (port 8000)"
+Write-Step "Opening FastAPI server window  (port 8001)"
 
 $apiCommand = '$env:PYTHONPATH = ''' + $RepoRoot + '''; ' +
               'Set-Location ''' + $RepoRoot + '''; ' +
-              '& ''' + $pythonExe + ''' -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000'
+              '& ''' + $pythonExe + ''' -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8001'
 
-Start-EncodedWindow -Title "Org Synapse API :8000" -Command $apiCommand -WorkDir $RepoRoot
+Start-EncodedWindow -Title "Org Synapse API :8001" -Command $apiCommand -WorkDir $RepoRoot
 
-Write-Ok "API server window opened  ->  http://localhost:8000"
+Write-Ok "API server window opened  ->  http://localhost:8001"
 
 # =============================================================================
 # STEP 8 -- Vite dashboard dev server  (port 5173)
@@ -357,7 +360,7 @@ Write-Step "Waiting for API server to be ready ..."
 $apiReady = $false
 for ($i = 1; $i -le 30; $i++) {
     try {
-        $r = Invoke-WebRequest -Uri "http://localhost:8000/health" `
+        $r = Invoke-WebRequest -Uri "http://localhost:8001/health" `
                                -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
         if ($r.StatusCode -eq 200) { $apiReady = $true; break }
     } catch { }

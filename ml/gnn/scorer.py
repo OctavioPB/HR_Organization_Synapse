@@ -70,7 +70,6 @@ def _top_influence_neighbors(
         dict mapping node index → list of {"employee_id", "attention"} dicts,
         highest attention first.
     """
-    import numpy as np
 
     src = att_edge_index[0].cpu().numpy()
     dst = att_edge_index[1].cpu().numpy()
@@ -79,7 +78,7 @@ def _top_influence_neighbors(
         alpha = alpha.mean(axis=1)  # average across attention heads
 
     by_target: dict[int, list[tuple[int, float]]] = {}
-    for s, d, a in zip(src, dst, alpha):
+    for s, d, a in zip(src, dst, alpha, strict=False):
         if s == d:
             continue  # skip self-loops
         by_target.setdefault(int(d), []).append((int(s), float(a)))

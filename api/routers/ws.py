@@ -102,7 +102,7 @@ async def websocket_alerts(ws: WebSocket) -> None:
                 )
                 if msg.strip() == "ping":
                     await ws.send_json({"type": "pong"})
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send server-side keep-alive ping
                 await ws.send_json({"type": "ping"})
             except WebSocketDisconnect:

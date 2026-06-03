@@ -7,10 +7,8 @@ No raw SPOF scores or churn probabilities are exposed — only traffic-light sta
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel

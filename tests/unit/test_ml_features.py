@@ -8,7 +8,6 @@ Tests cover all pure computation functions:
 
 import math
 
-import pytest
 
 from ml.features.feature_extractor import (
     build_feature_vector,

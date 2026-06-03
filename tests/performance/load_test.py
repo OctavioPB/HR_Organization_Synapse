@@ -33,7 +33,6 @@ from __future__ import annotations
 import os
 
 from locust import HttpUser, between, events, task
-from locust.runners import MasterRunner
 
 _TOKEN = os.environ.get("LOAD_TEST_API_TOKEN", "")
 

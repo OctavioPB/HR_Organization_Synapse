@@ -6,11 +6,9 @@ No individual demographic attributes are exposed in any response.
 
 from __future__ import annotations
 
-import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from api.deps import get_db
 

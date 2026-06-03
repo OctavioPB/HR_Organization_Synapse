@@ -323,7 +323,7 @@ async def _run_script(args: list[str]) -> str:
             loop.run_in_executor(None, _blocking),
             timeout=_SCRIPT_TIMEOUT + 10,
         )
-    except (asyncio.TimeoutError, subprocess.TimeoutExpired):
+    except (TimeoutError, subprocess.TimeoutExpired):
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"Script timed out after {_SCRIPT_TIMEOUT}s.",

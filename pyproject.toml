@@ -48,3 +48,37 @@ asyncio_mode = "auto"
 [tool.coverage.run]
 source = ["ingestion", "graph", "ml", "api"]
 omit = ["tests/*", "data/*"]
+
+# ─── Ruff ─────────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# E: pycodestyle errors   F: pyflakes   W: warnings
+# B: bugbear (catches real bugs)   UP: pyupgrade
+select = ["E", "F", "W", "B", "UP"]
+ignore = [
+    "E501",   # line-too-long — many docstrings and SQL strings legitimately exceed 120 chars
+    "E402",   # module-import-not-at-top — sys.path.insert pattern used in runnable scripts
+    "B008",   # function-call-in-default-argument — FastAPI Depends() pattern
+    "B904",   # raise-without-from-inside-except — FastAPI pattern: hide original exc from HTTP clients
+    "UP007",  # non-pep604-annotation — X | Y union syntax; kept for 3.9 forward-compat
+    "UP038",  # non-pep604-isinstance — X | Y isinstance requires 3.10+; kept for 3.9 compat
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "S", "E702"]   # less strict in tests; allow semicolons in test setup
+
+# ─── Mypy ─────────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+no_strict_optional = true
+warn_unused_ignores = true
+# Excluded files with annotation gaps that are tracked separately:
+#   graph/org_health.py  — Anthropic SDK union-attr narrowing
+#   graph/temporal/      — torch Tensor/float annotation gaps
+exclude = ["graph/org_health\\.py", "graph/temporal/"]

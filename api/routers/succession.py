@@ -4,7 +4,6 @@ import logging
 from datetime import date
 
 import io
-import json as _json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse

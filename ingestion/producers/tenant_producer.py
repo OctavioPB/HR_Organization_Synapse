@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Iterator
 
 from kafka import KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic

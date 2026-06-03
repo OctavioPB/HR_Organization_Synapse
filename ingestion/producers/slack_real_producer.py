@@ -33,8 +33,8 @@ import os
 import queue
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Iterator
+from datetime import datetime, UTC
+from collections.abc import Iterator
 
 import httpx
 
@@ -319,6 +319,6 @@ class SlackRealProducer(BaseProducer):
             direction=direction,  # type: ignore[arg-type]
             department_source="unknown",
             department_target="unknown",
-            timestamp=datetime.now(tz=timezone.utc),
+            timestamp=datetime.now(tz=UTC),
             weight=1.0,
         )

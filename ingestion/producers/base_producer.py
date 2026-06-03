@@ -19,7 +19,7 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Iterator
+from collections.abc import Iterator
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaError

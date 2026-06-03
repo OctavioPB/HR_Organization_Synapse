@@ -127,7 +127,8 @@ def test_temporal_build_edge_index_empty():
 
 def test_temporal_gnn_import_error_without_tgnn():
     """TemporalRiskGNN raises ImportError when torch_geometric_temporal is absent."""
-    import sys, importlib
+    import sys
+    import importlib
     with patch.dict(
         sys.modules,
         {
@@ -336,7 +337,7 @@ def test_temporal_flow_200(client):
 def test_temporal_flow_404(client):
     test_client, _ = client
     with patch("api.routers.graph.queries.fetch_temporal_flow", return_value=[]):
-        resp = test_client.get(f"/graph/temporal/flow?employee_id=no-such")
+        resp = test_client.get("/graph/temporal/flow?employee_id=no-such")
     assert resp.status_code == 404
 
 

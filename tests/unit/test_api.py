@@ -9,7 +9,7 @@ All tests use FastAPI's dependency_overrides to inject a no-op connection.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -99,7 +99,7 @@ _RISK_ROWS = [
 
 _ALERT_ROW = {
     "id": str(uuid.uuid4()),
-    "fired_at": datetime(2025, 4, 25, 10, 0, 0, tzinfo=timezone.utc),
+    "fired_at": datetime(2025, 4, 25, 10, 0, 0, tzinfo=UTC),
     "type": "silo",
     "severity": "high",
     "affected_entities": {"community_id": 1, "member_count": 3},
@@ -321,7 +321,6 @@ def test_employee_risk_history_empty_is_valid(client):
 
 def test_simulate_star_graph_betweenness_increases(client):
     """Removing the center of a star graph increases avg betweenness (components)."""
-    import networkx as nx
 
     center = str(uuid.uuid4())
     leaves = [str(uuid.uuid4()) for _ in range(4)]
@@ -406,7 +405,7 @@ def test_entropy_alerts_returns_200(client):
 
 def test_alert_history_returns_200(client):
     history_alerts = [
-        {**_ALERT_ROW, "resolved": True, "resolved_at": datetime(2025, 4, 26, tzinfo=timezone.utc)},
+        {**_ALERT_ROW, "resolved": True, "resolved_at": datetime(2025, 4, 26, tzinfo=UTC)},
         _ALERT_ROW,
     ]
     with patch("api.routers.alerts.queries.fetch_alert_history", return_value=history_alerts):

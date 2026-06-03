@@ -9,7 +9,6 @@ Test topologies used:
 """
 
 import networkx as nx
-import pytest
 
 from graph.metrics import (
     compute_betweenness,

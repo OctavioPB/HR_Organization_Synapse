@@ -36,7 +36,7 @@ def task_import_graph(snapshot_date_str: str, window_days: int = 30) -> dict:
     Returns:
         Dict with nodes_upserted and edges_upserted counts.
     """
-    from graph.builder import build_graph, load_raw_edges
+    from graph.builder import load_raw_edges
     from graph.neo4j_client import upsert_graph
     from ingestion.db import get_conn
 

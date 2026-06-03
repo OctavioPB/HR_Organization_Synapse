@@ -25,8 +25,8 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Iterator
+from datetime import datetime, timedelta, UTC
+from collections.abc import Iterator
 
 import httpx
 
@@ -65,7 +65,7 @@ class TeamsProducer(BaseProducer):
         self._access_token: str = ""
         self._token_expires_at: float = 0.0
         self._running = False
-        self._last_call_end_time: datetime = datetime.now(tz=timezone.utc) - timedelta(
+        self._last_call_end_time: datetime = datetime.now(tz=UTC) - timedelta(
             days=self._lookback_days
         )
 
@@ -197,7 +197,7 @@ class TeamsProducer(BaseProducer):
                         participants.append(identity)
 
         call_ts = datetime.fromisoformat(
-            record.get("startDateTime", datetime.now(tz=timezone.utc).isoformat())
+            record.get("startDateTime", datetime.now(tz=UTC).isoformat())
             .replace("Z", "+00:00")
         )
 

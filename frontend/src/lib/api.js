@@ -1,6 +1,8 @@
 import axios from "axios";
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// Use the Vite dev-server proxy (/api/* → uvicorn) so the port never needs
+// to be hardcoded here.  Override with VITE_API_BASE_URL for production builds.
+const BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 const client = axios.create({ baseURL: BASE });
 

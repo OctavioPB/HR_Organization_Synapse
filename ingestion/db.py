@@ -1,7 +1,7 @@
 import logging
 import os
 from contextlib import contextmanager
-from typing import Generator
+from collections.abc import Generator
 
 import psycopg2
 import psycopg2.pool

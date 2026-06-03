@@ -105,7 +105,7 @@ def succession_dag():
             return task_generate_transfer_plans(snapshot_date, conn)
 
     result      = compute_succession()
-    plans       = generate_transfer_plans(result)
+    generate_transfer_plans(result)
     wait_for_graph >> result
     log_summary(result)
 

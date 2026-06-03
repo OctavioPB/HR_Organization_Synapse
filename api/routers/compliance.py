@@ -12,7 +12,7 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -129,7 +129,7 @@ def trigger_retention_purge(conn=Depends(get_admin_db)):
     results = run_retention_purge(conn, triggered_by="api")
     total   = sum(r["rows_deleted"] for r in results)
     return {
-        "triggered_at":     datetime.now(timezone.utc).isoformat(),
+        "triggered_at":     datetime.now(UTC).isoformat(),
         "results":          results,
         "total_rows_deleted": total,
     }

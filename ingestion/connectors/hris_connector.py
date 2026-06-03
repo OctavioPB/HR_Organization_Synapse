@@ -26,10 +26,9 @@ from __future__ import annotations
 import logging
 import os
 from datetime import date, datetime
-from typing import Generator
+from collections.abc import Generator
 
 import httpx
-import psycopg2.extras
 
 logger = logging.getLogger(__name__)
 

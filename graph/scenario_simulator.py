@@ -116,7 +116,7 @@ def _graph_metrics(G: nx.DiGraph) -> dict:
     avg_bw = sum(bw_dict.values()) / max(len(bw_dict), 1)
 
     # Avg path length (largest component only)
-    largest_cc = max(nx.connected_components(U), key=len, default=set())
+    largest_cc: set[str] = max(nx.connected_components(U), key=len, default=set())
     sub = U.subgraph(largest_cc)
     try:
         avg_path = nx.average_shortest_path_length(sub) if len(sub) > 1 else 0.0
@@ -140,7 +140,7 @@ def _count_silos(G: nx.DiGraph) -> int:
         dept_nodes.setdefault(d, []).append(n)
 
     silo_count = 0
-    for dept, nodes in dept_nodes.items():
+    for _dept, nodes in dept_nodes.items():
         subgraph = G.subgraph(nodes)
         internal = subgraph.number_of_edges()
         external = sum(

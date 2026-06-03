@@ -168,7 +168,7 @@ def query_shortest_path(
                 "department": dept,
             }
             for nid, name, dept in zip(
-                record["node_ids"], record["names"], record["departments"]
+                record["node_ids"], record["names"], record["departments"], strict=False
             )
         ],
         "hops": record["hops"],

@@ -64,7 +64,6 @@ def test_betweenness_exact_for_small_graph():
 
 def test_betweenness_approximate_for_large_graph():
     """Graphs above threshold must use k-pivot approximate betweenness."""
-    from graph.metrics import BETWEENNESS_K_PIVOTS, compute_betweenness
 
     n = 600
     G = _make_star_graph(n)
@@ -260,7 +259,6 @@ def test_cache_health_returns_unavailable_when_redis_down():
 
 
 from datetime import date
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient

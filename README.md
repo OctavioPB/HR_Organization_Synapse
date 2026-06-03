@@ -1,33 +1,144 @@
 # Organizational Synapse & Knowledge Risk
 
-A graph-based HR intelligence platform that ingests collaboration metadata, builds a live organizational network, and surfaces structural risk — before HR has any subjective signal.
+[![CI](https://github.com/YOUR_ORG/HR_Organization_Synapse/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/HR_Organization_Synapse/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/YOUR_ORG/HR_Organization_Synapse/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_ORG/HR_Organization_Synapse)
+
+A graph-based HR intelligence platform that surfaces structural risk from collaboration metadata — before HR has any subjective signal.
 
 ---
 
-## What it does
+## The problem
 
-The system ingests collaboration metadata (Slack, Teams, Jira, GitHub, Confluence, Notion) as directed edges — who interacted with whom, on which channel, at what time — and builds a weighted organizational graph. Daily and weekly ML pipelines compute structural risk metrics, predict churn, and generate prescriptive outputs: cross-training plans, team compositions, departure impact reports, DEI equity analytics, and weekly AI-authored briefings.
+HR gets subjective signals last. By the time a manager notices someone is "disengaged," or an exit interview flags a knowledge gap, the structural damage has been accumulating for months. Standard HR tooling — surveys, performance reviews, HRIS exports — captures how employees feel about their work, not how the organization structurally depends on them.
 
-**Core outputs**
+Three failure modes repeat across companies:
 
-| Output | Description |
+**Key-person departure.** A senior engineer leaves and two teams lose their only cross-functional connector. Nobody knew the dependency existed until the graph collapsed.
+
+**Silent siloing.** Two departments stop collaborating six months before anyone files a complaint. By the time it surfaces as a project delay, it's baked into team culture.
+
+**Onboarding blindness.** New hires integrate below cohort median at day 60. HR finds out at the 90-day review — or not at all.
+
+These risks are structural, not behavioral. They live in the collaboration graph, not in 1:1 feedback.
+
+---
+
+## Core mechanism
+
+Synapse ingests collaboration metadata (Slack, Teams, Jira, GitHub, Confluence, Notion) as directed edges — `{who} → {whom}`, `{channel}`, `{timestamp}`. No message content, no email bodies, no file contents. Only structure.
+
+Daily and weekly ML pipelines derive:
+
+| Signal | Method |
 |---|---|
-| **SPOF score** | Single-point-of-failure risk per employee — betweenness centrality, cross-department bridging, clustering coefficient, entropy trend |
-| **Knowledge risk** | Sole-expert fraction, document volume, domain breadth fused with SPOF score |
-| **Churn risk** | GNN churn probability (90-day horizon) enriched with HRIS tenure, promotion, and PTO signals |
-| **Silo alerts** | Departments whose internal/external edge ratio exceeds threshold |
-| **Org health score** | Composite 0–100 weekly score with AI-generated executive narrative |
-| **Succession plans** | Top-N cross-training candidates per SPOF employee, ranked by structural + domain compatibility |
-| **Knowledge transfer plans** | 90-day three-phase action plan (introductions → documents → shadowing) for each succession pair |
-| **What-If simulation** | Recalculates graph health after removing one or more employees; supports multi-operation reorg scenarios (remove / merge departments / move team) |
-| **Onboarding integration tracker** | Daily integration score for new hires vs. tenure-matched cohort; fires alert at day 60 below 25th percentile |
-| **Team composition optimizer** | Ranked team options scored by bridge coverage, domain coverage, structural load, and relationship density |
-| **DEI structural equity analytics** | Centrality distributions by demographic group; succession homophily check; all outputs aggregate-only |
-| **Departure impact report** | Automated post-departure analysis comparing predicted SPOF score against actual structural damage |
-| **Manager self-service view** | Traffic-light engagement health for direct reports with AI-generated 1:1 suggestions — no raw scores exposed |
-| **Weekly insights digest** | Monday email + Slack digest with Org Health Score, top risk signals, and one AI recommendation |
-| **NL query interface** | Plain-English questions answered by a Claude agentic loop with tool-backed graph access |
-| **Compliance reports** | GDPR/CCPA data audit, Article 20 export, consent management, retention purge, quarterly HTML report |
+| **SPOF score** | Betweenness centrality + cross-department bridging + clustering coefficient + entropy trend (formula below) |
+| **Knowledge risk** | Sole-expert fraction × document volume × domain breadth, fused with SPOF score |
+| **Churn probability** | Graph Attention Network (11-feature node matrix, 90-day horizon) enriched with HRIS tenure, promotion, and PTO signals — see [MODEL_CARD_CHURN.md](MODEL_CARD_CHURN.md) |
+| **Silo detection** | Louvain community detection; internal/external edge ratio vs. configurable threshold |
+| **Org health** | Composite 0–100 weekly score with AI executive briefing |
+
+Outputs are prescriptive: succession cross-training plans, 90-day knowledge transfer schedules, reorg what-if simulations, onboarding cohort alerts, departure impact forecasts.
+
+---
+
+## Validation & Results
+
+Each model is evaluated against a controlled synthetic dataset with planted ground truth. All numbers below are the **direct output of the test suite** (`tests/validation/`) — not targets or predictions. The suite runs without a database or Kafka: 30 tests, ~12 seconds.
+
+---
+
+### SPOF score — structural identification
+
+**Setup:** 100-employee org, planted archetypes with known structural roles (seed=42). Scoring uses the production `score_all_with_bands()` pipeline with rank-percentile transform.
+
+| Archetype | n | SPOF score | Rank | Flag | Robust critical |
+|---|---|---|---|---|---|
+| BRIDGE | 2 | 0.84 / 0.80 | 2 / 3 | critical | yes |
+| WITHDRAWING | 1 | 0.89 | 1 | critical | yes |
+| SOLE_EXPERT | 2 | 0.63 / 0.46 | 9 / 37 | warning / elevated | no |
+| SILO (max) | 10 | 0.49 | 26 | elevated | no |
+
+| Metric | Result | Threshold |
+|---|---|---|
+| Precision@critical (score ≥ 0.70) | 100% | ≥ 80% |
+| Recall — BRIDGE employees | 100% | 100% |
+| Recall — WITHDRAWING (score ≥ 0.50) | 100% | 100% |
+| SOLE_EXPERT max score | 0.63 | < 0.70 |
+| SILO max score | 0.49 | < 0.50 |
+| Spearman ρ (5 archetype medians) | 0.800 | ≥ 0.60 |
+
+The SOLE_EXPERT boundary (max score 0.63, below the 0.70 critical threshold) is a deliberate design property: knowledge depth without cross-department bridging is a different risk signal — scored separately in `graph/knowledge_risk.py`.
+
+---
+
+### SPOF score — what-if structural impact
+
+**Setup:** Each of the 100 employees removed one at a time via `scenario_simulator.apply_operations()`. Damage = avg-path-length increase % + new isolated components × 20.
+
+| Archetype | Mean damage score | SPOF rank | Damage rank |
+|---|---|---|---|
+| BRIDGE | 1.502 | 2–3 | 1–2 |
+| WITHDRAWING | 0.865 | 1 | 3 |
+| SOLE_EXPERT | 0.209 | 9 | 5 |
+| SILO | 0.102 | 26–67 | 70–95 |
+| NORMAL (mean) | −0.035 | 4–100 | — |
+
+| Metric | Result | Threshold |
+|---|---|---|
+| Spearman ρ — individual (N=100) | 0.349 | ≥ 0.30 |
+| Spearman ρ — archetype medians (N=5) | 0.900 | ≥ 0.80 |
+| Precision@5 | 60% | ≥ 40% |
+| BRIDGE damage > SOLE_EXPERT damage | 1.502 > 0.209 | required |
+| BRIDGE damage > SILO damage | 1.502 > 0.102 | required |
+
+**WITHDRAWING gap (SPOF rank 1, damage rank 3):** the model fires 15 days before departure because it reads the withdrawal signal from the entropy trend, not from current network load. By the time the employee actually leaves, the graph has already partially adapted. This is intended behavior — SPOF is a leading indicator, not a real-time damage meter.
+
+---
+
+### Churn model — graph vs. tabular baseline
+
+**Setup:** 300-employee synthetic org, stratified temporal split (210 train / 90 test, seed=42). Baseline: `LogisticRegression` on 3 tabular features (tenure, degree_out, entropy_trend). Graph model: `GraphMLP` (GraphSAGE-style, node features + mean-aggregated neighbor features) — surrogate for `ChurnGAT` since `torch_geometric` is not installed.
+
+| Metric | LogReg (3 features) | GraphMLP (11+11 features) | Δ |
+|---|---|---|---|
+| AUROC | 0.722 | 0.616 | −0.106 |
+| PR-AUC | 0.414 | 0.334 | −0.080 |
+| AP@10 | 0.610 | 0.589 | −0.021 |
+| F1 (optimal threshold) | 0.522 | 0.414 | −0.108 |
+| Precision (optimal) | 0.414 | 0.500 | +0.086 |
+| Recall (optimal) | 0.706 | 0.353 | −0.353 |
+
+**Finding:** at N=300 with 30 training positives, the 3-feature logistic regression outperforms the graph model by 10.6pp AUROC. Individual features (tenure, activity decay, entropy trend) are strong enough that the graph's social-contagion signal is not decisive at this scale. Both models exceed the random floor (AUROC 0.50) and the trivial PR-AUC floor (churn rate = 18.9%). The GNN architecture is expected to show advantage when churn labels cover N > 500 employees across ≥ 3 observation cohorts. Until then: deploy the baseline.
+
+---
+
+### Anomaly detection — Isolation Forest
+
+**Setup:** 100 noisy normal employees + 8 injected anomalies (4 archetypes × 2 severity levels), evaluated at oracle contamination (7.4% = 8/108) and production contamination (5%).
+
+| Archetype | Severity | Anomaly score | Rank / 108 | Oracle (7.4%) | Production (5%) |
+|---|---|---|---|---|---|
+| Activity spike | severe | 1.000 | 1 | detected | detected |
+| Sudden dropout | severe | 0.910 | 2 | detected | detected |
+| Activity spike | moderate | 0.736 | 3 | detected | detected |
+| Sudden dropout | moderate | 0.675 | 4 | detected | detected |
+| Entropy collapse | severe | 0.642 | 5 | detected | detected |
+| Bridge collapse | severe | 0.626 | 6 | detected | detected |
+| Entropy collapse | moderate | 0.413 | 7 | detected | missed |
+| Bridge collapse | moderate | 0.376 | 8 | detected | missed |
+
+| Metric | Result | Threshold |
+|---|---|---|
+| Recall@severe — oracle contamination | 100% | 100% |
+| Recall@all — oracle contamination | 100% | ≥ 62.5% |
+| Precision — oracle contamination | 100% | ≥ 62.5% |
+| Recall@severe — production (5%) | 75% (3/4) | ≥ 50% |
+| Severity order: severe score > moderate (all archetypes) | yes | required |
+| Spearman ρ — 3 group medians (normal / moderate / severe) | 1.000 | ≥ 0.90 |
+
+Group medians: normal 0.118 · moderate 0.544 · severe 0.776.
+
+**Hardest archetype: bridge collapse** (severe score 0.626, rank 6). The current betweenness and degree values are moderate — the anomaly lives in the 7-day delta features (`betweenness_delta_7d = −0.54`). At production contamination (5%, ~5 flags), entropy-collapse-moderate and bridge-collapse-moderate are missed. Raising contamination to 8% recovers both; the trade-off is more false positives from the normal tail.
 
 ---
 
@@ -130,7 +241,7 @@ org-synapse/
 │   │   ├── generate_transfer_plans.py
 │   │   └── generate_departure_report.py
 │   └── templates/
-│       └── digest_email.html   # BRAND.md-compliant HTML email template
+│       └── digest_email.html   # HTML email template
 │
 ├── graph/
 │   ├── builder.py              # NetworkX DiGraph from edge list
@@ -358,7 +469,7 @@ A Monday morning digest delivers the score, top risk signals, and one Claude-aut
 | GET | `/alerts/history` | All alerts in last N days |
 | WS | `/alerts/live` | Real-time WebSocket stream |
 
-### New feature endpoints
+### Prescriptive outputs
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -510,22 +621,25 @@ All unit tests mock the database via `dependency_overrides` — no live DB or Ka
 
 ---
 
-## Demo scenario
+## Roadmap
 
-```bash
-python scripts/seed_dev.py --employees 120 --days 60
-```
+**Near-term**
 
-Expected outputs:
+- Production OAuth flows for real Slack, Teams, Jira, and GitHub connectors (currently: API-backed synthetic producers)
+- Temporal GNN: replace static node features with time-series embeddings so the churn model sees velocity, not snapshots
+- Headless mode: decouple the Airflow DAGs from Docker Compose so the pipeline can run in any orchestration environment (Kubernetes, Prefect, Dagster)
 
-- **SPOF scores:** connector employees surface in top 5; withdrawing employee enters `critical` in the final 15 days
-- **Silo alerts:** HR and Sales fire; Engineering does not
-- **Onboarding tracker:** ~10% of employees have `hire_date` < 90 days; 6 flagged below cohort 25th percentile
-- **Succession + transfer plans:** top 10 SPOF employees get cross-training plans generated
-- **DEI equity:** `group_c` employees show lower median centrality than org median (by seed design)
-- **Departure report:** one SPOF employee is marked inactive; impact report compares t-90 prediction vs. t+30 structural change
-- **What-If (reorg scenario):** remove both connectors → `new_isolated_components` > 0, `avg_path_length_delta_pct` > 25%
-- **NL query:** "Who are the critical connectors between Engineering and Sales?" returns grounded tool-backed answer
+**Medium-term**
+
+- Real-time graph updates: bypass the daily DAG batch cycle for high-frequency events (Slack + GitHub) using the Kafka consumer to write graph deltas directly
+- Fine-tuned SPOF thresholds: per-tenant calibration based on historical departure data rather than fixed global defaults
+- Manager nudge system: proactive Slack DMs to managers when a direct report's SPOF score crosses a threshold — not just in the weekly digest
+
+**Long-term**
+
+- Federated deployment: each business unit runs its own graph pipeline with aggregated cross-unit visibility at the executive tier
+- Comparative benchmarks: anonymised cross-tenant percentile ranks so an org health score of 72 is interpretable against industry peers
+- Active intervention tracking: close the loop by recording whether a suggested knowledge transfer plan was executed and whether it moved the SPOF score
 
 ---
 

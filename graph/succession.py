@@ -47,7 +47,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 import sys
 
@@ -341,7 +341,7 @@ def _load_raw_edges_from_conn(
     conn,
 ) -> list[tuple[str, str, float, str, str]]:
     """Load raw_events for the rolling window ending on snapshot_date using a given conn."""
-    end_ts = datetime.combine(snapshot_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    end_ts = datetime.combine(snapshot_date, datetime.max.time()).replace(tzinfo=UTC)
     start_ts = end_ts - timedelta(days=window_days)
     with conn.cursor() as cur:
         cur.execute(

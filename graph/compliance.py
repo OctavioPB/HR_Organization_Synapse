@@ -11,7 +11,7 @@ Covers:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ def build_data_audit(conn) -> dict[str, Any]:
         audit.append(entry)
 
     return {
-        "generated_at":       datetime.now(timezone.utc).isoformat(),
+        "generated_at":       datetime.now(UTC).isoformat(),
         "framework":          ["GDPR", "CCPA"],
         "data_controller":    "Org Synapse",
         "dpo_contact":        "privacy@org-synapse.internal",
@@ -244,7 +244,7 @@ def export_employee_data(employee_id: str, conn) -> dict[str, Any] | None:
         return None
 
     return {
-        "export_generated_at":  datetime.now(timezone.utc).isoformat(),
+        "export_generated_at":  datetime.now(UTC).isoformat(),
         "article":              "GDPR Article 20 — Right to Data Portability",
         "employee_id":          employee_id,
         "employee":             employee,
@@ -409,7 +409,7 @@ def update_consent(
         "new_value":      new_value,
         "changed_by":     changed_by,
         "reason":         reason,
-        "changed_at":     datetime.now(timezone.utc).isoformat(),
+        "changed_at":     datetime.now(UTC).isoformat(),
     }
 
 

@@ -14,9 +14,8 @@ Skip in CI without Docker:
 import json
 import os
 import threading
-import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -107,7 +106,7 @@ def test_schema_validation_rejects_invalid_channel(require_services):
             direction="sent",
             department_source="Eng",
             department_target="Sales",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
 
@@ -138,7 +137,7 @@ def test_produce_and_consume_100_events(test_employee_id: str):
             direction="sent",
             department_source="Engineering",
             department_target="Engineering",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         producer.send(topic, value=event.model_dump(mode="json"))
         event_ids.append(event.event_id)

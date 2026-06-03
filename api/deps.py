@@ -13,13 +13,13 @@ Multi-tenant (F6):
 from __future__ import annotations
 
 import os
-from typing import Generator
+from collections.abc import Generator
 
 import psycopg2
 import psycopg2.extensions
 import psycopg2.extras
-from fastapi import Depends, Header, HTTPException, Request, status
-from typing import Callable
+from fastapi import Header, HTTPException, Request, status
+from collections.abc import Callable
 
 
 # ─── Connection factory ───────────────────────────────────────────────────────

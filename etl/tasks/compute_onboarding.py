@@ -149,7 +149,7 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
             median_degree = float(row["median_degree"] or 1)
             p25_degree   = float(row["p25_degree"] or 0)
             cohort_size  = int(row["cohort_size"] or 0)
-            clustering   = float(row["clustering"] or 0)
+            _clustering  = float(row["clustering"] or 0)  # stored; not yet used in integration score
             dept         = row["department"]
 
             # Cross-dept edge count in last 30 days

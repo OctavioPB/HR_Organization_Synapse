@@ -63,7 +63,7 @@ def temporal_gnn_train_dag():
         import os
         from ingestion.db import get_conn
 
-        n_weeks     = int(os.environ.get("TGNN_N_WEEKS", "8"))
+        _n_weeks    = int(os.environ.get("TGNN_N_WEEKS", "8"))  # reserved for future use
         history_req = int(os.environ.get("TGNN_HISTORY_WEEKS", "24")) + 1
 
         with get_conn() as conn:

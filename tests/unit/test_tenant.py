@@ -21,8 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -192,7 +191,6 @@ class TestTenantMiddleware:
 
         @app.get("/test")
         def _test_route(request):
-            from fastapi import Request
             return {
                 "tenant_id": getattr(request.state, "tenant_id", ""),
                 "api_key":   getattr(request.state, "api_key", ""),

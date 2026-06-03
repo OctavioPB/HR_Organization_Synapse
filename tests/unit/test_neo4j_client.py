@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -141,7 +140,7 @@ def test_query_reachability_returns_list():
         {"employee_id": "emp-b", "name": "Bob", "department": "Sales", "spof_score": 0.3},
         {"employee_id": "emp-c", "name": "Carol", "department": "HR",  "spof_score": 0.5},
     ]
-    mock_records = [MagicMock(**{"keys.return_value": r.keys(), **{k: v for k, v in r.items()}}) for r in rows]
+    _ = [MagicMock(**{"keys.return_value": r.keys(), **{k: v for k, v in r.items()}}) for r in rows]
 
     mock_driver, mock_session = _make_mock_driver()
     # Override __iter__ to return row dicts

@@ -22,10 +22,9 @@ import hmac
 import logging
 import os
 import queue
-import time
 import uuid
-from datetime import datetime, timezone
-from typing import Iterator
+from datetime import datetime, UTC
+from collections.abc import Iterator
 
 from ingestion.producers.base_producer import BaseProducer
 from ingestion.producers.registry import ConnectorRegistry
@@ -193,7 +192,7 @@ class GitHubProducer(BaseProducer):
                 return datetime.fromisoformat(raw.replace("Z", "+00:00"))
             except ValueError:
                 pass
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
 
     def _build_event(
         self,
