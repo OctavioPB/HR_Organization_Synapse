@@ -219,6 +219,8 @@ org-synapse/
 ├── demo.ps1                    # One-command launcher (Windows/PowerShell)
 ├── docker-compose.yml
 ├── .env.example
+├── MODEL_CARD_CHURN.md         # ChurnGAT model card (architecture, fairness, limitations)
+├── DPIA_THREAT_MODEL.md        # GDPR Art. 35 DPIA + threat model (re-identification, misuse, controls)
 │
 ├── ingestion/
 │   ├── producers/              # Kafka producers (synthetic + real-API + multi-tenant)
@@ -308,7 +310,7 @@ org-synapse/
 │       └── AdminPanel.jsx           # /admin — tenant management + digest config
 │
 ├── data/
-│   ├── migrations/             # 016 SQL migrations (000 → 016)
+│   ├── migrations/             # 017 SQL migrations (000 → 017)
 │   └── synthetic/              # generate_org_data.py
 │
 └── scripts/
@@ -602,6 +604,7 @@ curl http://localhost:8000/risk/scores \
 - **Manager view abstraction.** Managers see traffic-light status only — numeric SPOF scores and churn probabilities are `hr_admin`-scoped and never travel over the wire for `manager` role keys.
 - **GDPR Article 20.** `GET /compliance/data-export/{id}` returns a complete personal data package.
 - **Retention.** `raw_events` purged after 90 days; `graph_snapshots` after 365 days.
+- **DPIA.** [`DPIA_THREAT_MODEL.md`](DPIA_THREAT_MODEL.md) documents the full GDPR Art. 35 Data Protection Impact Assessment: data inventory, 15 identified threats (re-identification, misuse vectors, technical exploitation, model-specific harms), risk matrix, and controls map. Required reading before production deployment.
 
 ---
 
@@ -610,14 +613,43 @@ curl http://localhost:8000/risk/scores \
 ```bash
 pytest tests/ -v --tb=short
 
+# With coverage report
+pytest tests/unit/ --cov=graph --cov=api --cov=ml --cov=ingestion --cov-report=term-missing
+
 # Subsets
 pytest tests/unit/test_graph_metrics.py -v
 pytest tests/unit/test_compliance.py -v
-pytest tests/unit/test_tenant.py -v
+pytest tests/unit/test_org_health.py -v
 pytest tests/unit/test_nl_query.py -v
 ```
 
 All unit tests mock the database via `dependency_overrides` — no live DB or Kafka required.
+
+**Coverage highlights (unit suite, ~497 tests):**
+
+| Module | Coverage | Notes |
+|---|---|---|
+| `graph/compliance.py` | 100% | GDPR retention, consent, export, audit — all branches tested |
+| `graph/neo4j_client.py` | 90% | Only real-driver init/close miss (requires live Neo4j) |
+| `graph/org_health.py` | 64% | `compute_and_persist` needs integration test against DB |
+| `graph/risk_scorer.py` | 60% | Scoring algorithms covered; DB write path needs integration |
+| Overall (source packages) | ~35% | Gap is concentrated in `compute_and_persist` / `write_*` DB functions and ingestion connectors |
+
+Integration tests (`pytest -m integration`) require Docker Compose running.
+
+## Code quality
+
+Ruff and mypy are configured in `pyproject.toml` and run clean against the full source tree:
+
+```bash
+# Linting (ruff)
+python -m ruff check .
+
+# Type checking (mypy)
+python -m mypy ingestion graph ml api --ignore-missing-imports
+```
+
+Zero violations. Ignored rules are documented in `[tool.ruff.lint.ignore]` with rationale.
 
 ---
 
