@@ -12,12 +12,32 @@ from typing import Any
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def fetch_latest_snapshot_date(conn) -> date | None:
-    """Return the most recent snapshot_date in graph_snapshots, or None."""
+def _fetch_latest_date(conn, table: str, column: str) -> date | None:
+    """Return MAX(column) from table, or None when the table is empty."""
     with conn.cursor() as cur:
-        cur.execute("SELECT MAX(snapshot_date) FROM graph_snapshots")
+        cur.execute(f"SELECT MAX({column}) FROM {table}")  # noqa: S608 — internal constants only
         row = cur.fetchone()
     return row["max"] if row and row["max"] else None
+
+
+def _query_rows(conn, sql: str, params: tuple = ()) -> list[dict]:
+    """Execute sql and return all rows as plain dicts."""
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        return [dict(r) for r in cur.fetchall()]
+
+
+def _query_one(conn, sql: str, params: tuple = ()) -> dict | None:
+    """Execute sql and return the first row as a plain dict, or None."""
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def fetch_latest_snapshot_date(conn) -> date | None:
+    """Return the most recent snapshot_date in graph_snapshots, or None."""
+    return _fetch_latest_date(conn, "graph_snapshots", "snapshot_date")
 
 
 # ─── Graph ────────────────────────────────────────────────────────────────────
@@ -311,72 +331,69 @@ def fetch_employee_risk_history(
 
 def fetch_silo_alerts(conn) -> list[dict]:
     """Return unresolved silo alerts, most recent first."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                id::text,
-                fired_at,
-                type,
-                severity,
-                affected_entities,
-                details,
-                resolved
-            FROM alerts
-            WHERE type = 'silo'
-              AND resolved = false
-            ORDER BY fired_at DESC
-            LIMIT 100
-            """
-        )
-        return [dict(r) for r in cur.fetchall()]
+    return _query_rows(
+        conn,
+        """
+        SELECT
+            id::text,
+            fired_at,
+            type,
+            severity,
+            affected_entities,
+            details,
+            resolved
+        FROM alerts
+        WHERE type = 'silo'
+          AND resolved = false
+        ORDER BY fired_at DESC
+        LIMIT 100
+        """,
+    )
 
 
 def fetch_entropy_alerts(conn) -> list[dict]:
     """Return unresolved withdrawing / connectivity_anomaly alerts."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                id::text,
-                fired_at,
-                type,
-                severity,
-                affected_entities,
-                details,
-                resolved
-            FROM alerts
-            WHERE type IN ('withdrawing', 'connectivity_anomaly', 'spof_critical')
-              AND resolved = false
-            ORDER BY fired_at DESC
-            LIMIT 200
-            """
-        )
-        return [dict(r) for r in cur.fetchall()]
+    return _query_rows(
+        conn,
+        """
+        SELECT
+            id::text,
+            fired_at,
+            type,
+            severity,
+            affected_entities,
+            details,
+            resolved
+        FROM alerts
+        WHERE type IN ('withdrawing', 'connectivity_anomaly', 'spof_critical')
+          AND resolved = false
+        ORDER BY fired_at DESC
+        LIMIT 200
+        """,
+    )
 
 
 def fetch_alert_history(days: int, conn) -> list[dict]:
     """Return all alerts fired within the last N days."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                id::text,
-                fired_at,
-                type,
-                severity,
-                affected_entities,
-                details,
-                resolved,
-                resolved_at
-            FROM alerts
-            WHERE fired_at >= NOW() - (%s || ' days')::interval
-            ORDER BY fired_at DESC
-            LIMIT 1000
-            """,
-            (days,),
-        )
-        return [dict(r) for r in cur.fetchall()]
+    return _query_rows(
+        conn,
+        """
+        SELECT
+            id::text,
+            fired_at,
+            type,
+            severity,
+            affected_entities,
+            details,
+            resolved,
+            resolved_at
+        FROM alerts
+        WHERE fired_at >= NOW() - (%s || ' days')::interval
+        ORDER BY fired_at DESC
+        LIMIT 1000
+        """,
+        (days,),
+    )
 
 
 def fetch_silo_members(alert_id: str, conn) -> list[dict]:
@@ -527,10 +544,7 @@ def fetch_churn_scores(
 
 def fetch_latest_churn_date(conn) -> date | None:
     """Return the most recent scored_at date in churn_scores, or None."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT MAX(scored_at) FROM churn_scores")
-        row = cur.fetchone()
-    return row["max"] if row and row["max"] else None
+    return _fetch_latest_date(conn, "churn_scores", "scored_at")
 
 
 # ─── Temporal graph analysis ──────────────────────────────────────────────────
@@ -620,10 +634,7 @@ def fetch_temporal_anomaly_scores(
 
 def fetch_latest_temporal_anomaly_date(conn) -> date | None:
     """Return the most recent scored_at in temporal_anomaly_scores, or None."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT MAX(scored_at) FROM temporal_anomaly_scores")
-        row = cur.fetchone()
-    return row["max"] if row and row["max"] else None
+    return _fetch_latest_date(conn, "temporal_anomaly_scores", "scored_at")
 
 
 def fetch_employee_churn_history(employee_id: str, conn) -> list[dict]:
@@ -655,10 +666,7 @@ def fetch_employee_churn_history(employee_id: str, conn) -> list[dict]:
 
 def fetch_latest_succession_date(conn) -> date | None:
     """Return the most recent computed_at in succession_recommendations, or None."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT MAX(computed_at) FROM succession_recommendations")
-        row = cur.fetchone()
-    return row["max"] if row and row["max"] else None
+    return _fetch_latest_date(conn, "succession_recommendations", "computed_at")
 
 
 def fetch_succession_recommendations(
@@ -879,10 +887,7 @@ def fetch_knowledge_scores(
 
 def fetch_latest_knowledge_date(conn) -> date | None:
     """Return the most recent computed_at in knowledge_risk_scores, or None."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT MAX(computed_at) FROM knowledge_risk_scores")
-        row = cur.fetchone()
-    return row["max"] if row and row["max"] else None
+    return _fetch_latest_date(conn, "knowledge_risk_scores", "computed_at")
 
 
 def fetch_knowledge_domains(conn) -> list[dict]:
@@ -990,18 +995,16 @@ def fetch_employee_knowledge_profile(employee_id: str, conn) -> dict | None:
 
 def fetch_latest_org_health(conn) -> dict | None:
     """Return the most recent org health score row, or None if none computed yet."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT computed_at, score, tier, silo_count, avg_spof_score,
-                   avg_entropy_trend, wcc_count, node_count, component_scores
-            FROM org_health_scores
-            ORDER BY computed_at DESC
-            LIMIT 1
-            """
-        )
-        row = cur.fetchone()
-    return dict(row) if row else None
+    return _query_one(
+        conn,
+        """
+        SELECT computed_at, score, tier, silo_count, avg_spof_score,
+               avg_entropy_trend, wcc_count, node_count, component_scores
+        FROM org_health_scores
+        ORDER BY computed_at DESC
+        LIMIT 1
+        """,
+    )
 
 
 def fetch_org_health_trend(weeks: int, conn) -> list[dict]:
@@ -1065,14 +1068,13 @@ def persist_org_health(data: dict, conn) -> None:
 
 def fetch_purge_history(limit: int, conn) -> list[dict]:
     """Return recent data retention purge runs, most-recent first."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT purged_at, table_name, rows_deleted, cutoff_date, triggered_by, status
-            FROM data_retention_purges
-            ORDER BY purged_at DESC
-            LIMIT %s
-            """,
-            (limit,),
-        )
-        return [dict(r) for r in cur.fetchall()]
+    return _query_rows(
+        conn,
+        """
+        SELECT purged_at, table_name, rows_deleted, cutoff_date, triggered_by, status
+        FROM data_retention_purges
+        ORDER BY purged_at DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )

@@ -30,7 +30,6 @@ _DEFAULT_ARGS = {
 }
 
 _DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://localhost:5173")
-_CLAUDE_MODEL  = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
 
 
 @dag(
@@ -152,21 +151,15 @@ def weekly_digest_dag():
     @task()
     def generate_digest_narrative(digest_data: dict) -> dict:
         try:
-            import anthropic
+            from graph.claude_client import call_claude
 
-            client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
             prompt = (
                 "You are a people analytics advisor. Based on this week's organizational data, "
                 "write one concise paragraph (max 80 words) recommending the single highest-priority "
                 "HR action. Be specific and data-led. Do not use filler phrases.\n\n"
                 f"Data: {json.dumps(digest_data, indent=2)}"
             )
-            response = client.messages.create(
-                model=_CLAUDE_MODEL,
-                max_tokens=200,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            narrative = response.content[0].text.strip()
+            narrative = call_claude(prompt, max_tokens=200)
         except Exception as exc:
             logger.warning("Narrative generation failed: %s", exc)
             tier = digest_data.get("tier", "caution")

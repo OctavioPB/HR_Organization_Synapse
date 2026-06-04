@@ -14,8 +14,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
-_WINDOW_DAYS  = int(os.environ.get("GRAPH_WINDOW_DAYS", "30"))
+_WINDOW_DAYS = int(os.environ.get("GRAPH_WINDOW_DAYS", "30"))
 
 
 # ─── Snapshot stats ───────────────────────────────────────────────────────────
@@ -231,8 +230,8 @@ def task_generate_departure_report(employee_id: str, departure_date_str: str, co
 
 def _generate_narrative(impact: dict) -> str:
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        from graph.claude_client import call_claude
+
         prompt = (
             "You are a people analytics advisor writing a concise departure impact report. "
             "Based on the following structural analysis data, write 2 paragraphs: "
@@ -241,12 +240,7 @@ def _generate_narrative(impact: dict) -> str:
             "Be specific, data-led, and professional. Max 150 words total.\n\n"
             f"Data: {json.dumps(impact, indent=2, default=str)}"
         )
-        response = client.messages.create(
-            model=_CLAUDE_MODEL,
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text.strip()
+        return call_claude(prompt, max_tokens=300)
     except Exception as exc:
         logger.warning("Narrative generation failed: %s", exc)
         name   = impact.get("employee_name", "This employee")

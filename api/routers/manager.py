@@ -260,17 +260,11 @@ def get_suggestions(
     )
 
     try:
-        import anthropic
         import json
 
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
-        response = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        from anthropic.types import TextBlock
-        text = next((b.text for b in response.content if isinstance(b, TextBlock)), "").strip()
+        from graph.claude_client import call_claude
+
+        text = call_claude(prompt, max_tokens=300)
         # Parse the JSON array
         if text.startswith("["):
             suggestions = json.loads(text)[:3]

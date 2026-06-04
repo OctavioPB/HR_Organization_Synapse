@@ -364,9 +364,8 @@ def _claude_narrative(
     top_risks: list[dict],
     actions: list[str],
 ) -> str:
-    import anthropic
+    from graph.claude_client import call_claude
 
-    client = anthropic.Anthropic()
     score = current["score"]
     tier  = current["tier"]
 
@@ -385,10 +384,4 @@ def _claude_narrative(
         "Quantify where possible."
     )
 
-    response = client.messages.create(
-        model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    from anthropic.types import TextBlock
-    return next((b.text for b in response.content if isinstance(b, TextBlock)), "").strip()
+    return call_claude(prompt, max_tokens=300)

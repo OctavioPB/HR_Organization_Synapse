@@ -19,7 +19,6 @@ from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
-_CLAUDE_MODEL     = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
 _MIN_SPOF_SCORE   = float(os.environ.get("TRANSFER_MIN_SPOF_SCORE", "0.5"))
 _MAX_CANDIDATES   = int(os.environ.get("TRANSFER_MAX_CANDIDATES", "2"))
 _MAX_INTRO_ACTIONS   = int(os.environ.get("TRANSFER_MAX_INTROS", "5"))
@@ -180,8 +179,8 @@ def _build_plan(spof_id: str, candidate_id: str, pair: dict, G, conn) -> dict:
 def _generate_narrative(spof_name: str, candidate_name: str, dept: str,
                         intros: list, docs: list, shadows: list) -> str:
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        from graph.claude_client import call_claude
+
         prompt = (
             f"You are an HR advisor writing a knowledge transfer briefing. "
             f"{candidate_name} is being prepared to absorb {spof_name}'s structural role in {dept}. "
@@ -191,12 +190,7 @@ def _generate_narrative(spof_name: str, candidate_name: str, dept: str,
             f"(2) the key milestone to watch by week 12. "
             f"Professional, direct tone."
         )
-        response = client.messages.create(
-            model=_CLAUDE_MODEL,
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text.strip()
+        return call_claude(prompt, max_tokens=200)
     except Exception as exc:
         logger.warning("Narrative generation failed: %s", exc)
         return (
