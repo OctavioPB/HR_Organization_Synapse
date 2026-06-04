@@ -29,7 +29,7 @@ try:
     _PYG_AVAILABLE = True
 except ImportError:
     _PYG_AVAILABLE = False
-    GATConv = None  # type: ignore[assignment,misc]
+    GATConv = None
 
 logger = logging.getLogger(__name__)
 

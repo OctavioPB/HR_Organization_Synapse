@@ -11,7 +11,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 import numpy as np
@@ -67,10 +67,10 @@ def main() -> None:
 
     # Resolve start date
     if args.start_date:
-        start_date = datetime.fromisoformat(args.start_date).replace(tzinfo=timezone.utc)
+        start_date = datetime.fromisoformat(args.start_date).replace(tzinfo=UTC)
     else:
         start_date = (
-            datetime.now(timezone.utc) - timedelta(days=args.days)
+            datetime.now(UTC) - timedelta(days=args.days)
         ).replace(hour=0, minute=0, second=0, microsecond=0)
 
     logger.info(

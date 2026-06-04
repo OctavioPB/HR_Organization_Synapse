@@ -124,7 +124,7 @@ def _auroc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     tpr = np.concatenate([[0.0], tpr])
     fpr = np.concatenate([[0.0], fpr])
 
-    return float(np.trapz(tpr, fpr))
+    return float(np.trapezoid(tpr, fpr))
 
 
 # ─── Training function ────────────────────────────────────────────────────────

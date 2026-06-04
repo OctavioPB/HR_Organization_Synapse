@@ -390,4 +390,5 @@ def _claude_narrative(
         max_tokens=300,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.content[0].text.strip()
+    from anthropic.types import TextBlock
+    return next((b.text for b in response.content if isinstance(b, TextBlock)), "").strip()

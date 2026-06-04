@@ -3,6 +3,7 @@
 import logging
 import os
 from datetime import date
+from typing import Literal
 
 import networkx as nx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -161,6 +162,7 @@ def get_shortest_path(
     """
     from graph.neo4j_client import neo4j_available, query_shortest_path
 
+    source: Literal["neo4j", "networkx"]
     if neo4j_available():
         result = query_shortest_path(from_employee_id, to_employee_id)
         source = "neo4j"
@@ -203,6 +205,7 @@ def get_reachability(
     """
     from graph.neo4j_client import neo4j_available, query_reachability
 
+    source: Literal["neo4j", "networkx"]
     if neo4j_available():
         reachable = query_reachability(employee_id, hops)
         source = "neo4j"
@@ -236,6 +239,7 @@ def get_knowledge_islands(
     """
     from graph.neo4j_client import neo4j_available, query_knowledge_islands
 
+    source: Literal["neo4j", "networkx"]
     if neo4j_available():
         islands = query_knowledge_islands(max_size)
         source = "neo4j"

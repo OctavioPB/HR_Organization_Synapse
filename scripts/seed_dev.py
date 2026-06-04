@@ -25,11 +25,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -136,7 +135,7 @@ def main() -> None:
         withdrawing_id = select_withdrawing(employees, connector_ids, rng)
         start_dt       = datetime(
             snapshot_date.year, snapshot_date.month, snapshot_date.day,
-            tzinfo=timezone.utc,
+            tzinfo=UTC,
         ) - timedelta(days=args.days)
 
         silo_depts = {"HR", "Sales"}
@@ -385,7 +384,7 @@ def main() -> None:
         # Deliberately skew: group_c gets lower-tenure, lower-level roles (for demo insight)
 
         with conn.cursor() as cur:
-            for i, emp in enumerate(demo_emps):
+            for _, emp in enumerate(demo_emps):
                 emp_id = emp["id"]
                 role   = emp["role"]
 

@@ -98,7 +98,6 @@ def reset(yes: bool) -> None:
         with conn.cursor() as cur:
             table_list = ", ".join(_TABLES)
             cur.execute(f"TRUNCATE {table_list} CASCADE;")
-            rows_cleared = cur.rowcount  # psycopg2 returns -1 for TRUNCATE, that's fine
         conn.commit()
         print(f"  OK  Truncated {len(_TABLES)} tables.\n")
     except Exception as exc:

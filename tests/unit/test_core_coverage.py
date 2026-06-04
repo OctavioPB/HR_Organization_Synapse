@@ -17,7 +17,7 @@ Modules targeted:
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import networkx as nx
 import pytest
@@ -113,7 +113,6 @@ class TestBuildGraphDictRow:
 # ─── metrics ──────────────────────────────────────────────────────────────────
 
 from graph.metrics import (
-    BETWEENNESS_EXACT_THRESHOLD,
     compute_betweenness,
     compute_community,
     write_snapshot,

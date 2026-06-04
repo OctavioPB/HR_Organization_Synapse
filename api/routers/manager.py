@@ -269,7 +269,8 @@ def get_suggestions(
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = response.content[0].text.strip()
+        from anthropic.types import TextBlock
+        text = next((b.text for b in response.content if isinstance(b, TextBlock)), "").strip()
         # Parse the JSON array
         if text.startswith("["):
             suggestions = json.loads(text)[:3]

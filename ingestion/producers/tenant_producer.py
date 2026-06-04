@@ -162,25 +162,3 @@ class TenantAwareProducer:
         )
 
 
-# ─── CLI helper ───────────────────────────────────────────────────────────────
-
-
-def make_tenant_producer(
-    tenant_slug: str | None = None,
-    channel: str = "slack",
-) -> TenantAwareProducer:
-    """Factory used by CLI scripts and Airflow tasks.
-
-    tenant_slug defaults to TENANT_SLUG env var.
-    channel selects which inner producer to instantiate.
-    """
-    from ingestion.producers.registry import get_producer
-
-    slug = tenant_slug or os.environ.get("TENANT_SLUG", "")
-    if not slug:
-        raise ValueError(
-            "tenant_slug is required. Set TENANT_SLUG env var or pass explicitly."
-        )
-
-    inner = get_producer(channel)
-    return TenantAwareProducer(tenant_slug=slug, inner=inner)

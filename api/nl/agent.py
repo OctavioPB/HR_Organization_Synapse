@@ -70,8 +70,8 @@ def run_query(question: str, conn) -> dict[str, Any]:
             model=_MODEL,
             max_tokens=1024,
             system=_SYSTEM_PROMPT,
-            tools=TOOL_DEFINITIONS,
-            messages=messages,
+            tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
+            messages=messages,       # type: ignore[arg-type]
         )
 
         # Append assistant message (may contain tool_use blocks)

@@ -71,11 +71,11 @@ def produce_from_csv(
                     event_id=row["event_id"],
                     source_employee_id=row["source_employee_id"],
                     target_employee_id=row["target_employee_id"],
-                    channel=row["channel"],
-                    direction=row["direction"],
+                    channel=row["channel"],      # type: ignore[arg-type]
+                    direction=row["direction"],  # type: ignore[arg-type]
                     department_source=row["department_source"],
                     department_target=row["department_target"],
-                    timestamp=row["timestamp"],
+                    timestamp=row["timestamp"],  # type: ignore[arg-type]
                     weight=float(row["weight"]),
                 )
             except ValidationError as exc:
