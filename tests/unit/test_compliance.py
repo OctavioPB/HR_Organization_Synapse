@@ -437,9 +437,14 @@ class TestConsentEndpoint:
 
 class TestPurgeEndpoint:
     def test_missing_admin_key_returns_403(self):
+        import api.deps
         from api.main import app
+
         client = TestClient(app, raise_server_exceptions=True)
-        resp = client.post("/compliance/purge")
+        # _ADMIN_SECRET is evaluated at import time; patch it so the route
+        # reaches the key-comparison check instead of returning 503.
+        with patch.object(api.deps, "_ADMIN_SECRET", "some-secret"):
+            resp = client.post("/compliance/purge")
         assert resp.status_code == 403
 
     def test_returns_202_on_success(self, admin_client):
@@ -473,7 +478,7 @@ class TestPurgeHistoryEndpoint:
             "triggered_by": "airflow",
             "status": "completed",
         }]
-        with patch("api.db.fetch_purge_history", return_value=rows):
+        with patch("api.routers.compliance.fetch_purge_history", return_value=rows):
             resp = client.get("/compliance/purge-history")
         assert resp.status_code == 200
         body = resp.json()
@@ -509,3 +514,45 @@ class TestComplianceReportEndpoint:
         with patch("graph.compliance.generate_html_report", side_effect=RuntimeError("DB down")):
             resp = client.get("/compliance/report")
         assert resp.status_code == 502
+
+
+# ─── Exception-branch coverage for fetch helpers ─────────────────────────────
+
+
+def _failing_conn():
+    """Return a conn mock whose cursor.execute always raises."""
+    cur = MagicMock()
+    cur.execute.side_effect = Exception("DB error")
+    conn = MagicMock()
+    conn.cursor.return_value.__enter__ = MagicMock(return_value=cur)
+    conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+    return conn
+
+
+class TestFetchHelperExceptionBranches:
+    def test_record_purge_exception_is_swallowed(self):
+        from graph.compliance import _record_purge
+
+        conn = _failing_conn()
+        # Must not raise; logs a warning instead
+        _record_purge("raw_events", 0, date(2025, 1, 1), "api", "failed", conn)
+
+    def test_fetch_churn_scores_exception_returns_empty(self):
+        from graph.compliance import _fetch_employee_churn_scores_export
+
+        assert _fetch_employee_churn_scores_export("u1", _failing_conn()) == []
+
+    def test_fetch_knowledge_exception_returns_empty(self):
+        from graph.compliance import _fetch_employee_knowledge_export
+
+        assert _fetch_employee_knowledge_export("u1", _failing_conn()) == []
+
+    def test_fetch_consent_audit_log_exception_returns_empty(self):
+        from graph.compliance import _fetch_consent_audit_log
+
+        assert _fetch_consent_audit_log("u1", _failing_conn()) == []
+
+    def test_fetch_recent_purges_exception_returns_empty(self):
+        from graph.compliance import _fetch_recent_purges
+
+        assert _fetch_recent_purges(_failing_conn()) == []
