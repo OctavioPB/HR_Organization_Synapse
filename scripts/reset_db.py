@@ -8,7 +8,8 @@ Usage:
     python scripts/reset_db.py            # prompts for confirmation
     python scripts/reset_db.py --yes      # non-interactive (CI / scripting)
     python scripts/reset_db.py --yes --seed   # reset then immediately reseed
-"""
+
+    """
 
 from __future__ import annotations
 

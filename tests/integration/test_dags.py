@@ -6,7 +6,8 @@ installed; if it is not available they are skipped automatically.
 
 Run:
     pytest tests/integration/test_dags.py -v
-"""
+
+    """
 
 import pytest
 

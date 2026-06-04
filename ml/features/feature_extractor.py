@@ -15,6 +15,7 @@ DB-accessing functions:
     compute_entropy_trends(snapshot_date, window_days) → dict[str, float]
     extract_features(snapshot_date, window_days)       → list[dict]
 
+    
 CLI:
     python ml/features/feature_extractor.py --snapshot-date 2025-04-25
 """
