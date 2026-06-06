@@ -1,5 +1,5 @@
 # MODEL.md — Mathematical Foundations of Organizational Synapse
-# Octavio Pérez Bravo · Data & AI Strategy Architect
+# Octavio Pérez Bravo 
 
 This document records every quantitative decision in the platform: why each formula was chosen, what alternatives were considered, where the weights came from, and what the model cannot capture. It is written for a technical reviewer who needs to reproduce, critique, or extend the risk calculations.
 
