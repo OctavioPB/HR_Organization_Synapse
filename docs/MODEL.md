@@ -569,7 +569,3 @@ All parameters are configurable via environment variables. Weights sum to 1.0 wi
   *Used in: §13 Limitation 12 (discrete vs. continuous-time GNN).*
 
 ---
-
-*OPB · Octavio Pérez Bravo · Data & AI Strategy Architect*
-*Mathematical corrections v2.0: Dr. Emilio Vargas Ochoa, Applied Mathematics*
-*Literature update v3.0: Dr. Emilio Vargas Ochoa, Applied Mathematics*
