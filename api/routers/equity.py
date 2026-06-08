@@ -19,14 +19,14 @@ router = APIRouter(prefix="/equity", tags=["equity"])
 @router.get("/centrality-distribution")
 def get_centrality_distribution(
     dimension: str = Query(default="tenure_band", description="gender_group | tenure_band | level_band"),
-    metric:    str = Query(default="betweenness", description="betweenness | degree"),
+    metric: str = Query(default="betweenness", description="betweenness | degree"),
     conn=Depends(get_db),
 ) -> dict:
     """Return centrality distribution by demographic group for the latest computed date.
 
     All values are aggregated at the group level — no individual data exposed.
     """
-    valid_dims    = {"gender_group", "tenure_band", "level_band"}
+    valid_dims = {"gender_group", "tenure_band", "level_band"}
     valid_metrics = {"betweenness", "degree"}
     if dimension not in valid_dims:
         raise HTTPException(status_code=422, detail=f"dimension must be one of: {sorted(valid_dims)}")
@@ -62,15 +62,15 @@ def get_centrality_distribution(
 
     return {
         "computed_at": str(latest),
-        "dimension":   dimension,
-        "metric":      metric,
+        "dimension": dimension,
+        "metric": metric,
         "groups": [
             {
-                "group_value":      r["group_value"],
-                "median_score":     round(float(r["median_score"]), 6) if r["median_score"] is not None else None,
-                "p25_score":        round(float(r["p25_score"]),    6) if r["p25_score"]    is not None else None,
-                "p75_score":        round(float(r["p75_score"]),    6) if r["p75_score"]    is not None else None,
-                "member_count":     int(r["member_count"] or 0),
+                "group_value": r["group_value"],
+                "median_score": round(float(r["median_score"]), 6) if r["median_score"] is not None else None,
+                "p25_score": round(float(r["p25_score"]), 6) if r["p25_score"] is not None else None,
+                "p75_score": round(float(r["p75_score"]), 6) if r["p75_score"] is not None else None,
+                "member_count": int(r["member_count"] or 0),
                 "below_org_median": bool(r["below_org_median"]),
             }
             for r in rows
@@ -110,25 +110,25 @@ def get_succession_equity_check(
 
     # Compute tenure_band composition
     tenure_counts: dict[str, int] = {}
-    level_counts:  dict[str, int] = {}
+    level_counts: dict[str, int] = {}
     for c in candidates:
         tb = c.get("tenure_band") or "unknown"
-        lb = c.get("level_band")  or "unknown"
+        lb = c.get("level_band") or "unknown"
         tenure_counts[tb] = tenure_counts.get(tb, 0) + 1
-        level_counts[lb]  = level_counts.get(lb, 0) + 1
+        level_counts[lb] = level_counts.get(lb, 0) + 1
 
     total = len(candidates)
     max_tenure_pct = max(tenure_counts.values()) / total if tenure_counts else 0.0
-    max_level_pct  = max(level_counts.values())  / total if level_counts  else 0.0
-    homophily_warning = (max_tenure_pct > 0.7 or max_level_pct > 0.7)
+    max_level_pct = max(level_counts.values()) / total if level_counts else 0.0
+    homophily_warning = max_tenure_pct > 0.7 or max_level_pct > 0.7
 
     return {
-        "spof_employee_id":    spof_employee_id,
-        "total_candidates":    total,
+        "spof_employee_id": spof_employee_id,
+        "total_candidates": total,
         "tenure_band_composition": {k: round(v / total, 3) for k, v in tenure_counts.items()},
-        "level_band_composition":  {k: round(v / total, 3) for k, v in level_counts.items()},
-        "homophily_warning":   homophily_warning,
-        "dominant_group_pct":  round(max(max_tenure_pct, max_level_pct), 3),
+        "level_band_composition": {k: round(v / total, 3) for k, v in level_counts.items()},
+        "homophily_warning": homophily_warning,
+        "dominant_group_pct": round(max(max_tenure_pct, max_level_pct), 3),
     }
 
 
@@ -144,10 +144,10 @@ def import_demographics(
     Only employees with consent=TRUE in the employees table are accepted.
     """
     valid_tenures = {"0-1y", "1-3y", "3-5y", "5y+"}
-    valid_levels  = {"ic", "senior_ic", "manager", "director_plus"}
+    valid_levels = {"ic", "senior_ic", "manager", "director_plus"}
 
     imported = 0
-    skipped  = 0
+    skipped = 0
 
     with conn.cursor() as cur:
         for rec in records:
@@ -167,7 +167,7 @@ def import_demographics(
                 continue
 
             tenure = rec.get("tenure_band")
-            level  = rec.get("level_band")
+            level = rec.get("level_band")
             if tenure and tenure not in valid_tenures:
                 skipped += 1
                 continue

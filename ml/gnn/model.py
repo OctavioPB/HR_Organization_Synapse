@@ -26,6 +26,7 @@ import torch.nn.functional as F
 
 try:
     from torch_geometric.nn import GATConv
+
     _PYG_AVAILABLE = True
 except ImportError:
     _PYG_AVAILABLE = False
@@ -62,8 +63,7 @@ class ChurnGAT(nn.Module):
     ) -> None:
         if not _PYG_AVAILABLE:
             raise ImportError(
-                "torch_geometric is required for ChurnGAT.  "
-                "Install it with: pip install torch-geometric"
+                "torch_geometric is required for ChurnGAT.  " "Install it with: pip install torch-geometric"
             )
         super().__init__()
 
@@ -122,9 +122,7 @@ class ChurnGAT(nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
 
         if return_attention:
-            h, attention = self.conv1(
-                x, edge_index, return_attention_weights=True
-            )
+            h, attention = self.conv1(x, edge_index, return_attention_weights=True)
             h = F.elu(h)
             h = F.dropout(h, p=self.dropout, training=self.training)
             h = F.elu(self.conv2(h, edge_index))

@@ -29,6 +29,7 @@ from ingestion.schemas.collaboration_event import CollaborationEvent
 def reset_singletons():
     """Reset the ConnectorRegistry and router-level producer singletons between tests."""
     import api.routers.connectors as conn_mod
+
     ConnectorRegistry.reset()
     conn_mod._slack_producer = None
     conn_mod._github_producer = None
@@ -131,9 +132,7 @@ def test_slack_producer_verify_signature_valid():
     body = b'{"type":"event_callback"}'
     ts = str(int(time.time()))
     sig_base = f"v0:{ts}:{body.decode()}"
-    expected = "v0=" + hmac.new(
-        secret.encode("utf-8"), sig_base.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    expected = "v0=" + hmac.new(secret.encode("utf-8"), sig_base.encode("utf-8"), hashlib.sha256).hexdigest()
 
     with patch.dict(os.environ, {"SLACK_SIGNING_SECRET": secret}):
         producer = SlackRealProducer()
@@ -358,11 +357,14 @@ def test_github_producer_employee_map_resolves_logins():
 def test_jira_producer_extract_edges_assignment():
     from ingestion.producers.jira_real_producer import JiraRealProducer
 
-    with patch.dict(os.environ, {
-        "JIRA_BASE_URL": "https://test.atlassian.net",
-        "JIRA_EMAIL": "test@test.com",
-        "JIRA_API_TOKEN": "token",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "JIRA_BASE_URL": "https://test.atlassian.net",
+            "JIRA_EMAIL": "test@test.com",
+            "JIRA_API_TOKEN": "token",
+        },
+    ):
         producer = JiraRealProducer()
 
     issue = {
@@ -383,11 +385,14 @@ def test_jira_producer_extract_edges_assignment():
 def test_jira_producer_extract_edges_comment_authors():
     from ingestion.producers.jira_real_producer import JiraRealProducer
 
-    with patch.dict(os.environ, {
-        "JIRA_BASE_URL": "https://test.atlassian.net",
-        "JIRA_EMAIL": "test@test.com",
-        "JIRA_API_TOKEN": "token",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "JIRA_BASE_URL": "https://test.atlassian.net",
+            "JIRA_EMAIL": "test@test.com",
+            "JIRA_API_TOKEN": "token",
+        },
+    ):
         producer = JiraRealProducer()
 
     issue = {
@@ -412,11 +417,14 @@ def test_jira_producer_extract_edges_comment_authors():
 def test_jira_producer_extract_edges_no_self_loops():
     from ingestion.producers.jira_real_producer import JiraRealProducer
 
-    with patch.dict(os.environ, {
-        "JIRA_BASE_URL": "https://test.atlassian.net",
-        "JIRA_EMAIL": "test@test.com",
-        "JIRA_API_TOKEN": "token",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "JIRA_BASE_URL": "https://test.atlassian.net",
+            "JIRA_EMAIL": "test@test.com",
+            "JIRA_API_TOKEN": "token",
+        },
+    ):
         producer = JiraRealProducer()
 
     issue = {

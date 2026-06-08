@@ -62,9 +62,7 @@ class SlackRealProducer(BaseProducer):
         self._token: str = os.environ.get("SLACK_BOT_TOKEN", "")
         self._signing_secret: str = os.environ.get("SLACK_SIGNING_SECRET", "")
         self._poll_interval: int = int(os.environ.get("SLACK_POLL_INTERVAL", _DEFAULT_POLL_INTERVAL))
-        self._employee_map: dict[str, str] = json.loads(
-            os.environ.get("SLACK_EMPLOYEE_MAP", "{}")
-        )
+        self._employee_map: dict[str, str] = json.loads(os.environ.get("SLACK_EMPLOYEE_MAP", "{}"))
         self._http: httpx.Client | None = None
         self._event_queue: queue.Queue[CollaborationEvent] = queue.Queue()
         self._running = False
@@ -146,11 +144,14 @@ class SlackRealProducer(BaseProducer):
             return False
 
         sig_base = f"v0:{timestamp}:{body.decode('utf-8')}"
-        expected = "v0=" + hmac.new(
-            self._signing_secret.encode("utf-8"),
-            sig_base.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        expected = (
+            "v0="
+            + hmac.new(
+                self._signing_secret.encode("utf-8"),
+                sig_base.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+        )
         return hmac.compare_digest(expected, signature)
 
     def parse_webhook_payload(self, payload: dict) -> CollaborationEvent | None:
@@ -245,7 +246,7 @@ class SlackRealProducer(BaseProducer):
             # Emit edges for the first 50 member pairs to avoid combinatorial explosion
             pairs_emitted = 0
             for i, user_a in enumerate(members):
-                for user_b in members[i + 1:]:
+                for user_b in members[i + 1 :]:
                     if pairs_emitted >= 50:
                         break
                     event = self._build_event(

@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_WEIGHTS = {
     "alpha": float(os.environ.get("SPOF_ALPHA", "0.4")),
-    "beta":  float(os.environ.get("SPOF_BETA",  "0.3")),
+    "beta": float(os.environ.get("SPOF_BETA", "0.3")),
     "gamma": float(os.environ.get("SPOF_GAMMA", "0.2")),
     "delta": float(os.environ.get("SPOF_DELTA", "0.1")),
 }
@@ -146,10 +146,7 @@ def _percent_rank(values: dict[str, float]) -> dict[str, float]:
         return {k: 0.0 for k in values}
     ordered = sorted(values.values())
     n = len(ordered)
-    return {
-        k: bisect.bisect_left(ordered, v) / (n - 1)
-        for k, v in values.items()
-    }
+    return {k: bisect.bisect_left(ordered, v) / (n - 1) for k, v in values.items()}
 
 
 def score_all_with_bands(
@@ -248,9 +245,7 @@ def score_all(
     """
     return {
         node: detail["score"]
-        for node, detail in score_all_with_bands(
-            G, betweenness, clustering, entropy_trends, weights
-        ).items()
+        for node, detail in score_all_with_bands(G, betweenness, clustering, entropy_trends, weights).items()
     }
 
 
@@ -331,11 +326,10 @@ def write_scores(
 
     logger.info(
         "Wrote %d risk scores for %s | critical=%d critical_uncertain=%d warning=%d elevated=%d",
-        len(rows), snapshot_date,
-        sum(1 for e, s in scores.items()
-            if s >= 0.7 and bands.get(e, {}).get("robust_critical", True)),
-        sum(1 for e, s in scores.items()
-            if s >= 0.7 and not bands.get(e, {}).get("robust_critical", True)),
+        len(rows),
+        snapshot_date,
+        sum(1 for e, s in scores.items() if s >= 0.7 and bands.get(e, {}).get("robust_critical", True)),
+        sum(1 for e, s in scores.items() if s >= 0.7 and not bands.get(e, {}).get("robust_critical", True)),
         sum(1 for _, s in scores.items() if 0.5 <= s < 0.7),
         sum(1 for _, s in scores.items() if 0.4 <= s < 0.5),
     )
@@ -344,12 +338,11 @@ def write_scores(
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    parser = argparse.ArgumentParser(
-        description="Compute SPOF risk scores and write to risk_scores table."
-    )
+    parser = argparse.ArgumentParser(description="Compute SPOF risk scores and write to risk_scores table.")
     parser.add_argument("--snapshot-date", type=date.fromisoformat, required=True)
     parser.add_argument(
-        "--window-days", type=int,
+        "--window-days",
+        type=int,
         default=int(os.environ.get("GRAPH_WINDOW_DAYS", "30")),
     )
     args = parser.parse_args()
@@ -369,8 +362,10 @@ def main() -> None:
     top5 = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
     logger.info("Top-5 SPOF scores:")
     for emp_id, score in top5:
-        tag = "robust" if bands[emp_id]["robust_critical"] else (
-            "weight-sensitive" if bands[emp_id]["weight_sensitive"] else ""
+        tag = (
+            "robust"
+            if bands[emp_id]["robust_critical"]
+            else ("weight-sensitive" if bands[emp_id]["weight_sensitive"] else "")
         )
         logger.info("  %s… %.4f %s", emp_id[:8], score, tag)
 

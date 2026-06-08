@@ -18,81 +18,81 @@ logger = logging.getLogger(__name__)
 
 # ─── Retention policy (configurable via env in the DAG) ───────────────────────
 
-_RAW_EVENTS_RETENTION_DAYS   = 90
+_RAW_EVENTS_RETENTION_DAYS = 90
 _GRAPH_SNAPSHOTS_RETENTION_MONTHS = 12  # stored as 365 days for simplicity
-_GRAPH_SNAPSHOTS_RETENTION_DAYS   = 365
+_GRAPH_SNAPSHOTS_RETENTION_DAYS = 365
 
 # ─── Data catalogue ───────────────────────────────────────────────────────────
 
 _DATA_CATEGORIES: list[dict[str, Any]] = [
     {
-        "table":            "raw_events",
-        "description":      "Collaboration metadata events (who contacted whom, channel, timestamp)",
-        "personal_data":    True,
-        "sensitivity":      "medium",
-        "retention_days":   _RAW_EVENTS_RETENTION_DAYS,
-        "legal_basis":      "legitimate_interest",
-        "fields":           ["source_id", "target_id", "channel", "direction", "ts", "weight"],
+        "table": "raw_events",
+        "description": "Collaboration metadata events (who contacted whom, channel, timestamp)",
+        "personal_data": True,
+        "sensitivity": "medium",
+        "retention_days": _RAW_EVENTS_RETENTION_DAYS,
+        "legal_basis": "legitimate_interest",
+        "fields": ["source_id", "target_id", "channel", "direction", "ts", "weight"],
         "excludes_content": True,
     },
     {
-        "table":            "graph_snapshots",
-        "description":      "Daily graph-metric snapshot per employee (centrality, clustering, community)",
-        "personal_data":    True,
-        "sensitivity":      "medium",
-        "retention_days":   _GRAPH_SNAPSHOTS_RETENTION_DAYS,
-        "legal_basis":      "legitimate_interest",
-        "fields":           ["betweenness", "degree_in", "degree_out", "clustering", "community_id"],
+        "table": "graph_snapshots",
+        "description": "Daily graph-metric snapshot per employee (centrality, clustering, community)",
+        "personal_data": True,
+        "sensitivity": "medium",
+        "retention_days": _GRAPH_SNAPSHOTS_RETENTION_DAYS,
+        "legal_basis": "legitimate_interest",
+        "fields": ["betweenness", "degree_in", "degree_out", "clustering", "community_id"],
         "excludes_content": True,
     },
     {
-        "table":            "risk_scores",
-        "description":      "SPOF / entropy / anomaly risk scores per employee",
-        "personal_data":    True,
-        "sensitivity":      "high",
-        "retention_days":   _GRAPH_SNAPSHOTS_RETENTION_DAYS,
-        "legal_basis":      "legitimate_interest",
-        "fields":           ["spof_score", "entropy_trend", "anomaly_score", "flag"],
+        "table": "risk_scores",
+        "description": "SPOF / entropy / anomaly risk scores per employee",
+        "personal_data": True,
+        "sensitivity": "high",
+        "retention_days": _GRAPH_SNAPSHOTS_RETENTION_DAYS,
+        "legal_basis": "legitimate_interest",
+        "fields": ["spof_score", "entropy_trend", "anomaly_score", "flag"],
         "excludes_content": False,
     },
     {
-        "table":            "churn_risk_scores",
-        "description":      "Predicted churn probability per employee",
-        "personal_data":    True,
-        "sensitivity":      "high",
-        "retention_days":   _GRAPH_SNAPSHOTS_RETENTION_DAYS,
-        "legal_basis":      "legitimate_interest",
-        "fields":           ["churn_prob", "risk_tier", "model_version"],
+        "table": "churn_risk_scores",
+        "description": "Predicted churn probability per employee",
+        "personal_data": True,
+        "sensitivity": "high",
+        "retention_days": _GRAPH_SNAPSHOTS_RETENTION_DAYS,
+        "legal_basis": "legitimate_interest",
+        "fields": ["churn_prob", "risk_tier", "model_version"],
         "excludes_content": False,
     },
     {
-        "table":            "employee_knowledge",
-        "description":      "Knowledge contribution metadata (document counts, domains)",
-        "personal_data":    True,
-        "sensitivity":      "low",
-        "retention_days":   _GRAPH_SNAPSHOTS_RETENTION_DAYS,
-        "legal_basis":      "legitimate_interest",
-        "fields":           ["source", "doc_count", "domain", "last_contribution_at"],
+        "table": "employee_knowledge",
+        "description": "Knowledge contribution metadata (document counts, domains)",
+        "personal_data": True,
+        "sensitivity": "low",
+        "retention_days": _GRAPH_SNAPSHOTS_RETENTION_DAYS,
+        "legal_basis": "legitimate_interest",
+        "fields": ["source", "doc_count", "domain", "last_contribution_at"],
         "excludes_content": True,
     },
     {
-        "table":            "employees",
-        "description":      "Employee master record (name, department, role, consent status)",
-        "personal_data":    True,
-        "sensitivity":      "medium",
-        "retention_days":   None,   # retained for employment duration
-        "legal_basis":      "contract",
-        "fields":           ["name", "department", "role", "active", "consent"],
+        "table": "employees",
+        "description": "Employee master record (name, department, role, consent status)",
+        "personal_data": True,
+        "sensitivity": "medium",
+        "retention_days": None,  # retained for employment duration
+        "legal_basis": "contract",
+        "fields": ["name", "department", "role", "active", "consent"],
         "excludes_content": False,
     },
     {
-        "table":            "consent_audit_log",
-        "description":      "Audit trail of all consent changes",
-        "personal_data":    True,
-        "sensitivity":      "low",
-        "retention_days":   _GRAPH_SNAPSHOTS_RETENTION_DAYS * 3,   # 3 years
-        "legal_basis":      "legal_obligation",
-        "fields":           ["employee_id", "changed_by", "previous_value", "new_value", "reason", "changed_at"],
+        "table": "consent_audit_log",
+        "description": "Audit trail of all consent changes",
+        "personal_data": True,
+        "sensitivity": "low",
+        "retention_days": _GRAPH_SNAPSHOTS_RETENTION_DAYS * 3,  # 3 years
+        "legal_basis": "legal_obligation",
+        "fields": ["employee_id", "changed_by", "previous_value", "new_value", "reason", "changed_at"],
         "excludes_content": False,
     },
 ]
@@ -120,12 +120,12 @@ def build_data_audit(conn) -> dict[str, Any]:
         audit.append(entry)
 
     return {
-        "generated_at":       datetime.now(UTC).isoformat(),
-        "framework":          ["GDPR", "CCPA"],
-        "data_controller":    "Org Synapse",
-        "dpo_contact":        "privacy@org-synapse.internal",
-        "categories":         audit,
-        "total_tables":       len(audit),
+        "generated_at": datetime.now(UTC).isoformat(),
+        "framework": ["GDPR", "CCPA"],
+        "data_controller": "Org Synapse",
+        "dpo_contact": "privacy@org-synapse.internal",
+        "categories": audit,
+        "total_tables": len(audit),
         "total_personal_rows": sum(e["row_count"] for e in audit if e["personal_data"]),
     }
 
@@ -134,7 +134,7 @@ def _count_table(table_name: str, conn) -> int:
     """Return row count for a given table; 0 if the table doesn't exist."""
     try:
         with conn.cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) FROM {table_name}")   # noqa: S608 — table name comes from internal constant
+            cur.execute(f"SELECT COUNT(*) FROM {table_name}")  # noqa: S608 — table name comes from internal constant
             row = cur.fetchone()
         return int(row[0] if row else 0)
     except Exception:
@@ -151,19 +151,19 @@ def run_retention_purge(conn, triggered_by: str = "api") -> list[dict[str, Any]]
     """
     results: list[dict[str, Any]] = []
 
-    raw_cutoff    = date.today() - timedelta(days=_RAW_EVENTS_RETENTION_DAYS)
-    graph_cutoff  = date.today() - timedelta(days=_GRAPH_SNAPSHOTS_RETENTION_DAYS)
+    raw_cutoff = date.today() - timedelta(days=_RAW_EVENTS_RETENTION_DAYS)
+    graph_cutoff = date.today() - timedelta(days=_GRAPH_SNAPSHOTS_RETENTION_DAYS)
 
     tasks = [
-        ("raw_events",      "ts::date",             raw_cutoff),
-        ("graph_snapshots", "snapshot_date",         graph_cutoff),
+        ("raw_events", "ts::date", raw_cutoff),
+        ("graph_snapshots", "snapshot_date", graph_cutoff),
     ]
 
     for table, date_col, cutoff in tasks:
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    f"DELETE FROM {table} WHERE {date_col} < %s",   # noqa: S608
+                    f"DELETE FROM {table} WHERE {date_col} < %s",  # noqa: S608
                     (cutoff,),
                 )
                 rows_deleted = cur.rowcount
@@ -178,12 +178,14 @@ def run_retention_purge(conn, triggered_by: str = "api") -> list[dict[str, Any]]
                 conn=conn,
             )
 
-            results.append({
-                "table":        table,
-                "rows_deleted": rows_deleted,
-                "cutoff_date":  cutoff.isoformat(),
-                "status":       "completed",
-            })
+            results.append(
+                {
+                    "table": table,
+                    "rows_deleted": rows_deleted,
+                    "cutoff_date": cutoff.isoformat(),
+                    "status": "completed",
+                }
+            )
             logger.info("Purged %d rows from %s (cutoff %s)", rows_deleted, table, cutoff)
 
         except Exception as exc:
@@ -196,13 +198,15 @@ def run_retention_purge(conn, triggered_by: str = "api") -> list[dict[str, Any]]
                 status="failed",
                 conn=conn,
             )
-            results.append({
-                "table":        table,
-                "rows_deleted": 0,
-                "cutoff_date":  cutoff.isoformat(),
-                "status":       "failed",
-                "error":        str(exc),
-            })
+            results.append(
+                {
+                    "table": table,
+                    "rows_deleted": 0,
+                    "cutoff_date": cutoff.isoformat(),
+                    "status": "failed",
+                    "error": str(exc),
+                }
+            )
             logger.error("Purge failed for %s: %s", table, exc)
 
     return results
@@ -244,16 +248,16 @@ def export_employee_data(employee_id: str, conn) -> dict[str, Any] | None:
         return None
 
     return {
-        "export_generated_at":  datetime.now(UTC).isoformat(),
-        "article":              "GDPR Article 20 — Right to Data Portability",
-        "employee_id":          employee_id,
-        "employee":             employee,
-        "raw_events":           _fetch_employee_raw_events(employee_id, conn),
-        "graph_snapshots":      _fetch_employee_graph_snapshots(employee_id, conn),
-        "risk_scores":          _fetch_employee_risk_scores_export(employee_id, conn),
-        "churn_scores":         _fetch_employee_churn_scores_export(employee_id, conn),
-        "knowledge_entries":    _fetch_employee_knowledge_export(employee_id, conn),
-        "consent_audit_log":    _fetch_consent_audit_log(employee_id, conn),
+        "export_generated_at": datetime.now(UTC).isoformat(),
+        "article": "GDPR Article 20 — Right to Data Portability",
+        "employee_id": employee_id,
+        "employee": employee,
+        "raw_events": _fetch_employee_raw_events(employee_id, conn),
+        "graph_snapshots": _fetch_employee_graph_snapshots(employee_id, conn),
+        "risk_scores": _fetch_employee_risk_scores_export(employee_id, conn),
+        "churn_scores": _fetch_employee_churn_scores_export(employee_id, conn),
+        "knowledge_entries": _fetch_employee_knowledge_export(employee_id, conn),
+        "consent_audit_log": _fetch_consent_audit_log(employee_id, conn),
     }
 
 
@@ -404,12 +408,12 @@ def update_consent(
     conn.commit()
 
     return {
-        "employee_id":    employee_id,
+        "employee_id": employee_id,
         "previous_value": previous,
-        "new_value":      new_value,
-        "changed_by":     changed_by,
-        "reason":         reason,
-        "changed_at":     datetime.now(UTC).isoformat(),
+        "new_value": new_value,
+        "changed_by": changed_by,
+        "reason": reason,
+        "changed_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -422,10 +426,10 @@ def generate_html_report(conn) -> str:
     Includes summary statistics, data inventory, retention policy,
     recent purge history, and consent status distribution.
     """
-    audit  = build_data_audit(conn)
+    audit = build_data_audit(conn)
     purges = _fetch_recent_purges(conn)
     consent_stats = _fetch_consent_stats(conn)
-    today  = date.today().isoformat()
+    today = date.today().isoformat()
 
     rows_audit = "".join(
         f"<tr><td>{c['table']}</td><td>{c['description']}</td>"
@@ -435,12 +439,15 @@ def generate_html_report(conn) -> str:
         for c in audit["categories"]
     )
 
-    rows_purge = "".join(
-        f"<tr><td>{p['purged_at'][:10]}</td><td>{p['table_name']}</td>"
-        f"<td>{p['rows_deleted']:,}</td><td>{p['cutoff_date']}</td>"
-        f"<td>{p['triggered_by']}</td><td>{p['status']}</td></tr>"
-        for p in purges
-    ) or "<tr><td colspan='6'>No purge history available.</td></tr>"
+    rows_purge = (
+        "".join(
+            f"<tr><td>{p['purged_at'][:10]}</td><td>{p['table_name']}</td>"
+            f"<td>{p['rows_deleted']:,}</td><td>{p['cutoff_date']}</td>"
+            f"<td>{p['triggered_by']}</td><td>{p['status']}</td></tr>"
+            for p in purges
+        )
+        or "<tr><td colspan='6'>No purge history available.</td></tr>"
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -549,7 +556,7 @@ def _fetch_consent_stats(conn) -> dict[str, int]:
             )
             row = cur.fetchone()
         return {
-            "opted_in":  int(row["opted_in"]  if row else 0),
+            "opted_in": int(row["opted_in"] if row else 0),
             "opted_out": int(row["opted_out"] if row else 0),
         }
     except Exception:

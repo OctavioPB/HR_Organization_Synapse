@@ -42,17 +42,17 @@ logger = logging.getLogger(__name__)
 
 # ─── Hyperparameters (env-overridable) ────────────────────────────────────────
 
-_N_EPOCHS        = int(os.environ.get("GNN_EPOCHS", "200"))
-_LR              = float(os.environ.get("GNN_LR", "5e-3"))
-_WEIGHT_DECAY    = float(os.environ.get("GNN_WEIGHT_DECAY", "1e-4"))
-_HIDDEN          = int(os.environ.get("GNN_HIDDEN", "64"))
-_HEADS           = int(os.environ.get("GNN_HEADS", "4"))
-_DROPOUT         = float(os.environ.get("GNN_DROPOUT", "0.3"))
-_PATIENCE        = int(os.environ.get("GNN_PATIENCE", "20"))
+_N_EPOCHS = int(os.environ.get("GNN_EPOCHS", "200"))
+_LR = float(os.environ.get("GNN_LR", "5e-3"))
+_WEIGHT_DECAY = float(os.environ.get("GNN_WEIGHT_DECAY", "1e-4"))
+_HIDDEN = int(os.environ.get("GNN_HIDDEN", "64"))
+_HEADS = int(os.environ.get("GNN_HEADS", "4"))
+_DROPOUT = float(os.environ.get("GNN_DROPOUT", "0.3"))
+_PATIENCE = int(os.environ.get("GNN_PATIENCE", "20"))
 _AUROC_MIN_DELTA = float(os.environ.get("GNN_AUROC_MIN_DELTA", "0.001"))
-_TEST_DAYS       = int(os.environ.get("GNN_TEST_DAYS", "14"))
-_VAL_DAYS        = int(os.environ.get("GNN_VAL_DAYS", "30"))
-_CHECKPOINT_DIR  = os.environ.get("GNN_CHECKPOINT_DIR", "checkpoints")
+_TEST_DAYS = int(os.environ.get("GNN_TEST_DAYS", "14"))
+_VAL_DAYS = int(os.environ.get("GNN_VAL_DAYS", "30"))
+_CHECKPOINT_DIR = os.environ.get("GNN_CHECKPOINT_DIR", "checkpoints")
 
 
 # ─── Split helper ─────────────────────────────────────────────────────────────
@@ -81,9 +81,7 @@ def _temporal_masks(
         empty = np.zeros(len(y), dtype=bool)
         return empty, empty, empty
 
-    dates_arr = np.array(
-        [d.toordinal() if d is not None else -1 for d in label_dates]
-    )
+    dates_arr = np.array([d.toordinal() if d is not None else -1 for d in label_dates])
     labelled = np.isfinite(y)
     valid_dates = dates_arr[labelled]
 
@@ -93,10 +91,10 @@ def _temporal_masks(
 
     max_ord = int(valid_dates.max())
     test_cutoff = max_ord - test_days
-    val_cutoff  = max_ord - test_days - val_days
+    val_cutoff = max_ord - test_days - val_days
 
-    test_mask  = labelled & (dates_arr >  test_cutoff)
-    val_mask   = labelled & (dates_arr >  val_cutoff) & (dates_arr <= test_cutoff)
+    test_mask = labelled & (dates_arr > test_cutoff)
+    val_mask = labelled & (dates_arr > val_cutoff) & (dates_arr <= test_cutoff)
     train_mask = labelled & (dates_arr <= val_cutoff)
     return train_mask, val_mask, test_mask
 
@@ -169,18 +167,13 @@ def train(
     # resolved the "latest label per employee" — temporal ordering is preserved
     # by using the real label_date attached to each label row.  For simplicity
     # in this implementation we use the single label_date for all labelled nodes.
-    label_dates: list[date | None] = [
-        label_date if np.isfinite(y_np[i]) else None
-        for i in range(len(y_np))
-    ]
+    label_dates: list[date | None] = [label_date if np.isfinite(y_np[i]) else None for i in range(len(y_np))]
 
-    train_mask, val_mask, test_mask = _temporal_masks(
-        y_np, label_dates, test_days, val_days
-    )
+    train_mask, val_mask, test_mask = _temporal_masks(y_np, label_dates, test_days, val_days)
 
     n_train = int(train_mask.sum())
-    n_val   = int(val_mask.sum())
-    n_test  = int(test_mask.sum())
+    n_val = int(val_mask.sum())
+    n_test = int(test_mask.sum())
     logger.info("Split — train=%d val=%d test=%d", n_train, n_val, n_test)
 
     if n_train < 2:
@@ -197,8 +190,8 @@ def train(
 
     y = torch.tensor(y_np, dtype=torch.float)
     train_mask_t = torch.tensor(train_mask)
-    val_mask_t   = torch.tensor(val_mask)
-    test_mask_t  = torch.tensor(test_mask)
+    val_mask_t = torch.tensor(val_mask)
+    test_mask_t = torch.tensor(test_mask)
 
     # Model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -209,13 +202,11 @@ def train(
         dropout=_DROPOUT,
     ).to(device)
 
-    x, edge_index, edge_weight, y = (
-        x.to(device), edge_index.to(device), edge_weight.to(device), y.to(device)
-    )
+    x, edge_index, edge_weight, y = (x.to(device), edge_index.to(device), edge_weight.to(device), y.to(device))
     train_mask_t = train_mask_t.to(device)
-    val_mask_t   = val_mask_t.to(device)
-    test_mask_t  = test_mask_t.to(device)
-    pos_weight   = pos_weight.to(device)
+    val_mask_t = val_mask_t.to(device)
+    test_mask_t = test_mask_t.to(device)
+    pos_weight = pos_weight.to(device)
 
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=_LR, weight_decay=_WEIGHT_DECAY)
@@ -238,7 +229,7 @@ def train(
         model.eval()
         with torch.no_grad():
             val_logits = logits[val_mask_t].cpu().numpy()
-            val_probs  = 1 / (1 + np.exp(-val_logits))
+            val_probs = 1 / (1 + np.exp(-val_logits))
             val_labels = y[val_mask_t].cpu().numpy()
 
         if n_val >= 2:
@@ -249,7 +240,10 @@ def train(
         if epoch % 20 == 0 or epoch == 1:
             logger.info(
                 "Epoch %d/%d  loss=%.4f  val_auroc=%.4f",
-                epoch, _N_EPOCHS, loss.item(), val_auroc,
+                epoch,
+                _N_EPOCHS,
+                loss.item(),
+                val_auroc,
             )
 
         if val_auroc >= best_val_auroc + _AUROC_MIN_DELTA:
@@ -271,13 +265,15 @@ def train(
     with torch.no_grad():
         final_logits = model(x, edge_index, edge_weight)
 
-    test_probs  = (1 / (1 + np.exp(-final_logits[test_mask_t].cpu().numpy())))
+    test_probs = 1 / (1 + np.exp(-final_logits[test_mask_t].cpu().numpy()))
     test_labels = y[test_mask_t].cpu().numpy()
-    test_auroc  = _auroc(test_labels, test_probs) if n_test >= 2 else float("nan")
+    test_auroc = _auroc(test_labels, test_probs) if n_test >= 2 else float("nan")
 
     logger.info(
         "Training done — best_epoch=%d best_val_auroc=%.4f test_auroc=%.4f",
-        best_epoch, best_val_auroc, test_auroc,
+        best_epoch,
+        best_val_auroc,
+        test_auroc,
     )
 
     # ── Save checkpoint ────────────────────────────────────────────────────

@@ -359,9 +359,12 @@ def test_simulate_404_when_no_snapshot(client):
 def test_simulate_404_when_employee_not_in_graph(client):
     with (
         patch("api.routers.risk.queries.fetch_latest_snapshot_date", return_value=_SNAPSHOT_DATE),
-        patch("api.routers.risk.load_raw_edges", return_value=[
-            (_EMP_A, _EMP_B, 1.0, "Engineering", "Sales"),
-        ]),
+        patch(
+            "api.routers.risk.load_raw_edges",
+            return_value=[
+                (_EMP_A, _EMP_B, 1.0, "Engineering", "Sales"),
+            ],
+        ),
     ):
         resp = client.post(
             "/risk/simulate",
@@ -427,7 +430,7 @@ def test_alert_history_days_param_validated(client):
 _PATH_RESULT = {
     "path": [
         {"employee_id": _EMP_A, "name": "Alice", "department": "Engineering"},
-        {"employee_id": _EMP_B, "name": "Bob",   "department": "Sales"},
+        {"employee_id": _EMP_B, "name": "Bob", "department": "Sales"},
     ],
     "hops": 1,
 }
@@ -483,8 +486,8 @@ def test_graph_path_missing_required_params(client):
 
 
 _REACHABLE_ROWS = [
-    {"employee_id": _EMP_B, "name": "Bob",   "department": "Sales",  "spof_score": 0.3},
-    {"employee_id": _EMP_C, "name": "Carol", "department": "HR",     "spof_score": 0.5},
+    {"employee_id": _EMP_B, "name": "Bob", "department": "Sales", "spof_score": 0.3},
+    {"employee_id": _EMP_C, "name": "Carol", "department": "HR", "spof_score": 0.5},
 ]
 
 

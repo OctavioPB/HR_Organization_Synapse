@@ -36,7 +36,7 @@ def load_current_graph(conn, window_days: int = _WINDOW_DAYS) -> nx.DiGraph:
         row = cur.fetchone()
         snap_date = row["d"] if row and row["d"] else date.today()
 
-    end_ts   = f"{snap_date} 23:59:59+00"
+    end_ts = f"{snap_date} 23:59:59+00"
     start_ts = (snap_date - timedelta(days=window_days)).isoformat()
 
     with conn.cursor() as cur:
@@ -59,9 +59,7 @@ def load_current_graph(conn, window_days: int = _WINDOW_DAYS) -> nx.DiGraph:
 
     # Attach department attribute to each node
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id::text, department FROM employees WHERE active = true AND consent = true"
-        )
+        cur.execute("SELECT id::text, department FROM employees WHERE active = true AND consent = true")
         for r in cur.fetchall():
             if r["id"] in G:
                 G.nodes[r["id"]]["department"] = r["department"]
@@ -87,7 +85,7 @@ def apply_operations(G: nx.DiGraph, operations: list[dict]) -> nx.DiGraph:
                 if attrs.get("department", "") == source:
                     G2.nodes[n]["department"] = target
         elif op_type == "move_team":
-            emp_ids  = op.get("employee_ids", [])
+            emp_ids = op.get("employee_ids", [])
             target_d = op.get("target_dept", "")
             for n in emp_ids:
                 if n in G2:
@@ -124,9 +122,9 @@ def _graph_metrics(G: nx.DiGraph) -> dict:
         avg_path = 0.0
 
     return {
-        "node_count":     G.number_of_nodes(),
-        "edge_count":     G.number_of_edges(),
-        "wcc_count":      wcc_count,
+        "node_count": G.number_of_nodes(),
+        "edge_count": G.number_of_edges(),
+        "wcc_count": wcc_count,
         "avg_path_length": round(avg_path, 4),
         "avg_betweenness": round(avg_bw, 6),
     }
@@ -143,9 +141,7 @@ def _count_silos(G: nx.DiGraph) -> int:
     for _dept, nodes in dept_nodes.items():
         subgraph = G.subgraph(nodes)
         internal = subgraph.number_of_edges()
-        external = sum(
-            1 for n in nodes for nb in G.neighbors(n) if nb not in nodes
-        )
+        external = sum(1 for n in nodes for nb in G.neighbors(n) if nb not in nodes)
         ratio = internal / max(external, 1)
         if ratio > _SILO_THRESHOLD:
             silo_count += 1
@@ -162,15 +158,16 @@ def compute_impact_report(
 ) -> dict[str, Any]:
     """Compare before/after graph metrics and return a structured impact report."""
     metrics_before = _graph_metrics(G_before)
-    metrics_after  = _graph_metrics(G_after)
-    silos_before   = _count_silos(G_before)
-    silos_after    = _count_silos(G_after)
+    metrics_after = _graph_metrics(G_after)
+    silos_before = _count_silos(G_before)
+    silos_after = _count_silos(G_after)
 
     path_delta_pct = 0.0
     if metrics_before["avg_path_length"] > 0:
         path_delta_pct = round(
             (metrics_after["avg_path_length"] - metrics_before["avg_path_length"])
-            / metrics_before["avg_path_length"] * 100,
+            / metrics_before["avg_path_length"]
+            * 100,
             1,
         )
 
@@ -180,14 +177,16 @@ def compute_impact_report(
     # Org health score delta (simple approximation)
     spof_delta = round(
         (metrics_after["avg_betweenness"] - metrics_before["avg_betweenness"])
-        / max(metrics_before["avg_betweenness"], 1e-9) * 100,
+        / max(metrics_before["avg_betweenness"], 1e-9)
+        * 100,
         1,
     )
 
     # Compute per-employee SPOF changes for top-risk employees
     from graph.metrics import compute_betweenness
+
     bw_before_dict = compute_betweenness(G_before)
-    bw_after_dict  = compute_betweenness(G_after)
+    bw_after_dict = compute_betweenness(G_after)
 
     # Top 10 employees with biggest betweenness increase after the scenario
     spof_changes = []
@@ -210,15 +209,15 @@ def compute_impact_report(
             name_map = {r["id"]: {"name": r["name"], "dept": r["department"]} for r in cur.fetchall()}
         for r in spof_top10_delta:
             info = name_map.get(r["employee_id"], {})
-            r["name"]       = info.get("name", "")
+            r["name"] = info.get("name", "")
             r["department"] = info.get("dept", "")
 
     return {
-        "before":           metrics_before,
-        "after":            metrics_after,
-        "silos_before":     silos_before,
-        "silos_after":      silos_after,
-        "nodes_removed":    nodes_removed,
+        "before": metrics_before,
+        "after": metrics_after,
+        "silos_before": silos_before,
+        "silos_after": silos_after,
+        "nodes_removed": nodes_removed,
         "new_isolated_components": new_components,
         "avg_path_length_delta_pct": path_delta_pct,
         "avg_betweenness_delta_pct": spof_delta,

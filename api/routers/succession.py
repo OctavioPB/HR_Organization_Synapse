@@ -72,9 +72,7 @@ def get_succession_recommendations(
     - domain_overlap: fraction of SPOF's knowledge domains the candidate covers
     """
     computed_at = _resolve_succession_date(date, conn)
-    rows = queries.fetch_succession_recommendations(
-        computed_at, top_spof, min_spof_score, conn
-    )
+    rows = queries.fetch_succession_recommendations(computed_at, top_spof, min_spof_score, conn)
 
     if not rows and date is not None:
         raise HTTPException(
@@ -152,13 +150,13 @@ def get_transfer_plan(employee_id: str, conn=Depends(get_db)) -> dict:
         "spof_employee_id": employee_id,
         "plans": [
             {
-                "plan_id":        r["id"],
-                "candidate_id":   r["candidate_id"],
+                "plan_id": r["id"],
+                "candidate_id": r["candidate_id"],
                 "candidate_name": r["candidate_name"],
                 "candidate_dept": r["candidate_dept"],
-                "generated_at":   str(r["generated_at"]),
-                "status":         r["status"],
-                "plan_json":      r["plan_json"],
+                "generated_at": str(r["generated_at"]),
+                "status": r["status"],
+                "plan_json": r["plan_json"],
             }
             for r in rows
         ],

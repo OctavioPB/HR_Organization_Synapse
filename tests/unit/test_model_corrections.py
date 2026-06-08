@@ -71,9 +71,7 @@ class TestScoreAllWithBands:
         from graph.risk_scorer import score_all_with_bands
 
         G = _two_dept_star()
-        bands = score_all_with_bands(
-            G, compute_betweenness(G), compute_clustering(G)
-        )
+        bands = score_all_with_bands(G, compute_betweenness(G), compute_clustering(G))
         for detail in bands.values():
             for key in ("score", "score_lo", "score_hi", "robust_critical", "weight_sensitive"):
                 assert key in detail
@@ -83,9 +81,7 @@ class TestScoreAllWithBands:
         from graph.risk_scorer import score_all_with_bands
 
         G = _two_dept_star()
-        bands = score_all_with_bands(
-            G, compute_betweenness(G), compute_clustering(G)
-        )
+        bands = score_all_with_bands(G, compute_betweenness(G), compute_clustering(G))
         for d in bands.values():
             assert 0.0 <= d["score"] <= 1.0
             assert 0.0 <= d["score_lo"] <= 1.0
@@ -96,9 +92,7 @@ class TestScoreAllWithBands:
         from graph.risk_scorer import score_all_with_bands
 
         G = _two_dept_star()
-        bands = score_all_with_bands(
-            G, compute_betweenness(G), compute_clustering(G)
-        )
+        bands = score_all_with_bands(G, compute_betweenness(G), compute_clustering(G))
         for d in bands.values():
             assert not (d["robust_critical"] and d["weight_sensitive"])
 

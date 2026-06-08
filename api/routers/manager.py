@@ -27,12 +27,13 @@ _CONTRACTING_WEEKS = int(os.environ.get("CONTRACTING_WEEKS_THRESHOLD", "4"))
 
 # ─── Response models ──────────────────────────────────────────────────────────
 
+
 class TeamMemberStatus(BaseModel):
     employee_id: str
     name: str
     department: str
     role: str
-    status: str          # 'green' | 'amber' | 'red'
+    status: str  # 'green' | 'amber' | 'red'
     contracting_network: bool
     contracting_weeks: int
 
@@ -50,6 +51,7 @@ class SuggestionsResponse(BaseModel):
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _compute_status(churn_prob: float | None, entropy_trend: float | None) -> str:
     churn = churn_prob or 0.0
@@ -96,6 +98,7 @@ def _resolve_manager_employee_id(request: Request, conn) -> str | None:
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/team",
@@ -157,15 +160,17 @@ def get_team_risk(
     team = []
     for row in rows:
         contracting_weeks = _count_contracting_weeks(row["employee_id"], conn)
-        team.append(TeamMemberStatus(
-            employee_id=row["employee_id"],
-            name=row["name"],
-            department=row["department"],
-            role=row["role"],
-            status=_compute_status(row["churn_prob"], row["entropy_trend"]),
-            contracting_network=contracting_weeks >= _CONTRACTING_WEEKS,
-            contracting_weeks=contracting_weeks,
-        ))
+        team.append(
+            TeamMemberStatus(
+                employee_id=row["employee_id"],
+                name=row["name"],
+                department=row["department"],
+                role=row["role"],
+                status=_compute_status(row["churn_prob"], row["entropy_trend"]),
+                contracting_network=contracting_weeks >= _CONTRACTING_WEEKS,
+                contracting_weeks=contracting_weeks,
+            )
+        )
 
     return TeamRiskResponse(
         manager_employee_id=mgr_id,
@@ -246,17 +251,14 @@ def get_suggestions(
     if emp.get("anomaly_tier") in ("high", "medium"):
         anomaly_signal = "Their interaction patterns show an anomalous trajectory."
 
-    context = (
-        f"Employee: {name}, Department: {dept}. "
-        f"{entropy_signal} {anomaly_signal}".strip()
-    )
+    context = f"Employee: {name}, Department: {dept}. " f"{entropy_signal} {anomaly_signal}".strip()
 
     prompt = (
         f"You are an HR support assistant. A manager is preparing for a 1:1 meeting with "
         f"{name} ({dept}). {context} "
         f"Provide exactly 3 plain-language, empathetic, actionable suggestions for topics "
         f"the manager should raise. Do NOT mention scores, probabilities, or technical metrics. "
-        f"Return only a JSON array of 3 strings, e.g. [\"...\", \"...\", \"...\"]."
+        f'Return only a JSON array of 3 strings, e.g. ["...", "...", "..."].'
     )
 
     try:

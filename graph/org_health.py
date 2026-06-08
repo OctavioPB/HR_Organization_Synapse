@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 # ─── Weight / calibration constants ───────────────────────────────────────────
 
-_W_SILO    = float(os.environ.get("HEALTH_W_SILO",       "0.20"))
-_W_SPOF    = float(os.environ.get("HEALTH_W_SPOF",       "0.35"))
-_W_ENTROPY = float(os.environ.get("HEALTH_W_ENTROPY",    "0.20"))
-_W_FRAG    = float(os.environ.get("HEALTH_W_FRAG",       "0.25"))
+_W_SILO = float(os.environ.get("HEALTH_W_SILO", "0.20"))
+_W_SPOF = float(os.environ.get("HEALTH_W_SPOF", "0.35"))
+_W_ENTROPY = float(os.environ.get("HEALTH_W_ENTROPY", "0.20"))
+_W_FRAG = float(os.environ.get("HEALTH_W_FRAG", "0.25"))
 
 # Silo risk denominator scales with organisation structure (MODEL.md §12.1):
 # maximum tolerable silo count ≈ one silo per SILO_THRESHOLD_RATIO departments,
@@ -56,13 +56,14 @@ def silo_threshold(dept_count: int | None) -> int:
         return 2
     return max(int(math.floor(dept_count / _SILO_THRESHOLD_RATIO)), 2)
 
+
 # ─── Tier thresholds (score, tier) — evaluated top-down ───────────────────────
 
 _TIERS: list[tuple[float, str]] = [
     (80.0, "healthy"),
     (60.0, "caution"),
     (40.0, "at_risk"),
-    (0.0,  "critical"),
+    (0.0, "critical"),
 ]
 
 
@@ -121,12 +122,7 @@ def compute_org_health(
     extra_components = max(0, wcc_count - 1)
     frag_risk = 1.0 - math.exp(-_FRAG_LAMBDA * extra_components)
 
-    composite_risk = (
-        _W_SILO    * silo_risk
-        + _W_SPOF  * spof_risk
-        + _W_ENTROPY * entropy_risk
-        + _W_FRAG  * frag_risk
-    )
+    composite_risk = _W_SILO * silo_risk + _W_SPOF * spof_risk + _W_ENTROPY * entropy_risk + _W_FRAG * frag_risk
 
     score = round(max(0.0, min(100.0, (1.0 - composite_risk) * 100)), 1)
 
@@ -135,16 +131,14 @@ def compute_org_health(
         "tier": score_tier(score),
         "silo_count": silo_count,
         "avg_spof_score": round(avg_spof_score, 4),
-        "avg_entropy_trend": (
-            round(avg_entropy_trend, 6) if avg_entropy_trend is not None else None
-        ),
+        "avg_entropy_trend": (round(avg_entropy_trend, 6) if avg_entropy_trend is not None else None),
         "wcc_count": wcc_count,
         "node_count": node_count,
         "component_scores": {
-            "silo":    round(silo_risk,    4),
-            "spof":    round(spof_risk,    4),
+            "silo": round(silo_risk, 4),
+            "spof": round(spof_risk, 4),
             "entropy": round(entropy_risk, 4),
-            "frag":    round(frag_risk,    4),
+            "frag": round(frag_risk, 4),
         },
     }
 
@@ -184,18 +178,12 @@ def compute_and_persist(snapshot_date: date, conn) -> dict[str, Any]:
         row = cur.fetchone()
 
     node_count = int(row["n"] or 0) if row else 0
-    avg_spof   = float(row["avg_spof"] or 0.0) if row else 0.0
-    avg_entropy: float | None = (
-        float(row["avg_entropy"])
-        if row and row["avg_entropy"] is not None
-        else None
-    )
+    avg_spof = float(row["avg_spof"] or 0.0) if row else 0.0
+    avg_entropy: float | None = float(row["avg_entropy"]) if row and row["avg_entropy"] is not None else None
 
     # 3. Distinct departments among active employees — scales silo-risk denominator
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT COUNT(DISTINCT department)::int AS d FROM employees WHERE active = true"
-        )
+        cur.execute("SELECT COUNT(DISTINCT department)::int AS d FROM employees WHERE active = true")
         drow = cur.fetchone()
     dept_count = int(drow["d"] or 0) if drow else 0
 
@@ -226,8 +214,13 @@ def compute_and_persist(snapshot_date: date, conn) -> dict[str, Any]:
 
     logger.info(
         "Org health for %s: %.1f (%s)  silo=%d spof=%.3f wcc=%d n=%d",
-        snapshot_date, health["score"], health["tier"],
-        silo_count, avg_spof, wcc_count, node_count,
+        snapshot_date,
+        health["score"],
+        health["tier"],
+        silo_count,
+        avg_spof,
+        wcc_count,
+        node_count,
     )
     return health
 
@@ -250,21 +243,18 @@ def generate_briefing(current: dict, trend: list[dict]) -> dict[str, Any]:
               recommended_actions, narrative, computed_at.
     """
     score = current["score"]
-    tier  = current["tier"]
-    prev  = trend[-2]["score"] if len(trend) >= 2 else score
+    tier = current["tier"]
+    prev = trend[-2]["score"] if len(trend) >= 2 else score
     delta = round(score - prev, 1)
 
     components = current.get("component_scores") or {}
     if isinstance(components, str):
         import json
+
         components = json.loads(components)
 
     ranked = sorted(components.items(), key=lambda kv: kv[1], reverse=True)
-    top_risks = [
-        {"factor": k, "risk_level": round(float(v), 3)}
-        for k, v in ranked
-        if float(v) > 0
-    ]
+    top_risks = [{"factor": k, "risk_level": round(float(v), 3)} for k, v in ranked if float(v) > 0]
 
     recommended_actions = _recommend_actions(current, components)
     narrative = _generate_narrative(current, delta, top_risks, recommended_actions)
@@ -278,11 +268,7 @@ def generate_briefing(current: dict, trend: list[dict]) -> dict[str, Any]:
         "score": score,
         "tier": tier,
         "trend_delta": delta,
-        "trend_direction": (
-            "improving" if delta > 0.5
-            else "declining" if delta < -0.5
-            else "stable"
-        ),
+        "trend_direction": ("improving" if delta > 0.5 else "declining" if delta < -0.5 else "stable"),
         "top_risks": top_risks,
         "recommended_actions": recommended_actions,
         "narrative": narrative,
@@ -293,25 +279,15 @@ def _recommend_actions(current: dict, components: dict) -> list[str]:
     actions: list[str] = []
     if float(components.get("silo", 0)) > 0.3:
         n = current.get("silo_count", 1)
-        actions.append(
-            f"Schedule cross-team syncs to address {n} active communication silo(s)."
-        )
+        actions.append(f"Schedule cross-team syncs to address {n} active communication silo(s).")
     if float(components.get("spof", 0)) > 0.4:
-        actions.append(
-            "Initiate cross-training programmes for the top 3 single-points-of-failure."
-        )
+        actions.append("Initiate cross-training programmes for the top 3 single-points-of-failure.")
     if float(components.get("entropy", 0)) > 0.3:
-        actions.append(
-            "HR 1:1 check-ins with employees showing a declining engagement trend."
-        )
+        actions.append("HR 1:1 check-ins with employees showing a declining engagement trend.")
     if float(components.get("frag", 0)) > 0.3:
-        actions.append(
-            "Review org chart for structurally disconnected sub-groups."
-        )
+        actions.append("Review org chart for structurally disconnected sub-groups.")
     if not actions:
-        actions.append(
-            "No immediate action required — maintain current monitoring cadence."
-        )
+        actions.append("No immediate action required — maintain current monitoring cadence.")
     return actions
 
 
@@ -336,19 +312,12 @@ def _template_narrative(
     top_risks: list[dict],
     actions: list[str],
 ) -> str:
-    score      = current["score"]
-    tier       = current["tier"].replace("_", " ")
+    score = current["score"]
+    tier = current["tier"].replace("_", " ")
     silo_count = current.get("silo_count", 0)
     node_count = current.get("node_count", 0)
-    direction  = (
-        "improved" if delta > 0.5
-        else "declined" if delta < -0.5
-        else "held steady"
-    )
-    risk_names = (
-        " and ".join(r["factor"] for r in top_risks[:2])
-        if top_risks else "no dominant risk factors"
-    )
+    direction = "improved" if delta > 0.5 else "declined" if delta < -0.5 else "held steady"
+    risk_names = " and ".join(r["factor"] for r in top_risks[:2]) if top_risks else "no dominant risk factors"
     return (
         f"Organisational health scored {score}/100 this week — tier: {tier}. "
         f"The score {direction} by {abs(delta):.1f} points versus last week. "
@@ -367,7 +336,7 @@ def _claude_narrative(
     from graph.claude_client import call_claude
 
     score = current["score"]
-    tier  = current["tier"]
+    tier = current["tier"]
 
     prompt = (
         "Write a 3-sentence executive briefing for an HR intelligence platform.\n\n"

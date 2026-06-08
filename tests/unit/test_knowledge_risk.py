@@ -43,8 +43,8 @@ class TestComputeSoleExperts:
 
     def test_sole_expert_per_domain_independently(self):
         contributions = {
-            ("emp-a", "payments"): 5,   # sole in payments
-            ("emp-a", "devops"): 2,     # not sole in devops
+            ("emp-a", "payments"): 5,  # sole in payments
+            ("emp-a", "devops"): 2,  # not sole in devops
             ("emp-b", "devops"): 4,
         }
         sole = compute_sole_experts(contributions)
@@ -107,7 +107,7 @@ class TestComputeKnowledgeScores:
 
     def test_doc_count_correct(self):
         results = compute_knowledge_scores_from_contributions(self._base_contributions())
-        assert results["emp-a"]["doc_count"] == 15   # 10 + 5
+        assert results["emp-a"]["doc_count"] == 15  # 10 + 5
         assert results["emp-b"]["doc_count"] == 8
         assert results["emp-c"]["doc_count"] == 3
 
@@ -131,8 +131,8 @@ class TestComputeKnowledgeScores:
 
     def test_sole_expert_gets_expertise_bonus(self):
         contributions = {
-            ("emp-a", "ml"): 5,   # sole — gets 1.2x
-            ("emp-b", "ml"): 0,   # zero → excluded
+            ("emp-a", "ml"): 5,  # sole — gets 1.2x
+            ("emp-b", "ml"): 0,  # zero → excluded
         }
         results = compute_knowledge_scores_from_contributions(contributions)
         # emp-a's expertise_score should be capped at 1.0 (1.0 × 1.2 capped)
@@ -243,6 +243,7 @@ _PROFILE_ROW: dict[str, Any] = {
 def client():
     from api.main import app
     from api.deps import get_db
+
     mock_conn = MagicMock()
     app.dependency_overrides[get_db] = lambda: mock_conn
     yield TestClient(app, raise_server_exceptions=True)

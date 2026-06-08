@@ -42,9 +42,9 @@ logger = logging.getLogger(__name__)
 
 GNN_IN_FEATURES: int = 11
 
-_MAX_TENURE_DAYS: float = 3650.0   # 10 years → 1.0
+_MAX_TENURE_DAYS: float = 3650.0  # 10 years → 1.0
 _MAX_ROLE_LEVEL: float = 7.0
-_MAX_PTO_DAYS: float = 90.0        # rolling 90-day window
+_MAX_PTO_DAYS: float = 90.0  # rolling 90-day window
 _GRAPH_WINDOW_DAYS: int = 30
 
 
@@ -93,13 +93,13 @@ def _build_node_features(
 
         # Graph features (default 0.0 if employee has no snapshot)
         gf = graph_features.get(emp_id, {})
-        x[i, 3]  = float(gf.get("betweenness", 0.0))
-        x[i, 4]  = float(gf.get("degree_in", 0.0))
-        x[i, 5]  = float(gf.get("degree_out", 0.0))
-        x[i, 6]  = float(gf.get("clustering", 0.0))
-        x[i, 7]  = float(np.clip(gf.get("betweenness_delta_7d", 0.0), -1.0, 1.0))
-        x[i, 8]  = float(np.clip(gf.get("degree_out_delta_7d", 0.0), -1.0, 1.0))
-        x[i, 9]  = float(min(gf.get("entropy_current", 0.0), 1.0))
+        x[i, 3] = float(gf.get("betweenness", 0.0))
+        x[i, 4] = float(gf.get("degree_in", 0.0))
+        x[i, 5] = float(gf.get("degree_out", 0.0))
+        x[i, 6] = float(gf.get("clustering", 0.0))
+        x[i, 7] = float(np.clip(gf.get("betweenness_delta_7d", 0.0), -1.0, 1.0))
+        x[i, 8] = float(np.clip(gf.get("degree_out_delta_7d", 0.0), -1.0, 1.0))
+        x[i, 9] = float(min(gf.get("entropy_current", 0.0), 1.0))
         x[i, 10] = float(np.clip(gf.get("entropy_trend", 0.0), -1.0, 1.0))
 
     return x

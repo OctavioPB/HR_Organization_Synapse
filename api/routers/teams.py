@@ -17,9 +17,9 @@ router = APIRouter(prefix="/teams", tags=["teams"])
 
 class TeamOptimizeRequest(BaseModel):
     departments: list[str] = Field(default_factory=list)
-    domains:     list[str] = Field(default_factory=list)
-    min_size:    int = Field(default=3, ge=2, le=12)
-    max_size:    int = Field(default=6, ge=2, le=20)
+    domains: list[str] = Field(default_factory=list)
+    min_size: int = Field(default=3, ge=2, le=12)
+    max_size: int = Field(default=6, ge=2, le=20)
     exclude_spof_above: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
@@ -51,9 +51,9 @@ def optimize_team(
         raise HTTPException(status_code=502, detail=f"Optimization failed: {exc}") from exc
 
     return {
-        "constraints":   body.model_dump(),
-        "total_found":   len(compositions),
-        "compositions":  compositions,
+        "constraints": body.model_dump(),
+        "total_found": len(compositions),
+        "compositions": compositions,
     }
 
 
@@ -61,14 +61,14 @@ def optimize_team(
 def export_team_csv(
     composition_index: int = Query(default=0, ge=0, le=2),
     departments: str = Query(default=""),
-    domains:     str = Query(default=""),
-    min_size:    int = Query(default=3),
-    max_size:    int = Query(default=6),
+    domains: str = Query(default=""),
+    min_size: int = Query(default=3),
+    max_size: int = Query(default=6),
     exclude_spof_above: float = Query(default=0.7),
     conn=Depends(get_db),
 ) -> StreamingResponse:
     """Re-run optimization and export the Nth composition as CSV."""
-    dept_list   = [d.strip() for d in departments.split(",") if d.strip()]
+    dept_list = [d.strip() for d in departments.split(",") if d.strip()]
     domain_list = [d.strip() for d in domains.split(",") if d.strip()]
 
     try:
@@ -111,9 +111,7 @@ def export_team_csv(
 def list_departments(conn=Depends(get_db)) -> dict:
     """Return distinct department names for use in the team optimizer UI."""
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT DISTINCT department FROM employees WHERE active = TRUE ORDER BY department"
-        )
+        cur.execute("SELECT DISTINCT department FROM employees WHERE active = TRUE ORDER BY department")
         depts = [r["department"] for r in cur.fetchall()]
     return {"departments": depts}
 
@@ -122,8 +120,6 @@ def list_departments(conn=Depends(get_db)) -> dict:
 def list_domains(conn=Depends(get_db)) -> dict:
     """Return distinct knowledge domains from employee_knowledge table."""
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT DISTINCT domain FROM employee_knowledge ORDER BY domain"
-        )
+        cur.execute("SELECT DISTINCT domain FROM employee_knowledge ORDER BY domain")
         domains = [r["domain"] for r in cur.fetchall()]
     return {"domains": domains}

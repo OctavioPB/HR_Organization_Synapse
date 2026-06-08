@@ -116,9 +116,9 @@ class ConnectorRegistry:
         Connectors start as healthy=False until their connect() succeeds.
         """
         channels = {
-            "slack":  "ENABLE_SLACK",
-            "teams":  "ENABLE_TEAMS",
-            "jira":   "ENABLE_JIRA",
+            "slack": "ENABLE_SLACK",
+            "teams": "ENABLE_TEAMS",
+            "jira": "ENABLE_JIRA",
             "github": "ENABLE_GITHUB",
         }
         for channel, env_key in channels.items():

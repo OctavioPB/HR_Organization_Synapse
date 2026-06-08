@@ -45,6 +45,7 @@ def mock_conn():
 def admin_client(monkeypatch):
     monkeypatch.setenv("ADMIN_SECRET_KEY", "test-admin-secret")
     from api.main import app
+
     return TestClient(app, raise_server_exceptions=True)
 
 
@@ -193,7 +194,7 @@ class TestTenantMiddleware:
         def _test_route(request):
             return {
                 "tenant_id": getattr(request.state, "tenant_id", ""),
-                "api_key":   getattr(request.state, "api_key", ""),
+                "api_key": getattr(request.state, "api_key", ""),
             }
 
         # Import Request for the route
@@ -203,7 +204,7 @@ class TestTenantMiddleware:
         def _check(request: Request):
             return {
                 "tenant_id": getattr(request.state, "tenant_id", "MISSING"),
-                "api_key":   getattr(request.state, "api_key", "MISSING"),
+                "api_key": getattr(request.state, "api_key", "MISSING"),
             }
 
         client = TestClient(app)
@@ -214,7 +215,7 @@ class TestTenantMiddleware:
         assert resp.status_code == 200
         body = resp.json()
         assert body["tenant_id"] == "abc-123"
-        assert body["api_key"]   == "secret"
+        assert body["api_key"] == "secret"
 
     def test_missing_headers_sets_empty_strings(self):
         from fastapi import FastAPI, Request
@@ -228,7 +229,7 @@ class TestTenantMiddleware:
         def _check(request: Request):
             return {
                 "tenant_id": getattr(request.state, "tenant_id", "MISSING"),
-                "api_key":   getattr(request.state, "api_key", "MISSING"),
+                "api_key": getattr(request.state, "api_key", "MISSING"),
             }
 
         client = TestClient(app)
@@ -236,7 +237,7 @@ class TestTenantMiddleware:
         assert resp.status_code == 200
         body = resp.json()
         assert body["tenant_id"] == ""
-        assert body["api_key"]   == ""
+        assert body["api_key"] == ""
 
 
 # ─── POST /admin/tenants ──────────────────────────────────────────────────────
@@ -245,12 +246,12 @@ class TestTenantMiddleware:
 class TestAdminCreateTenant:
     def test_returns_201_with_api_key(self, admin_client):
         provisioned = {
-            "tenant_id":    "tid-001",
-            "slug":         "acme",
-            "name":         "Acme Corp",
-            "plan":         "free",
-            "schema_name":  "tenant_acme",
-            "raw_api_key":  "raw-key-abc",
+            "tenant_id": "tid-001",
+            "slug": "acme",
+            "name": "Acme Corp",
+            "plan": "free",
+            "schema_name": "tenant_acme",
+            "raw_api_key": "raw-key-abc",
         }
         with patch("api.tenant.provision_tenant_schema", return_value=provisioned):
             resp = admin_client.post(
@@ -295,12 +296,18 @@ class TestAdminListTenants:
     def test_returns_200_with_list(self, admin_client):
         from datetime import datetime
 
-        rows = [{
-            "id": "tid-001", "slug": "acme", "name": "Acme Corp",
-            "plan": "free", "schema_name": "tenant_acme", "active": True,
-            "stripe_customer_id": None,
-            "created_at": datetime(2025, 1, 1),
-        }]
+        rows = [
+            {
+                "id": "tid-001",
+                "slug": "acme",
+                "name": "Acme Corp",
+                "plan": "free",
+                "schema_name": "tenant_acme",
+                "active": True,
+                "stripe_customer_id": None,
+                "created_at": datetime(2025, 1, 1),
+            }
+        ]
 
         mock_cursor = MagicMock()
         mock_cursor.__enter__ = lambda s: mock_cursor
@@ -326,11 +333,13 @@ class TestAdminListTenants:
 
 class TestBillingWebhook:
     def test_valid_event_returns_200(self, admin_client):
-        payload = json.dumps({
-            "id": "evt_test_001",
-            "type": "invoice.paid",
-            "data": {"object": {"customer": "cus_001", "amount_due": 5000}},
-        }).encode()
+        payload = json.dumps(
+            {
+                "id": "evt_test_001",
+                "type": "invoice.paid",
+                "data": {"object": {"customer": "cus_001", "amount_due": 5000}},
+            }
+        ).encode()
 
         mock_cursor = MagicMock()
         mock_cursor.__enter__ = lambda s: mock_cursor
@@ -350,11 +359,13 @@ class TestBillingWebhook:
         assert resp.status_code == 200
 
     def test_duplicate_event_returns_duplicate_status(self, admin_client):
-        payload = json.dumps({
-            "id": "evt_dup_001",
-            "type": "invoice.paid",
-            "data": {"object": {"customer": "cus_001"}},
-        }).encode()
+        payload = json.dumps(
+            {
+                "id": "evt_dup_001",
+                "type": "invoice.paid",
+                "data": {"object": {"customer": "cus_001"}},
+            }
+        ).encode()
 
         mock_cursor = MagicMock()
         mock_cursor.__enter__ = lambda s: mock_cursor
@@ -376,6 +387,7 @@ class TestBillingWebhook:
     def test_invalid_signature_returns_400(self, admin_client, monkeypatch):
         monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "real-secret")
         import api.routers.billing as billing_mod
+
         billing_mod._STRIPE_WEBHOOK_SECRET = "real-secret"
 
         payload = b'{"id":"evt_bad","type":"invoice.paid","data":{"object":{}}}'

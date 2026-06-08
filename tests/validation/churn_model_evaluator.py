@@ -89,22 +89,22 @@ logger = logging.getLogger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-N_EMPLOYEES   = 300
-N_HIGH_RISK   = 50
+N_EMPLOYEES = 300
+N_HIGH_RISK = 50
 N_MEDIUM_RISK = 80
-N_LOW_RISK    = 170
-TRAIN_FRAC    = 0.70
-N_FEATURES    = 11      # matches ml/gnn/feature_builder.py GNN_IN_FEATURES
-SEED          = 42
+N_LOW_RISK = 170
+TRAIN_FRAC = 0.70
+N_FEATURES = 11  # matches ml/gnn/feature_builder.py GNN_IN_FEATURES
+SEED = 42
 
 # Baseline uses only features {0, 5, 10}: tenure, degree_out, entropy_trend
 BASELINE_FEATURE_COLS = [0, 5, 10]
 
 # Training hypers for GraphMLP
-_LR        = 3e-3
-_EPOCHS    = 300
-_HIDDEN    = 64
-_DROPOUT   = 0.30
+_LR = 3e-3
+_EPOCHS = 300
+_HIDDEN = 64
+_DROPOUT = 0.30
 _POS_WEIGHT_CAP = 15.0  # cap pos_weight to prevent gradient explosion on tiny pos sets
 
 
@@ -158,9 +158,9 @@ def generate_churn_dataset(seed: int = SEED) -> dict[str, Any]:
     n = N_EMPLOYEES
     cluster = np.empty(n, dtype=int)
     # Cluster assignment: 0=high, 1=medium, 2=low
-    cluster[:N_HIGH_RISK]                            = 0
-    cluster[N_HIGH_RISK:N_HIGH_RISK + N_MEDIUM_RISK] = 1
-    cluster[N_HIGH_RISK + N_MEDIUM_RISK:]             = 2
+    cluster[:N_HIGH_RISK] = 0
+    cluster[N_HIGH_RISK : N_HIGH_RISK + N_MEDIUM_RISK] = 1
+    cluster[N_HIGH_RISK + N_MEDIUM_RISK :] = 2
 
     x = np.zeros((n, N_FEATURES), dtype=np.float32)
 
@@ -168,13 +168,11 @@ def generate_churn_dataset(seed: int = SEED) -> dict[str, Any]:
     # Tenure: WEAKLY correlated with cluster to avoid degenerate splits.
     # High-risk employees are younger on average but with large variance so
     # both young and veteran employees exist in every cluster.
-    tenure_mean = {0: 800.0, 1: 1400.0, 2: 2000.0}   # days — means differ but overlap
-    tenure_std  = {0: 600.0, 1: 700.0,  2: 700.0}    # large std → heavy overlap
+    tenure_mean = {0: 800.0, 1: 1400.0, 2: 2000.0}  # days — means differ but overlap
+    tenure_std = {0: 600.0, 1: 700.0, 2: 700.0}  # large std → heavy overlap
     for c in range(3):
         idx = cluster == c
-        x[idx, 0] = np.clip(
-            rng.normal(tenure_mean[c], tenure_std[c], idx.sum()) / 3650.0, 0.02, 1.0
-        ).astype(np.float32)
+        x[idx, 0] = np.clip(rng.normal(tenure_mean[c], tenure_std[c], idx.sum()) / 3650.0, 0.02, 1.0).astype(np.float32)
 
     # Role level: uniform noise (no cluster correlation)
     x[:, 1] = (rng.integers(1, 6, n) / 7.0).astype(np.float32)
@@ -183,9 +181,7 @@ def generate_churn_dataset(seed: int = SEED) -> dict[str, Any]:
     pto_mean = {0: 18.0, 1: 35.0, 2: 50.0}
     for c, mu in pto_mean.items():
         idx = cluster == c
-        x[idx, 2] = np.clip(
-            rng.normal(mu, 15.0, idx.sum()) / 90.0, 0.0, 1.0
-        ).astype(np.float32)
+        x[idx, 2] = np.clip(rng.normal(mu, 15.0, idx.sum()) / 90.0, 0.0, 1.0).astype(np.float32)
 
     # ── Graph features (3-6) based on cluster structural role ────────────────
     bw_range = {0: (0.00, 0.05), 1: (0.02, 0.18), 2: (0.05, 0.45)}
@@ -211,11 +207,11 @@ def generate_churn_dataset(seed: int = SEED) -> dict[str, Any]:
 
     # ── Entropy features (9-10) ───────────────────────────────────────────────
     ent_current = {0: (0.08, 0.32), 1: (0.32, 0.62), 2: (0.52, 0.92)}
-    ent_trend   = {0: (-0.55, -0.05), 1: (-0.18, 0.18), 2: (0.02, 0.52)}
+    ent_trend = {0: (-0.55, -0.05), 1: (-0.18, 0.18), 2: (0.02, 0.52)}
     for c in range(3):
         idx = cluster == c
         m = idx.sum()
-        x[idx, 9]  = rng.uniform(*ent_current[c], m).astype(np.float32)
+        x[idx, 9] = rng.uniform(*ent_current[c], m).astype(np.float32)
         x[idx, 10] = rng.uniform(*ent_trend[c], m).astype(np.float32)
 
     # ── Edge generation: cluster-structured graph ─────────────────────────────
@@ -228,17 +224,19 @@ def generate_churn_dataset(seed: int = SEED) -> dict[str, Any]:
 
     for c in range(3):
         node_idx = all_nodes[cluster == c]
-        outside  = all_nodes[cluster != c]
+        outside = all_nodes[cluster != c]
         ip = intra_prob[c]
         ep = inter_prob[c]
         for i in node_idx:
             peers = node_idx[node_idx != i]
-            hits  = peers[rng.random(len(peers)) < ip]
+            hits = peers[rng.random(len(peers)) < ip]
             for j in hits:
-                edges_src.append(int(i)); edges_dst.append(int(j))
+                edges_src.append(int(i))
+                edges_dst.append(int(j))
             ext_hits = outside[rng.random(len(outside)) < ep]
             for j in ext_hits:
-                edges_src.append(int(i)); edges_dst.append(int(j))
+                edges_src.append(int(i))
+                edges_dst.append(int(j))
 
     edge_index = np.array([edges_src, edges_dst], dtype=np.int64)
 
@@ -246,16 +244,16 @@ def generate_churn_dataset(seed: int = SEED) -> dict[str, Any]:
     # Individual signal: visible to all models (tenure, degree_out, entropy_trend)
     individual_logit = (
         -1.5
-        - 1.5 * x[:, 0]                   # tenure protects
-        - 2.0 * x[:, 5]                   # high activity protects
+        - 1.5 * x[:, 0]  # tenure protects
+        - 2.0 * x[:, 5]  # high activity protects
         + 4.0 * np.maximum(-x[:, 10], 0)  # negative trend → risk
-        + rng.normal(0, 0.45, n)          # per-employee noise
+        + rng.normal(0, 0.45, n)  # per-employee noise
     )
     # Cluster signal: NOT directly in features; only recoverable via graph neighbours.
     # This is the "social contagion" component that graph models can learn.
     cluster_bonus = np.where(cluster == 0, 2.0, np.where(cluster == 1, 0.4, 0.0))
-    churn_logit   = individual_logit + cluster_bonus
-    churn_probs   = (1.0 / (1.0 + np.exp(-churn_logit))).astype(np.float32)
+    churn_logit = individual_logit + cluster_bonus
+    churn_probs = (1.0 / (1.0 + np.exp(-churn_logit))).astype(np.float32)
     y = (rng.random(n) < churn_probs).astype(np.float32)
 
     # ── Temporal split: stratified within each cluster ────────────────────────
@@ -271,15 +269,15 @@ def generate_churn_dataset(seed: int = SEED) -> dict[str, Any]:
         train_mask[idx[perm[:cutoff]]] = True
 
     return {
-        "x":             x,
-        "edge_index":    edge_index,
-        "y":             y,
-        "churn_probs":   churn_probs,
-        "cluster":       cluster,
-        "train_mask":    train_mask,
-        "n_high_risk":   N_HIGH_RISK,
+        "x": x,
+        "edge_index": edge_index,
+        "y": y,
+        "churn_probs": churn_probs,
+        "cluster": cluster,
+        "train_mask": train_mask,
+        "n_high_risk": N_HIGH_RISK,
         "n_medium_risk": N_MEDIUM_RISK,
-        "n_low_risk":    N_LOW_RISK,
+        "n_low_risk": N_LOW_RISK,
     }
 
 
@@ -306,10 +304,10 @@ def temporal_split(
 
 def _auroc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     """Area under the ROC curve (trapezoid, pure numpy)."""
-    order  = np.argsort(-y_score)
-    yt     = y_true[order].astype(float)
-    n_pos  = yt.sum()
-    n_neg  = len(yt) - n_pos
+    order = np.argsort(-y_score)
+    yt = y_true[order].astype(float)
+    n_pos = yt.sum()
+    n_neg = len(yt) - n_pos
     if n_pos == 0 or n_neg == 0:
         return 0.5
     tps = np.cumsum(yt)
@@ -326,17 +324,17 @@ def _pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     For imbalanced data this is more informative than AUROC.
     """
     order = np.argsort(-y_score)
-    yt    = y_true[order].astype(float)
+    yt = y_true[order].astype(float)
     n_pos = yt.sum()
     if n_pos == 0:
         return 0.0
-    tps       = np.cumsum(yt)
-    fps       = np.cumsum(1 - yt)
+    tps = np.cumsum(yt)
+    fps = np.cumsum(1 - yt)
     precision = tps / (tps + fps)
-    recall    = tps / n_pos
+    recall = tps / n_pos
     # Prepend (0, 1.0)
     precision = np.concatenate([[1.0], precision])
-    recall    = np.concatenate([[0.0], recall])
+    recall = np.concatenate([[0.0], recall])
     return float(np.trapezoid(precision, recall))
 
 
@@ -353,8 +351,8 @@ def _metrics_at_optimal_threshold(
         fp = float((preds * (1 - y_true)).sum())
         fn = float(((1 - preds) * y_true).sum())
         prec = tp / max(tp + fp, 1)
-        rec  = tp / max(tp + fn, 1)
-        f1   = 2 * prec * rec / max(prec + rec, 1e-9)
+        rec = tp / max(tp + fn, 1)
+        f1 = 2 * prec * rec / max(prec + rec, 1e-9)
         if f1 > best_f1:
             best_f1, best_prec, best_rec, best_thr = f1, prec, rec, thr
     return {"f1": best_f1, "precision": best_prec, "recall": best_rec, "threshold": best_thr}
@@ -363,7 +361,7 @@ def _metrics_at_optimal_threshold(
 def _average_precision_at_k(y_true: np.ndarray, y_score: np.ndarray, k: int = 10) -> float:
     """AP@K: average precision among the top-K scored employees."""
     order = np.argsort(-y_score)[:k]
-    hits  = y_true[order].astype(float)
+    hits = y_true[order].astype(float)
     if hits.sum() == 0:
         return 0.0
     precisions = np.cumsum(hits) / (np.arange(len(hits)) + 1)
@@ -376,20 +374,20 @@ def evaluate_scores(
     model_name: str,
 ) -> dict[str, Any]:
     """Compute all evaluation metrics for one model."""
-    auroc  = _auroc(y_true, y_score)
+    auroc = _auroc(y_true, y_score)
     pr_auc = _pr_auc(y_true, y_score)
-    ap10   = _average_precision_at_k(y_true, y_score, k=10)
-    opt    = _metrics_at_optimal_threshold(y_true, y_score)
+    ap10 = _average_precision_at_k(y_true, y_score, k=10)
+    opt = _metrics_at_optimal_threshold(y_true, y_score)
     return {
-        "model":     model_name,
-        "n_test":    int(len(y_true)),
-        "n_pos":     int(y_true.sum()),
-        "auroc":     round(auroc, 4),
-        "pr_auc":    round(pr_auc, 4),
-        "ap_at_10":  round(ap10, 4),
-        "f1":        round(opt["f1"], 4),
+        "model": model_name,
+        "n_test": int(len(y_true)),
+        "n_pos": int(y_true.sum()),
+        "auroc": round(auroc, 4),
+        "pr_auc": round(pr_auc, 4),
+        "ap_at_10": round(ap10, 4),
+        "f1": round(opt["f1"], 4),
         "precision": round(opt["precision"], 4),
-        "recall":    round(opt["recall"], 4),
+        "recall": round(opt["recall"], 4),
         "threshold": round(opt["threshold"], 4),
     }
 
@@ -449,7 +447,7 @@ class GraphMLP(nn.Module):
         # 2 * in_features: [node_feat | mean_neighbour_feat]
         self.fc1 = nn.Linear(in_features * 2, hidden)
         self.fc2 = nn.Linear(hidden, 32)
-        self.out  = nn.Linear(32, 1)
+        self.out = nn.Linear(32, 1)
 
     def forward(
         self,
@@ -468,7 +466,7 @@ class GraphMLP(nn.Module):
         """
         # Mean-aggregate neighbour features: (N, F)
         neighbour_mean = adj @ x
-        h = torch.cat([x, neighbour_mean], dim=1)     # (N, 2F)
+        h = torch.cat([x, neighbour_mean], dim=1)  # (N, 2F)
         h = F.relu(self.fc1(h))
         h = F.dropout(h, p=self.dropout, training=self.training)
         h = F.relu(self.fc2(h))
@@ -519,37 +517,37 @@ def train_graph_mlp(
     x_all = scaler.transform(x).astype(np.float32)
 
     n = x.shape[0]
-    x_t    = torch.tensor(x_all, dtype=torch.float32)
-    y_t    = torch.tensor(y, dtype=torch.float32)
-    adj    = _build_norm_adj(edge_index, n)
+    x_t = torch.tensor(x_all, dtype=torch.float32)
+    y_t = torch.tensor(y, dtype=torch.float32)
+    adj = _build_norm_adj(edge_index, n)
     train_t = torch.tensor(train_mask, dtype=torch.bool)
 
     # Positive class weight
-    y_train  = y[train_mask]
-    n_pos    = float(y_train.sum())
-    n_neg    = float(len(y_train) - n_pos)
-    pos_w    = min(n_neg / max(n_pos, 1), _POS_WEIGHT_CAP)
+    y_train = y[train_mask]
+    n_pos = float(y_train.sum())
+    n_neg = float(len(y_train) - n_pos)
+    pos_w = min(n_neg / max(n_pos, 1), _POS_WEIGHT_CAP)
     pos_weight = torch.tensor([pos_w], dtype=torch.float32)
 
-    model     = GraphMLP(in_features=N_FEATURES, hidden=_HIDDEN, dropout=_DROPOUT)
+    model = GraphMLP(in_features=N_FEATURES, hidden=_HIDDEN, dropout=_DROPOUT)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-    best_loss  = float("inf")
+    best_loss = float("inf")
     best_state = None
-    patience   = 40
+    patience = 40
     no_improve = 0
 
     for epoch in range(1, n_epochs + 1):
         model.train()
         optimizer.zero_grad()
         logits = model(x_t, adj)
-        loss   = criterion(logits[train_t], y_t[train_t])
+        loss = criterion(logits[train_t], y_t[train_t])
         loss.backward()
         optimizer.step()
 
         if loss.item() < best_loss - 1e-4:
-            best_loss  = loss.item()
+            best_loss = loss.item()
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             no_improve = 0
         else:
@@ -563,7 +561,7 @@ def train_graph_mlp(
     model.eval()
     with torch.no_grad():
         logits = model(x_t, adj)
-        probs  = torch.sigmoid(logits).numpy()
+        probs = torch.sigmoid(logits).numpy()
 
     return probs.astype(np.float32)
 
@@ -579,10 +577,10 @@ class EvalReport:
     churn_rate_test: float
     n_train: int
     n_test: int
-    delta_auroc: float            # graph - baseline
+    delta_auroc: float  # graph - baseline
     delta_pr_auc: float
-    graph_beats_baseline: bool    # delta_auroc > 0
-    random_auroc_floor: float     # = churn_rate_test (naive rank baseline)
+    graph_beats_baseline: bool  # delta_auroc > 0
+    random_auroc_floor: float  # = churn_rate_test (naive rank baseline)
 
 
 def run_evaluation(seed: int = SEED) -> EvalReport:
@@ -591,29 +589,29 @@ def run_evaluation(seed: int = SEED) -> EvalReport:
     Returns EvalReport with all metrics.
     """
     data = generate_churn_dataset(seed=seed)
-    x          = data["x"]
+    x = data["x"]
     edge_index = data["edge_index"]
-    y          = data["y"]
+    y = data["y"]
 
     train_mask, test_mask = temporal_split(data["train_mask"])
 
     n_train = int(train_mask.sum())
-    n_test  = int(test_mask.sum())
+    n_test = int(test_mask.sum())
     churn_rate_train = float(y[train_mask].mean())
-    churn_rate_test  = float(y[test_mask].mean())
+    churn_rate_test = float(y[test_mask].mean())
 
     # Train and score both models
     baseline_scores = train_baseline(x, y, train_mask)
-    graph_scores    = train_graph_mlp(x, edge_index, y, train_mask, seed=seed)
+    graph_scores = train_graph_mlp(x, edge_index, y, train_mask, seed=seed)
 
-    y_test    = y[test_mask]
+    y_test = y[test_mask]
     base_test = baseline_scores[test_mask]
-    gnn_test  = graph_scores[test_mask]
+    gnn_test = graph_scores[test_mask]
 
     baseline_metrics = evaluate_scores(y_test, base_test, "LogisticRegression (3 tabular features)")
-    graph_metrics    = evaluate_scores(y_test, gnn_test,  "GraphMLP (GraphSAGE-style, 11+11 features)")
+    graph_metrics = evaluate_scores(y_test, gnn_test, "GraphMLP (GraphSAGE-style, 11+11 features)")
 
-    delta_auroc  = graph_metrics["auroc"]  - baseline_metrics["auroc"]
+    delta_auroc = graph_metrics["auroc"] - baseline_metrics["auroc"]
     delta_pr_auc = graph_metrics["pr_auc"] - baseline_metrics["pr_auc"]
 
     return EvalReport(
@@ -653,12 +651,12 @@ def print_report(report: EvalReport) -> None:
     print(f"  {'-'*18} {'-'*22} {'-'*12}  {'-'*8}")
 
     metrics_display = [
-        ("AUROC",   "auroc"),
-        ("PR-AUC",  "pr_auc"),
-        ("AP@10",   "ap_at_10"),
-        ("F1 (opt)","f1"),
-        ("Precision","precision"),
-        ("Recall",   "recall"),
+        ("AUROC", "auroc"),
+        ("PR-AUC", "pr_auc"),
+        ("AP@10", "ap_at_10"),
+        ("F1 (opt)", "f1"),
+        ("Precision", "precision"),
+        ("Recall", "recall"),
     ]
     for label, key in metrics_display:
         b = report.baseline[key]
@@ -686,8 +684,7 @@ def print_report(report: EvalReport) -> None:
 
     print("\n  RANDOM BASELINE FLOOR (predict everyone = positive): AUROC = 0.50")
     print("  CHURN-RATE BASELINE  (predict churn_rate for all):   AUROC ~= 0.50")
-    print(f"  Both models beat random: LR={report.baseline['auroc']:.3f}  "
-          f"Graph={report.graph_mlp['auroc']:.3f}")
+    print(f"  Both models beat random: LR={report.baseline['auroc']:.3f}  " f"Graph={report.graph_mlp['auroc']:.3f}")
 
     print("\n  PASS / FAIL")
     checks = _assertion_checks(report)
@@ -772,8 +769,7 @@ def test_baseline_pr_auc_beats_trivial():
     """
     report = _get_report()
     assert report.baseline["pr_auc"] >= report.churn_rate_test, (
-        f"Baseline PR-AUC = {report.baseline['pr_auc']:.4f} not >= "
-        f"churn_rate {report.churn_rate_test:.4f}"
+        f"Baseline PR-AUC = {report.baseline['pr_auc']:.4f} not >= " f"churn_rate {report.churn_rate_test:.4f}"
     )
 
 
@@ -781,8 +777,7 @@ def test_graph_mlp_pr_auc_beats_trivial():
     """GraphMLP PR-AUC must exceed the churn base rate."""
     report = _get_report()
     assert report.graph_mlp["pr_auc"] >= report.churn_rate_test, (
-        f"GraphMLP PR-AUC = {report.graph_mlp['pr_auc']:.4f} not >= "
-        f"churn_rate {report.churn_rate_test:.4f}"
+        f"GraphMLP PR-AUC = {report.graph_mlp['pr_auc']:.4f} not >= " f"churn_rate {report.churn_rate_test:.4f}"
     )
 
 

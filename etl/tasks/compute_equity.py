@@ -14,7 +14,7 @@ from datetime import date
 logger = logging.getLogger(__name__)
 
 _DIMENSIONS = ["gender_group", "tenure_band", "level_band"]
-_METRICS    = ["betweenness", "degree", "cross_dept_ratio"]
+_METRICS = ["betweenness", "degree", "cross_dept_ratio"]
 
 # Disparity ratio that triggers a `below_org_median` flag (MODEL.md §11.1).
 #
@@ -91,20 +91,19 @@ def task_compute_equity(snapshot_date_str: str, conn) -> dict:
             continue
 
         # Compute global medians
-        global_med_bw  = _median([r["med_bw"]  for r in group_rows if r["med_bw"]  is not None])
+        global_med_bw = _median([r["med_bw"] for r in group_rows if r["med_bw"] is not None])
         global_med_deg = _median([r["med_deg"] for r in group_rows if r["med_deg"] is not None])
 
         with conn.cursor() as cur:
             for row in group_rows:
                 group_val = row["group_val"]
-                count     = int(row["member_count"] or 0)
+                count = int(row["member_count"] or 0)
 
                 for metric, median_v, p25_v, p75_v, global_med in [
-                    ("betweenness", row["med_bw"],  row["p25_bw"],  row["p75_bw"],  global_med_bw),
-                    ("degree",      row["med_deg"], row["p25_deg"], row["p75_deg"], global_med_deg),
+                    ("betweenness", row["med_bw"], row["p25_bw"], row["p75_bw"], global_med_bw),
+                    ("degree", row["med_deg"], row["p25_deg"], row["p75_deg"], global_med_deg),
                 ]:
-                    below = (median_v is not None and global_med is not None
-                             and median_v < global_med * _DISPARITY_RATIO)
+                    below = median_v is not None and global_med is not None and median_v < global_med * _DISPARITY_RATIO
                     cur.execute(
                         """
                         INSERT INTO structural_equity_scores
@@ -112,11 +111,16 @@ def task_compute_equity(snapshot_date_str: str, conn) -> dict:
                            member_count, below_org_median)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """,
-                        (dimension, group_val, metric,
-                         float(median_v) if median_v is not None else None,
-                         float(p25_v)    if p25_v    is not None else None,
-                         float(p75_v)    if p75_v    is not None else None,
-                         count, below),
+                        (
+                            dimension,
+                            group_val,
+                            metric,
+                            float(median_v) if median_v is not None else None,
+                            float(p25_v) if p25_v is not None else None,
+                            float(p75_v) if p75_v is not None else None,
+                            count,
+                            below,
+                        ),
                     )
                     rows_written += 1
 

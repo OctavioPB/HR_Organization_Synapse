@@ -72,6 +72,7 @@ def test_betweenness_approximate_for_large_graph():
         # Reload constants after env change
         import importlib
         import graph.metrics as gm
+
         importlib.reload(gm)
         result = gm.compute_betweenness(G)
 
@@ -88,11 +89,15 @@ def test_betweenness_approximate_within_tolerance():
 
     exact = nx.betweenness_centrality(G.copy(), normalized=True)
 
-    with patch.dict(os.environ, {
-        "BETWEENNESS_EXACT_THRESHOLD": "50",
-        "BETWEENNESS_K_PIVOTS": "100",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "BETWEENNESS_EXACT_THRESHOLD": "50",
+            "BETWEENNESS_K_PIVOTS": "100",
+        },
+    ):
         import importlib
+
         importlib.reload(gm)
         approx = gm.compute_betweenness(G)
 
@@ -119,6 +124,7 @@ def test_community_parallelism_invoked_for_large_graph():
 
     with patch.dict(os.environ, {"BETWEENNESS_EXACT_THRESHOLD": "500"}):
         import importlib
+
         importlib.reload(gm)
 
         if not gm._JOBLIB_AVAILABLE or not gm._LOUVAIN_AVAILABLE:
@@ -151,6 +157,7 @@ def test_community_fallback_without_louvain():
 def reset_cache_client():
     """Reset the module-level Redis client between tests."""
     from api import cache
+
     cache.reset_client()
     yield
     cache.reset_client()
@@ -170,6 +177,7 @@ def test_cache_get_returns_none_when_redis_unavailable():
     """When Redis is down, get() must return None without raising."""
     with patch.dict(os.environ, {"REDIS_URL": "redis://127.0.0.1:1", "CACHE_ENABLED": "true"}):
         from api import cache
+
         cache.reset_client()
         result = cache.get("any_key")
     assert result is None
@@ -179,6 +187,7 @@ def test_cache_set_is_noop_when_redis_unavailable():
     """When Redis is down, set() must not raise."""
     with patch.dict(os.environ, {"REDIS_URL": "redis://127.0.0.1:1", "CACHE_ENABLED": "true"}):
         from api import cache
+
         cache.reset_client()
         cache.set("key", {"data": 1})  # must not raise
 
@@ -187,6 +196,7 @@ def test_cache_disabled_by_env():
     """CACHE_ENABLED=false must bypass Redis entirely."""
     with patch.dict(os.environ, {"CACHE_ENABLED": "false"}):
         from api import cache
+
         cache.reset_client()
         # No Redis connection attempted; everything returns None / no-ops
         assert cache.get("key") is None
@@ -250,6 +260,7 @@ def test_cache_invalidate_snapshot_deletes_matching_keys():
 def test_cache_health_returns_unavailable_when_redis_down():
     with patch.dict(os.environ, {"REDIS_URL": "redis://127.0.0.1:1", "CACHE_ENABLED": "true"}):
         from api import cache
+
         cache.reset_client()
         result = cache.health()
     assert result["cache"] == "unavailable"

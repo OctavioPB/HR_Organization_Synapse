@@ -26,6 +26,7 @@ class TestConnectionManager:
     def _make_manager(self):
         # Re-import to get a fresh instance for each test
         from api.ws.manager import ConnectionManager
+
         return ConnectionManager()
 
     def _fake_ws(self, fail_send: bool = False) -> MagicMock:
@@ -87,9 +88,7 @@ class TestConnectionManager:
 
     def test_broadcast_empty_returns_zero(self):
         mgr = self._make_manager()
-        result = asyncio.get_event_loop().run_until_complete(
-            mgr.broadcast({"type": "ping"})
-        )
+        result = asyncio.get_event_loop().run_until_complete(mgr.broadcast({"type": "ping"}))
         assert result == 0
 
     def test_multiple_disconnects_same_ws(self):
@@ -113,6 +112,7 @@ def ws_client():
     """
     with patch("api.routers.ws._get_recent_alerts", return_value=[]):
         from api.main import app
+
         yield TestClient(app, raise_server_exceptions=False)
 
 
@@ -127,24 +127,27 @@ class TestWebSocketEndpoint:
 
     def test_ping_pong(self, ws_client):
         with ws_client.websocket_connect("/alerts/live") as ws:
-            ws.receive_json()   # consume initial message
+            ws.receive_json()  # consume initial message
             ws.send_text("ping")
             response = ws.receive_json()
             assert response["type"] == "pong"
 
     def test_initial_alerts_list_present(self, ws_client):
-        with patch("api.routers.ws._get_recent_alerts", return_value=[
-            {
-                "id": "a1",
-                "fired_at": "2025-05-01T10:00:00Z",
-                "type": "spof_critical",
-                "severity": "high",
-                "affected_entities": {},
-                "details": "Alice is a SPOF",
-                "resolved": False,
-                "resolved_at": None,
-            }
-        ]):
+        with patch(
+            "api.routers.ws._get_recent_alerts",
+            return_value=[
+                {
+                    "id": "a1",
+                    "fired_at": "2025-05-01T10:00:00Z",
+                    "type": "spof_critical",
+                    "severity": "high",
+                    "affected_entities": {},
+                    "details": "Alice is a SPOF",
+                    "resolved": False,
+                    "resolved_at": None,
+                }
+            ],
+        ):
             with ws_client.websocket_connect("/alerts/live") as ws:
                 msg = ws.receive_json()
         assert msg["type"] == "initial"
@@ -171,6 +174,7 @@ _SAMPLE_ALERT: dict[str, Any] = {
 def api_client():
     from api.main import app
     from api.deps import get_db
+
     mock_conn = MagicMock()
     app.dependency_overrides[get_db] = lambda: mock_conn
     yield TestClient(app, raise_server_exceptions=True)
@@ -200,6 +204,7 @@ class TestInternalBroadcastEndpoint:
 
     def test_ws_status_returns_connection_count(self, api_client):
         from api.ws.manager import manager
+
         resp = api_client.get("/internal/ws/status")
         assert resp.status_code == 200
         body = resp.json()
@@ -211,6 +216,7 @@ class TestInternalBroadcastEndpoint:
         # Re-import routers to pick up the new env var
         import importlib
         import api.routers.internal as internal_mod
+
         importlib.reload(internal_mod)
 
         payload = {"source": "test", "alerts": [], "metadata": {}}

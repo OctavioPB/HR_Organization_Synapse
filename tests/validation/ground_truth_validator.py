@@ -72,11 +72,11 @@ logger = logging.getLogger(__name__)
 # ─── Archetype definitions ────────────────────────────────────────────────────
 
 ARCHETYPES = {
-    "BRIDGE":      {"spof_expected": True,  "tier_floor": "critical",  "rank_ceiling": 3},
-    "WITHDRAWING": {"spof_expected": True,  "tier_floor": "warning",   "rank_ceiling": 10},
+    "BRIDGE": {"spof_expected": True, "tier_floor": "critical", "rank_ceiling": 3},
+    "WITHDRAWING": {"spof_expected": True, "tier_floor": "warning", "rank_ceiling": 10},
     "SOLE_EXPERT": {"spof_expected": False, "tier_ceiling": "elevated"},
-    "SILO":        {"spof_expected": False, "tier_ceiling": "elevated"},
-    "NORMAL":      {"spof_expected": False, "tier_ceiling": "warning"},
+    "SILO": {"spof_expected": False, "tier_ceiling": "elevated"},
+    "NORMAL": {"spof_expected": False, "tier_ceiling": "warning"},
 }
 
 # Structural SPOF ground truth: which archetype labels are true positives
@@ -84,11 +84,11 @@ _TRUE_SPOF_ARCHETYPES = {"BRIDGE", "WITHDRAWING"}
 
 # Planted severity (0 = no risk, 3 = critical) — used for Spearman correlation
 PLANTED_SEVERITY = {
-    "BRIDGE":      3,
+    "BRIDGE": 3,
     "WITHDRAWING": 2,
     "SOLE_EXPERT": 1,
-    "SILO":        0,
-    "NORMAL":      0,
+    "SILO": 0,
+    "NORMAL": 0,
 }
 
 TIER_RANK = {"critical": 4, "warning": 3, "elevated": 2, "normal": 1}
@@ -116,6 +116,7 @@ class GroundTruthOrg:
         entropy_trends: Computed entropy trend slope per employee_id.
         archetype_ids: Maps archetype name → list of employee_ids.
     """
+
     employees: list[_Employee]
     G: nx.DiGraph
     entropy_trends: dict[str, float]
@@ -171,8 +172,8 @@ def build_ground_truth_org(seed: int = 42) -> GroundTruthOrg:
     # 100 employees: Engineering 50, Sales 35, HR 15
     departments = {
         "Engineering": 50,  # 1 BRIDGE, 2 SOLE_EXPERT, 5 SILO, 42 NORMAL
-        "Sales":       35,  # 1 BRIDGE, 5 SILO, 29 NORMAL
-        "HR":          15,  # 1 WITHDRAWING, 14 NORMAL
+        "Sales": 35,  # 1 BRIDGE, 5 SILO, 29 NORMAL
+        "HR": 15,  # 1 WITHDRAWING, 14 NORMAL
     }
 
     employees: list[_Employee] = []
@@ -207,9 +208,9 @@ def build_ground_truth_org(seed: int = 42) -> GroundTruthOrg:
     for _ in range(14):
         employees.append(_emp("HR", "NORMAL"))
 
-    assert len(employees) == sum(departments.values()), (
-        f"Employee count mismatch: {len(employees)} vs {sum(departments.values())}"
-    )
+    assert len(employees) == sum(
+        departments.values()
+    ), f"Employee count mismatch: {len(employees)} vs {sum(departments.values())}"
 
     # Index for edge generation
     by_dept: dict[str, list[_Employee]] = {}
@@ -217,8 +218,8 @@ def build_ground_truth_org(seed: int = 42) -> GroundTruthOrg:
         by_dept.setdefault(e.department, []).append(e)
 
     bridge_ids = set(archetype_ids["BRIDGE"])
-    silo_ids   = set(archetype_ids["SILO"])
-    sole_ids   = set(archetype_ids["SOLE_EXPERT"])
+    silo_ids = set(archetype_ids["SILO"])
+    sole_ids = set(archetype_ids["SOLE_EXPERT"])
     withdrawing_id = archetype_ids["WITHDRAWING"][0]
 
     n_days = 30
@@ -243,8 +244,7 @@ def build_ground_truth_org(seed: int = 42) -> GroundTruthOrg:
         return pool[int(rng.integers(len(pool)))]
 
     def _add_edge(src: _Employee, tgt: _Employee, weight: float, day: int) -> None:
-        raw_edges.append((src.employee_id, tgt.employee_id, weight,
-                          src.department, tgt.department))
+        raw_edges.append((src.employee_id, tgt.employee_id, weight, src.department, tgt.department))
         daily_counts[src.employee_id][day] += 1
 
     for day in range(n_days):
@@ -260,7 +260,7 @@ def build_ground_truth_org(seed: int = 42) -> GroundTruthOrg:
             elif eid in sole_ids:
                 rate, cross_prob = 5.0, 0.01
             elif eid in silo_ids:
-                rate, cross_prob = 3.0, 0.00   # forced intra-dept
+                rate, cross_prob = 3.0, 0.00  # forced intra-dept
             else:
                 # NORMAL: power-law base rate, 5% cross-dept
                 rate = float(rng.pareto(2.0) + 0.2) * (0.7 / 1.0)
@@ -333,7 +333,7 @@ def run_scoring(org: GroundTruthOrg) -> dict[str, dict]:
         Per-employee scoring detail from score_all_with_bands().
     """
     betweenness = compute_betweenness(org.G)
-    clustering  = compute_clustering(org.G)
+    clustering = compute_clustering(org.G)
     return score_all_with_bands(org.G, betweenness, clustering, org.entropy_trends)
 
 
@@ -359,22 +359,23 @@ def spearman_r(x: list[float], y: list[float]) -> float:
     ay = np.array(y, dtype=float)
     rx = np.argsort(np.argsort(ax)).astype(float)
     ry = np.argsort(np.argsort(ay)).astype(float)
-    d  = rx - ry
-    return float(1.0 - 6.0 * np.sum(d ** 2) / (n * (n ** 2 - 1)))
+    d = rx - ry
+    return float(1.0 - 6.0 * np.sum(d**2) / (n * (n**2 - 1)))
 
 
 @dataclass
 class ValidationReport:
     """Structured validation result."""
-    precision_critical: float    # TP / (TP + FP) at score ≥ 0.7
-    recall_bridge:      float    # Fraction of BRIDGE employees flagged critical
-    recall_withdrawing: float    # Fraction of WITHDRAWING employees flagged ≥ warning
-    spearman_rho:       float    # Rank correlation: planted severity vs. median SPOF score per archetype (5 pts)
-    bridge_ranks:       list[int]
-    withdrawing_rank:   int
+
+    precision_critical: float  # TP / (TP + FP) at score ≥ 0.7
+    recall_bridge: float  # Fraction of BRIDGE employees flagged critical
+    recall_withdrawing: float  # Fraction of WITHDRAWING employees flagged ≥ warning
+    spearman_rho: float  # Rank correlation: planted severity vs. median SPOF score per archetype (5 pts)
+    bridge_ranks: list[int]
+    withdrawing_rank: int
     sole_expert_max_score: float
-    silo_max_score:        float
-    per_employee: list[dict]     # Full per-employee breakdown for the report
+    silo_max_score: float
+    per_employee: list[dict]  # Full per-employee breakdown for the report
 
 
 def validate(org: GroundTruthOrg, scores: dict[str, dict]) -> ValidationReport:
@@ -396,15 +397,17 @@ def validate(org: GroundTruthOrg, scores: dict[str, dict]) -> ValidationReport:
     for emp in org.employees:
         eid = emp.employee_id
         detail = scores[eid]
-        per_employee.append({
-            "archetype":  emp.archetype,
-            "department": emp.department,
-            "score":      round(detail["score"], 4),
-            "flag":       _flag(detail["score"]),
-            "robust":     detail["robust_critical"],
-            "rank":       rank_of[eid],
-            "planted_severity": PLANTED_SEVERITY[emp.archetype],
-        })
+        per_employee.append(
+            {
+                "archetype": emp.archetype,
+                "department": emp.department,
+                "score": round(detail["score"], 4),
+                "flag": _flag(detail["score"]),
+                "robust": detail["robust_critical"],
+                "rank": rank_of[eid],
+                "planted_severity": PLANTED_SEVERITY[emp.archetype],
+            }
+        )
 
     # True SPOFs = BRIDGE + WITHDRAWING
     true_spof_ids = set(org.archetype_ids["BRIDGE"] + org.archetype_ids["WITHDRAWING"])
@@ -431,7 +434,7 @@ def validate(org: GroundTruthOrg, scores: dict[str, dict]) -> ValidationReport:
 
     # Boundary check: sole experts and silos should not score critical
     sole_max = max(scores[eid]["score"] for eid in org.archetype_ids["SOLE_EXPERT"])
-    silo_max  = max(scores[eid]["score"] for eid in org.archetype_ids["SILO"])
+    silo_max = max(scores[eid]["score"] for eid in org.archetype_ids["SILO"])
 
     # Spearman rho: planted severity vs. median SPOF score per archetype.
     # Computed on 5 archetype medians rather than 100 individual employees.
@@ -442,10 +445,7 @@ def validate(org: GroundTruthOrg, scores: dict[str, dict]) -> ValidationReport:
     # is preserved, which is the meaningful structural claim.
     archetype_order = ["BRIDGE", "WITHDRAWING", "SOLE_EXPERT", "SILO", "NORMAL"]
     median_severities = [float(PLANTED_SEVERITY[a]) for a in archetype_order]
-    median_scores = [
-        float(np.median([scores[eid]["score"] for eid in org.archetype_ids[a]]))
-        for a in archetype_order
-    ]
+    median_scores = [float(np.median([scores[eid]["score"] for eid in org.archetype_ids[a]])) for a in archetype_order]
     rho = spearman_r(median_severities, median_scores)
 
     return ValidationReport(
@@ -481,7 +481,7 @@ def print_report(org: GroundTruthOrg, scores: dict[str, dict], report: Validatio
     print(f"    Edges : {org.G.number_of_edges()} directed")
     cross_dept = compute_cross_dept_ratio(org.G)
     bridge_cdr = np.mean([cross_dept[eid] for eid in org.archetype_ids["BRIDGE"]])
-    silo_cdr   = np.mean([cross_dept[eid] for eid in org.archetype_ids["SILO"]])
+    silo_cdr = np.mean([cross_dept[eid] for eid in org.archetype_ids["SILO"]])
     print(f"    BRIDGE mean cross-dept ratio  : {bridge_cdr:.3f}")
     print(f"    SILO   mean cross-dept ratio  : {silo_cdr:.3f}")
 
@@ -517,7 +517,6 @@ def print_report(org: GroundTruthOrg, scores: dict[str, dict], report: Validatio
         print(f"    [{status}] {label:45s}  {detail}")
 
     print(f"\n{sep}\n")
-
 
 
 def _assertion_checks(report: ValidationReport) -> list[tuple[str, bool, str]]:
@@ -648,17 +647,13 @@ def test_silo_scores_below_warning():
 def test_precision_at_critical():
     """Precision at the critical threshold must be ≥ 80%."""
     _, _, report = _get_fixtures()
-    assert report.precision_critical >= 0.80, (
-        f"Precision@critical = {report.precision_critical:.2%} (expected ≥ 80%)"
-    )
+    assert report.precision_critical >= 0.80, f"Precision@critical = {report.precision_critical:.2%} (expected ≥ 80%)"
 
 
 def test_spearman_rank_correlation():
     """Spearman ρ between planted severity and scored rank must be ≥ 0.60."""
     _, _, report = _get_fixtures()
-    assert report.spearman_rho >= 0.60, (
-        f"Spearman ρ = {report.spearman_rho:.3f} (expected ≥ 0.60)"
-    )
+    assert report.spearman_rho >= 0.60, f"Spearman ρ = {report.spearman_rho:.3f} (expected ≥ 0.60)"
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -666,7 +661,7 @@ def test_spearman_rank_correlation():
 
 def main() -> None:
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
-    org    = build_ground_truth_org(seed=42)
+    org = build_ground_truth_org(seed=42)
     scores = run_scoring(org)
     report = validate(org, scores)
     print_report(org, scores, report)

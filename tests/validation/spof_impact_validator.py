@@ -109,26 +109,26 @@ def measure_removal_damage(G: nx.DiGraph, emp_id: str) -> dict[str, Any]:
     G_after = apply_operations(G, [{"op": "remove", "employee_ids": [emp_id]}])
 
     U_before = G.to_undirected()
-    U_after  = G_after.to_undirected()
+    U_after = G_after.to_undirected()
 
     wcc_before = nx.number_weakly_connected_components(G)
-    wcc_after  = nx.number_weakly_connected_components(G_after)
+    wcc_after = nx.number_weakly_connected_components(G_after)
     new_components = max(0, wcc_after - wcc_before)
 
     path_before = _avg_path_length(U_before)
-    path_after  = _avg_path_length(U_after)
+    path_after = _avg_path_length(U_after)
     path_delta_pct = (path_after - path_before) / max(path_before, 1e-9) * 100.0
 
     # Composite: structural connectivity degradation + isolation penalty
     damage_score = path_delta_pct + new_components * _COMPONENT_PENALTY
 
     return {
-        "emp_id":          emp_id,
-        "path_before":     round(path_before, 4),
-        "path_after":      round(path_after, 4),
-        "path_delta_pct":  round(path_delta_pct, 3),
-        "new_components":  new_components,
-        "damage_score":    round(damage_score, 3),
+        "emp_id": emp_id,
+        "path_before": round(path_before, 4),
+        "path_after": round(path_after, 4),
+        "path_delta_pct": round(path_delta_pct, 3),
+        "new_components": new_components,
+        "damage_score": round(damage_score, 3),
     }
 
 
@@ -158,7 +158,7 @@ def run_exhaustive_what_if(
         if verbose and i % 10 == 0:
             print(f"    simulating removals ... {i}/{len(org.employees)}", end="\r")
         damage = measure_removal_damage(org.G, emp.employee_id)
-        damage["archetype"]  = emp.archetype
+        damage["archetype"] = emp.archetype
         damage["department"] = emp.department
         damage["spof_score"] = round(scores[emp.employee_id]["score"], 4)
         results.append(damage)
@@ -173,20 +173,20 @@ def run_exhaustive_what_if(
 
 @dataclass
 class ImpactReport:
-    spearman_rho:           float   # Spearman(SPOF_rank, damage_rank) across all N employees
-    archetype_spearman_rho: float   # Spearman on 5 archetype medians (cleaner signal)
-    precision_at_k:         float   # |top-K_SPOF ∩ top-K_damage| / K
-    recall_at_k:            float   # |top-K_SPOF ∩ top-K_damage| / K  (same value here, symmetric)
-    bridge_mean_damage:     float
-    withdrawing_damage:     float
+    spearman_rho: float  # Spearman(SPOF_rank, damage_rank) across all N employees
+    archetype_spearman_rho: float  # Spearman on 5 archetype medians (cleaner signal)
+    precision_at_k: float  # |top-K_SPOF ∩ top-K_damage| / K
+    recall_at_k: float  # |top-K_SPOF ∩ top-K_damage| / K  (same value here, symmetric)
+    bridge_mean_damage: float
+    withdrawing_damage: float
     sole_expert_mean_damage: float
-    silo_mean_damage:       float
-    normal_mean_damage:     float
-    k:                      int
-    top_k_by_spof:          list[dict]   # top-K employees by SPOF with their damage rank
-    top_k_by_damage:        list[dict]   # top-K employees by damage with their SPOF rank
-    withdrawing_rank_by_damage: int      # rank of WITHDRAWING in the damage ordering
-    withdrawing_rank_by_spof:   int      # rank of WITHDRAWING in the SPOF ordering
+    silo_mean_damage: float
+    normal_mean_damage: float
+    k: int
+    top_k_by_spof: list[dict]  # top-K employees by SPOF with their damage rank
+    top_k_by_damage: list[dict]  # top-K employees by damage with their SPOF rank
+    withdrawing_rank_by_damage: int  # rank of WITHDRAWING in the damage ordering
+    withdrawing_rank_by_spof: int  # rank of WITHDRAWING in the SPOF ordering
 
 
 def compute_impact_report(
@@ -205,10 +205,10 @@ def compute_impact_report(
         ImpactReport with all validation metrics.
     """
     # Build rankings
-    by_spof   = sorted(results, key=lambda r: r["spof_score"],   reverse=True)
+    by_spof = sorted(results, key=lambda r: r["spof_score"], reverse=True)
     by_damage = sorted(results, key=lambda r: r["damage_score"], reverse=True)
 
-    spof_rank_of   = {r["emp_id"]: i + 1 for i, r in enumerate(by_spof)}
+    spof_rank_of = {r["emp_id"]: i + 1 for i, r in enumerate(by_spof)}
     damage_rank_of = {r["emp_id"]: i + 1 for i, r in enumerate(by_damage)}
 
     # Spearman rho across all 100 employees.
@@ -216,7 +216,7 @@ def compute_impact_report(
     # NORMAL employees have moderate SPOF scores (power-law betweenness) but
     # near-zero or slightly negative damage scores in a dense 2000-edge graph
     # where alternative paths exist for most node removals.
-    spof_scores   = [r["spof_score"]   for r in results]
+    spof_scores = [r["spof_score"] for r in results]
     damage_scores = [r["damage_score"] for r in results]
     rho = spearman_r(spof_scores, damage_scores)
 
@@ -228,43 +228,36 @@ def compute_impact_report(
     _planted_severity = {"BRIDGE": 3, "WITHDRAWING": 2, "SOLE_EXPERT": 1, "SILO": 0, "NORMAL": 0}
     arch_severities = [float(_planted_severity[a]) for a in _archetype_order]
     arch_damages = [
-        float(np.median([r["damage_score"] for r in results if r["archetype"] == a]))
-        for a in _archetype_order
+        float(np.median([r["damage_score"] for r in results if r["archetype"] == a])) for a in _archetype_order
     ]
     arch_rho = spearman_r(arch_severities, arch_damages)
 
     # Precision@K: overlap between top-K by SPOF and top-K by damage
-    top_k_spof_ids   = {r["emp_id"] for r in by_spof[:k]}
+    top_k_spof_ids = {r["emp_id"] for r in by_spof[:k]}
     top_k_damage_ids = {r["emp_id"] for r in by_damage[:k]}
-    overlap          = len(top_k_spof_ids & top_k_damage_ids)
-    precision_at_k   = overlap / k
-    recall_at_k      = overlap / k   # symmetric when both sets have size k
+    overlap = len(top_k_spof_ids & top_k_damage_ids)
+    precision_at_k = overlap / k
+    recall_at_k = overlap / k  # symmetric when both sets have size k
 
     # Archetype-level damage means
     def _mean_damage(archetype: str) -> float:
         vals = [r["damage_score"] for r in results if r["archetype"] == archetype]
         return float(np.mean(vals)) if vals else 0.0
 
-    bridge_mean      = _mean_damage("BRIDGE")
-    withdrawing_dmg  = next(r["damage_score"] for r in results if r["archetype"] == "WITHDRAWING")
+    bridge_mean = _mean_damage("BRIDGE")
+    withdrawing_dmg = next(r["damage_score"] for r in results if r["archetype"] == "WITHDRAWING")
     sole_expert_mean = _mean_damage("SOLE_EXPERT")
-    silo_mean        = _mean_damage("SILO")
-    normal_mean      = _mean_damage("NORMAL")
+    silo_mean = _mean_damage("SILO")
+    normal_mean = _mean_damage("NORMAL")
 
     # WITHDRAWING rank in both orderings (key diagnostic)
     withdrawing_id = org.archetype_ids["WITHDRAWING"][0]
-    withdrawing_rank_dmg  = damage_rank_of[withdrawing_id]
+    withdrawing_rank_dmg = damage_rank_of[withdrawing_id]
     withdrawing_rank_spof = spof_rank_of[withdrawing_id]
 
     # Annotate top-K lists with their rank in the other ordering
-    top_k_by_spof = [
-        {**r, "damage_rank": damage_rank_of[r["emp_id"]]}
-        for r in by_spof[:k]
-    ]
-    top_k_by_damage = [
-        {**r, "spof_rank": spof_rank_of[r["emp_id"]]}
-        for r in by_damage[:k]
-    ]
+    top_k_by_spof = [{**r, "damage_rank": damage_rank_of[r["emp_id"]]} for r in by_spof[:k]]
+    top_k_by_damage = [{**r, "spof_rank": spof_rank_of[r["emp_id"]]} for r in by_damage[:k]]
 
     return ImpactReport(
         spearman_rho=round(rho, 3),
@@ -296,17 +289,25 @@ def print_report(report: ImpactReport) -> None:
     print(sep)
 
     print("\n  CORRELATION")
-    print(f"    Spearman rho -- individual (N=100)       : {report.spearman_rho:.3f}  [noisy: NORMAL pop spreads signal]")
-    print(f"    Spearman rho -- archetype medians (N=5)  : {report.archetype_spearman_rho:.3f}  [clean: archetype ordering]")
+    print(
+        f"    Spearman rho -- individual (N=100)       : {report.spearman_rho:.3f}  [noisy: NORMAL pop spreads signal]"
+    )
+    print(
+        f"    Spearman rho -- archetype medians (N=5)  : {report.archetype_spearman_rho:.3f}  [clean: archetype ordering]"
+    )
     print(f"    Precision@{report.k} / Recall@{report.k}               : {report.precision_at_k:.2%}")
 
     print("\n  ARCHETYPE DAMAGE (mean composite damage_score on removal)")
     rows = [
-        ("BRIDGE",      report.bridge_mean_damage,      "planted true SPOF"),
-        ("WITHDRAWING", report.withdrawing_damage,       f"rank {report.withdrawing_rank_by_damage} by damage, rank {report.withdrawing_rank_by_spof} by SPOF"),
-        ("SOLE_EXPERT", report.sole_expert_mean_damage,  "knowledge risk, not structural SPOF"),
-        ("SILO",        report.silo_mean_damage,         "intra-dept cluster"),
-        ("NORMAL",      report.normal_mean_damage,       "background mean"),
+        ("BRIDGE", report.bridge_mean_damage, "planted true SPOF"),
+        (
+            "WITHDRAWING",
+            report.withdrawing_damage,
+            f"rank {report.withdrawing_rank_by_damage} by damage, rank {report.withdrawing_rank_by_spof} by SPOF",
+        ),
+        ("SOLE_EXPERT", report.sole_expert_mean_damage, "knowledge risk, not structural SPOF"),
+        ("SILO", report.silo_mean_damage, "intra-dept cluster"),
+        ("NORMAL", report.normal_mean_damage, "background mean"),
     ]
     for name, score, note in rows:
         print(f"    {name:<14} {score:>7.3f}    {note}")
@@ -316,16 +317,20 @@ def print_report(report: ImpactReport) -> None:
     print(f"    {'-'*12} {'-'*14} {'-'*8} {'-'*10} {'-'*11}")
     for i, r in enumerate(report.top_k_by_spof):
         in_top_k = "*" if r["damage_rank"] <= report.k else " "
-        print(f"    #{i+1:<11} {r['archetype']:<14} {r['spof_score']:<8.4f} "
-              f"{r['damage_score']:<10.3f} #{r['damage_rank']}{in_top_k}")
+        print(
+            f"    #{i+1:<11} {r['archetype']:<14} {r['spof_score']:<8.4f} "
+            f"{r['damage_score']:<10.3f} #{r['damage_rank']}{in_top_k}"
+        )
 
     print(f"\n  TOP-{report.k} BY STRUCTURAL DAMAGE  (with their SPOF rank)")
     print(f"    {'Dmg Rank':<12} {'Archetype':<14} {'Damage':<10} {'SPOF':<8} {'SPOF Rank'}")
     print(f"    {'-'*12} {'-'*14} {'-'*10} {'-'*8} {'-'*9}")
     for i, r in enumerate(report.top_k_by_damage):
         in_top_k = "*" if r["spof_rank"] <= report.k else " "
-        print(f"    #{i+1:<11} {r['archetype']:<14} {r['damage_score']:<10.3f} "
-              f"{r['spof_score']:<8.4f} #{r['spof_rank']}{in_top_k}")
+        print(
+            f"    #{i+1:<11} {r['archetype']:<14} {r['damage_score']:<10.3f} "
+            f"{r['spof_score']:<8.4f} #{r['spof_rank']}{in_top_k}"
+        )
 
     print(f"\n  (* = also in top-{report.k} of the other ranking)")
 
@@ -400,10 +405,10 @@ _REPORT: ImpactReport | None = None
 def _get_fixtures() -> tuple[GroundTruthOrg, list[dict], ImpactReport]:
     global _ORG, _RESULTS, _REPORT
     if _ORG is None:
-        _ORG    = build_ground_truth_org(seed=42)
+        _ORG = build_ground_truth_org(seed=42)
         _scores = run_scoring(_ORG)
         _RESULTS = run_exhaustive_what_if(_ORG, _scores, verbose=False)
-        _REPORT  = compute_impact_report(_ORG, _RESULTS)
+        _REPORT = compute_impact_report(_ORG, _RESULTS)
     return _ORG, _RESULTS, _REPORT
 
 
@@ -471,8 +476,7 @@ def test_bridge_damage_exceeds_silo():
     """Bridge employees must cause more structural damage than silo employees."""
     _, _, report = _get_fixtures()
     assert report.bridge_mean_damage > report.silo_mean_damage, (
-        f"BRIDGE damage {report.bridge_mean_damage:.3f} not > "
-        f"SILO damage {report.silo_mean_damage:.3f}"
+        f"BRIDGE damage {report.bridge_mean_damage:.3f} not > " f"SILO damage {report.silo_mean_damage:.3f}"
     )
 
 
@@ -484,8 +488,7 @@ def test_withdrawing_damage_exceeds_silo():
     """
     _, _, report = _get_fixtures()
     assert report.withdrawing_damage > report.silo_mean_damage, (
-        f"WITHDRAWING damage {report.withdrawing_damage:.3f} not > "
-        f"SILO mean {report.silo_mean_damage:.3f}"
+        f"WITHDRAWING damage {report.withdrawing_damage:.3f} not > " f"SILO mean {report.silo_mean_damage:.3f}"
     )
 
 
@@ -517,7 +520,7 @@ def test_withdrawing_spof_overrank_documented():
 def main() -> None:
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
     print("\n  Building ground-truth org (100 employees, seed=42) ...")
-    org    = build_ground_truth_org(seed=42)
+    org = build_ground_truth_org(seed=42)
     scores = run_scoring(org)
 
     print("  Scoring all employees ...")

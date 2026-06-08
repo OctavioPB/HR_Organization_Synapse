@@ -155,9 +155,7 @@ def deactivate_tenant(
     from api.tenant import deprovision_tenant
 
     deprovision_tenant(tenant_id, conn, drop_schema=drop_schema)
-    logger.warning(
-        "Tenant %s deactivated (drop_schema=%s)", tenant_id, drop_schema
-    )
+    logger.warning("Tenant %s deactivated (drop_schema=%s)", tenant_id, drop_schema)
 
 
 # ─── API key management ───────────────────────────────────────────────────────
@@ -399,8 +397,11 @@ def get_digest_config(conn=Depends(get_admin_db)) -> DigestConfigResponse:
         row = cur.fetchone()
     if not row:
         return DigestConfigResponse(
-            email_recipients=[], slack_webhook_url_set=False,
-            enabled_email=False, enabled_slack=False, timezone="UTC",
+            email_recipients=[],
+            slack_webhook_url_set=False,
+            enabled_email=False,
+            enabled_slack=False,
+            timezone="UTC",
         )
     row = dict(row)
     return DigestConfigResponse(
@@ -420,12 +421,14 @@ def upsert_digest_config(
 ) -> DigestConfigResponse:
     """Create or update the digest configuration."""
     import re as _re
+
     email_re = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     bad = [e for e in body.email_recipients if not email_re.match(e)]
     if bad:
         raise HTTPException(status_code=422, detail=f"Invalid email addresses: {bad}")
 
     import zoneinfo
+
     try:
         zoneinfo.ZoneInfo(body.timezone)
     except Exception:

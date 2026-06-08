@@ -35,7 +35,6 @@ _DEFAULT_ARGS = {
     tags=["equity", "dei", "weekly"],
 )
 def equity_dag():
-
     wait_for_graph = ExternalTaskSensor(
         task_id="wait_for_graph_builder",
         external_dag_id="graph_builder_dag",
@@ -50,6 +49,7 @@ def equity_dag():
     def compute_equity(ds: str | None = None, **context) -> dict:
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from etl.tasks.compute_equity import task_compute_equity

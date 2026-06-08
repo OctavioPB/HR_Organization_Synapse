@@ -117,7 +117,7 @@ async def get_org_health_briefing(
     from graph.org_health import generate_briefing
 
     current = _resolve_health(conn)
-    trend   = queries.fetch_org_health_trend(trend_weeks, conn)
+    trend = queries.fetch_org_health_trend(trend_weeks, conn)
 
     try:
         briefing = await asyncio.to_thread(generate_briefing, current, trend)

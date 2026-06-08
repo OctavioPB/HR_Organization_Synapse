@@ -55,6 +55,7 @@ def churn_gnn_train_dag():
         """Run ChurnGAT training for the current execution date."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ml.gnn.trainer import train
@@ -84,8 +85,7 @@ def churn_gnn_train_dag():
 
         if n_train < 10:
             logger.warning(
-                "Low training sample count (%d). "
-                "Consider adding more churn_labels rows.",
+                "Low training sample count (%d). " "Consider adding more churn_labels rows.",
                 n_train,
             )
 
@@ -132,6 +132,7 @@ def churn_gnn_score_dag():
         """Load latest checkpoint and write churn_scores for today."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ml.gnn.scorer import score
@@ -142,19 +143,19 @@ def churn_gnn_score_dag():
         try:
             results = score(snapshot_date=snapshot_date, window_days=30)
         except FileNotFoundError as exc:
-            logger.warning(
-                "No checkpoint found — skipping scoring. "
-                "Run churn_gnn_train first. Error: %s", exc
-            )
+            logger.warning("No checkpoint found — skipping scoring. " "Run churn_gnn_train first. Error: %s", exc)
             return {"scored": 0, "skipped": True}
 
-        high_count   = sum(1 for r in results if r["risk_tier"] == "high")
+        high_count = sum(1 for r in results if r["risk_tier"] == "high")
         medium_count = sum(1 for r in results if r["risk_tier"] == "medium")
-        low_count    = sum(1 for r in results if r["risk_tier"] == "low")
+        low_count = sum(1 for r in results if r["risk_tier"] == "low")
 
         logger.info(
             "Scoring complete — total=%d high=%d medium=%d low=%d",
-            len(results), high_count, medium_count, low_count,
+            len(results),
+            high_count,
+            medium_count,
+            low_count,
         )
         return {
             "scored": len(results),
@@ -173,6 +174,7 @@ def churn_gnn_score_dag():
         """
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from etl.tasks.compute_peer_contagion import task_compute_peer_contagion

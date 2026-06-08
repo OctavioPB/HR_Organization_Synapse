@@ -113,8 +113,8 @@ def test_node_features_graph_features_populated():
     }
     emps = [_emp("a")]
     x = _build_node_features(emps, gf, _SNAPSHOT)
-    assert abs(x[0, 3] - 0.5) < 1e-6   # betweenness
-    assert abs(x[0, 9] - 0.8) < 1e-6   # entropy_current
+    assert abs(x[0, 3] - 0.5) < 1e-6  # betweenness
+    assert abs(x[0, 9] - 0.8) < 1e-6  # entropy_current
     assert abs(x[0, 10] - (-0.3)) < 1e-6  # entropy_trend
 
 
@@ -170,6 +170,7 @@ def test_churn_gat_import_error_without_pyg():
     with patch.dict(sys.modules, {"torch_geometric": None, "torch_geometric.nn": None}):
         import importlib
         import ml.gnn.model as gnn_mod
+
         importlib.reload(gnn_mod)
         # _PYG_AVAILABLE should be False after reload without torch_geometric
         if not gnn_mod._PYG_AVAILABLE:
@@ -283,7 +284,7 @@ def test_temporal_masks_no_labelled():
 
 
 def test_auroc_perfect():
-    y_true  = np.array([0, 0, 1, 1], dtype=float)
+    y_true = np.array([0, 0, 1, 1], dtype=float)
     y_score = np.array([0.1, 0.2, 0.8, 0.9])
     assert abs(_auroc(y_true, y_score) - 1.0) < 1e-9
 
@@ -291,13 +292,13 @@ def test_auroc_perfect():
 def test_auroc_worst():
     # Worst case: the positives receive the LOWEST scores, so every negative is
     # ranked above every positive → AUROC = 0.0.
-    y_true  = np.array([1, 1, 0, 0], dtype=float)
+    y_true = np.array([1, 1, 0, 0], dtype=float)
     y_score = np.array([0.1, 0.2, 0.8, 0.9])  # positives scored lowest
     assert abs(_auroc(y_true, y_score) - 0.0) < 1e-9
 
 
 def test_auroc_degenerate_all_positive():
-    y_true  = np.array([1.0, 1.0, 1.0])
+    y_true = np.array([1.0, 1.0, 1.0])
     y_score = np.array([0.5, 0.6, 0.7])
     assert _auroc(y_true, y_score) == 0.5
 

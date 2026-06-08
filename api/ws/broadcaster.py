@@ -33,6 +33,7 @@ async def _get_async_redis():
     """Return a connected async Redis client or None if unavailable."""
     try:
         import redis.asyncio as aioredis  # redis-py ≥ 4.2
+
         client = aioredis.Redis.from_url(_REDIS_URL, decode_responses=True)
         await client.ping()
         return client
@@ -102,9 +103,7 @@ async def start_subscriber(manager) -> None:
             logger.info("Redis subscriber task cancelled — shutting down.")
             break
         except Exception as exc:
-            logger.warning(
-                "Redis subscriber error (%s) — reconnecting in %ds", exc, _RETRY_DELAY
-            )
+            logger.warning("Redis subscriber error (%s) — reconnecting in %ds", exc, _RETRY_DELAY)
             await asyncio.sleep(_RETRY_DELAY)
         finally:
             if pubsub:

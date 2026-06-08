@@ -49,13 +49,15 @@ def ensure_topic(tenant_slug: str, bootstrap_servers: str) -> None:
     topic_name = tenant_topic(tenant_slug)
     admin = KafkaAdminClient(bootstrap_servers=bootstrap_servers.split(","))
     try:
-        admin.create_topics([
-            NewTopic(
-                name=topic_name,
-                num_partitions=_TOPIC_PARTITIONS,
-                replication_factor=_TOPIC_REPLICATION,
-            )
-        ])
+        admin.create_topics(
+            [
+                NewTopic(
+                    name=topic_name,
+                    num_partitions=_TOPIC_PARTITIONS,
+                    replication_factor=_TOPIC_REPLICATION,
+                )
+            ]
+        )
         logger.info("Created Kafka topic: %s", topic_name)
     except TopicAlreadyExistsError:
         logger.debug("Kafka topic already exists: %s", topic_name)
@@ -83,10 +85,10 @@ class TenantAwareProducer:
         inner: BaseProducer,
         auto_create_topic: bool = True,
     ) -> None:
-        self.tenant_slug      = tenant_slug
-        self.inner            = inner
+        self.tenant_slug = tenant_slug
+        self.inner = inner
         self.auto_create_topic = auto_create_topic
-        self._topic           = tenant_topic(tenant_slug)
+        self._topic = tenant_topic(tenant_slug)
 
     @property
     def topic(self) -> str:
@@ -114,15 +116,21 @@ class TenantAwareProducer:
                 if count % 100 == 0:
                     logger.info(
                         "[%s] %s: published %d events",
-                        self.tenant_slug, self.inner.channel, count,
+                        self.tenant_slug,
+                        self.inner.channel,
+                        count,
                     )
                 if delay_ms > 0:
                     import time
+
                     time.sleep(delay_ms / 1000.0)
         except Exception as exc:
             logger.error(
                 "[%s] %s producer aborted after %d events: %s",
-                self.tenant_slug, self.inner.channel, count, exc,
+                self.tenant_slug,
+                self.inner.channel,
+                count,
+                exc,
             )
             raise
         finally:
@@ -133,7 +141,10 @@ class TenantAwareProducer:
 
         logger.info(
             "[%s] %s: %d events published to topic %s",
-            self.tenant_slug, self.inner.channel, count, self._topic,
+            self.tenant_slug,
+            self.inner.channel,
+            count,
+            self._topic,
         )
         return count
 
@@ -148,7 +159,9 @@ class TenantAwareProducer:
         except KafkaError as exc:
             logger.error(
                 "[%s] Kafka publish failed event_id=%s: %s",
-                self.tenant_slug, event.event_id, exc,
+                self.tenant_slug,
+                event.event_id,
+                exc,
             )
             raise
 
@@ -160,5 +173,3 @@ class TenantAwareProducer:
             acks="all",
             retries=3,
         )
-
-

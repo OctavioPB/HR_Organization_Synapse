@@ -45,11 +45,15 @@ def _bridge_graph() -> tuple[nx.DiGraph, str]:
     """
     G = nx.DiGraph()
     for u, v in [("a1", "a2"), ("a2", "a3"), ("a3", "a1")]:
-        G.add_edge(u, v); G.add_edge(v, u)
+        G.add_edge(u, v)
+        G.add_edge(v, u)
     for u, v in [("b1", "b2"), ("b2", "b3"), ("b3", "b1")]:
-        G.add_edge(u, v); G.add_edge(v, u)
-    G.add_edge("b", "a1"); G.add_edge("a1", "b")
-    G.add_edge("b", "b1"); G.add_edge("b1", "b")
+        G.add_edge(u, v)
+        G.add_edge(v, u)
+    G.add_edge("b", "a1")
+    G.add_edge("a1", "b")
+    G.add_edge("b", "b1")
+    G.add_edge("b1", "b")
     return G, "b"
 
 
@@ -132,9 +136,9 @@ class TestComputeStructuralOverlap:
     def test_weighted_jaccard_reflects_proportions(self):
         """A candidate whose interaction *shares* differ scores below 1.0."""
         G = nx.DiGraph()
-        G.add_edge("s", "n1", weight=9.0)   # s: 90% n1, 10% n2
+        G.add_edge("s", "n1", weight=9.0)  # s: 90% n1, 10% n2
         G.add_edge("s", "n2", weight=1.0)
-        G.add_edge("c", "n1", weight=1.0)   # c: 10% n1, 90% n2
+        G.add_edge("c", "n1", weight=1.0)  # c: 10% n1, 90% n2
         G.add_edge("c", "n2", weight=9.0)
         result = compute_structural_overlap("s", "c", G)
         # min/max Tanimoto: (0.1+0.1)/(0.9+0.9) = 0.2/1.8 ≈ 0.111
@@ -250,11 +254,15 @@ class TestScoreCandidates:
         G = nx.DiGraph()
         shared_neighbors = [f"n{i}" for i in range(5)]
         for n in shared_neighbors:
-            G.add_edge("s", n); G.add_edge(n, "s")
-            G.add_edge("c1", n); G.add_edge(n, "c1")
+            G.add_edge("s", n)
+            G.add_edge(n, "s")
+            G.add_edge("c1", n)
+            G.add_edge(n, "c1")
         # c2 shares no neighbors
-        G.add_edge("s", "x"); G.add_edge("x", "s")
-        G.add_edge("c2", "y"); G.add_edge("y", "c2")
+        G.add_edge("s", "x")
+        G.add_edge("x", "s")
+        G.add_edge("c2", "y")
+        G.add_edge("y", "c2")
 
         node_metrics = {"c1": {"clustering": 0.3}, "c2": {"clustering": 0.3}}
         results = score_candidates("s", G, node_metrics, {}, ["c1", "c2"])
@@ -270,7 +278,9 @@ class TestScoreCandidates:
 
     def test_domain_overlap_contributes_to_score(self):
         G = nx.DiGraph()
-        G.add_node("s"); G.add_node("c1"); G.add_node("c2")
+        G.add_node("s")
+        G.add_node("c1")
+        G.add_node("c2")
         # c1 shares source's domains, c2 does not
         node_metrics = {"c1": {"clustering": 0.0}, "c2": {"clustering": 0.0}}
         knowledge = {
@@ -279,8 +289,7 @@ class TestScoreCandidates:
             "c2": {"ml"},
         }
         results = score_candidates(
-            "s", G, node_metrics, knowledge, ["c1", "c2"],
-            w_struct=0.0, w_clust=0.0, w_domain=1.0
+            "s", G, node_metrics, knowledge, ["c1", "c2"], w_struct=0.0, w_clust=0.0, w_domain=1.0
         )
         c1_result = next(r for r in results if r["candidate_employee_id"] == "c1")
         c2_result = next(r for r in results if r["candidate_employee_id"] == "c2")
@@ -288,19 +297,27 @@ class TestScoreCandidates:
 
     def test_output_has_required_keys(self):
         G = nx.DiGraph()
-        G.add_node("s"); G.add_node("c1")
+        G.add_node("s")
+        G.add_node("c1")
         G.add_edge("s", "c1")
         results = score_candidates("s", G, {"c1": {"clustering": 0.4}}, {}, ["c1"])
         assert len(results) == 1
         r = results[0]
-        for key in ("candidate_employee_id", "structural_overlap", "clustering_score",
-                    "domain_overlap", "compatibility_score"):
+        for key in (
+            "candidate_employee_id",
+            "structural_overlap",
+            "clustering_score",
+            "domain_overlap",
+            "compatibility_score",
+        ):
             assert key in r
 
     def test_compatibility_score_rounded_to_4_decimals(self):
         G = nx.DiGraph()
-        G.add_node("s"); G.add_node("c")
-        G.add_edge("s", "n1"); G.add_edge("c", "n1")
+        G.add_node("s")
+        G.add_node("c")
+        G.add_edge("s", "n1")
+        G.add_edge("c", "n1")
         node_metrics = {"c": {"clustering": 1 / 3}}
         results = score_candidates("s", G, node_metrics, {}, ["c"])
         score = results[0]["compatibility_score"]
@@ -336,6 +353,7 @@ _SUCCESSION_ROW = {
 def client():
     from api.main import app
     from api.deps import get_db
+
     mock_conn = MagicMock()
     app.dependency_overrides[get_db] = lambda: mock_conn
     yield TestClient(app, raise_server_exceptions=True)

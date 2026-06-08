@@ -70,10 +70,7 @@ def _graph_health_stats(G: nx.DiGraph) -> GraphHealthStats:
 
 def _cross_dept_edges(G: nx.DiGraph) -> int:
     """Count edges that cross department boundaries."""
-    return sum(
-        1 for u, v in G.edges()
-        if G.nodes[u].get("department") != G.nodes[v].get("department")
-    )
+    return sum(1 for u, v in G.edges() if G.nodes[u].get("department") != G.nodes[v].get("department"))
 
 
 def _avg_path_length(G: nx.DiGraph) -> float:
@@ -208,13 +205,10 @@ def simulate_removal(
     cross_after = _cross_dept_edges(G_after)
     path_after = _avg_path_length(G_after)
 
-    cross_dept_loss_pct = round(
-        (cross_before - cross_after) / max(cross_before, 1) * 100, 1
-    )
+    cross_dept_loss_pct = round((cross_before - cross_after) / max(cross_before, 1) * 100, 1)
 
     impact = {
-        "components_delta": after_stats.weakly_connected_components
-            - before_stats.weakly_connected_components,
+        "components_delta": after_stats.weakly_connected_components - before_stats.weakly_connected_components,
         "node_removed_degree": degree_before,
         "cross_dept_edges_before": cross_before,
         "cross_dept_edges_after": cross_after,
@@ -227,8 +221,7 @@ def simulate_removal(
     }
 
     logger.info(
-        "POST /risk/simulate removed=%s before_nodes=%d after_nodes=%d "
-        "components_delta=%d",
+        "POST /risk/simulate removed=%s before_nodes=%d after_nodes=%d " "components_delta=%d",
         body.remove_employee_id[:8],
         before_stats.node_count,
         after_stats.node_count,

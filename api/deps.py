@@ -75,7 +75,7 @@ def get_tenant_db(
     from api.tenant import resolve_tenant, set_search_path
 
     tenant_id = getattr(request.state, "tenant_id", "") or ""
-    api_key   = getattr(request.state, "api_key", "") or ""
+    api_key = getattr(request.state, "api_key", "") or ""
 
     if not tenant_id or not api_key:
         raise HTTPException(
@@ -130,6 +130,7 @@ def get_current_role(request: Request) -> str:
 
 def require_role(*roles: str) -> Callable:
     """Dependency factory: raises HTTP 403 if the caller's role is not in *roles*."""
+
     def _check(request: Request) -> str:
         role = get_current_role(request)
         if role not in roles:
@@ -138,6 +139,7 @@ def require_role(*roles: str) -> Callable:
                 detail=f"Role '{role}' is not authorised for this endpoint. Required: {list(roles)}",
             )
         return role
+
     return _check
 
 

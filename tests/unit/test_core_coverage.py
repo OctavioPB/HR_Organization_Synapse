@@ -63,7 +63,7 @@ class TestGraphToAdjacency:
 
     def test_node_missing_department_defaults_to_empty_string(self):
         G = nx.DiGraph()
-        G.add_node("X")   # no department attribute
+        G.add_node("X")  # no department attribute
         G.add_edge("X", "X", weight=1.0)
         adj = graph_to_adjacency(G)
         assert adj["nodes"][0]["department"] == ""
@@ -143,8 +143,7 @@ class TestComputeCommunityEdgeCases:
         original = metrics_mod._LOUVAIN_AVAILABLE
         try:
             metrics_mod._LOUVAIN_AVAILABLE = False
-            with patch("graph.metrics.nx.community.louvain_communities",
-                       side_effect=AttributeError):
+            with patch("graph.metrics.nx.community.louvain_communities", side_effect=AttributeError):
                 result = compute_community(G)
 
             # Two connected components → two distinct community IDs
@@ -234,9 +233,7 @@ class TestWriteScoresFlagTiers:
         conn = MagicMock()
         conn.__enter__ = MagicMock(return_value=conn)
         conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor.return_value.__enter__ = MagicMock(
-            return_value=MagicMock()
-        )
+        conn.cursor.return_value.__enter__ = MagicMock(return_value=MagicMock())
         conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
         return conn
 
@@ -262,8 +259,7 @@ class TestWriteScoresFlagTiers:
         """score >= 0.7 with robust_critical=True → 'critical'."""
         flags = self._run(
             scores={"E1": 0.8},
-            bands={"E1": {"robust_critical": True, "weight_sensitive": False,
-                          "score_lo": 0.75, "score_hi": 0.85}},
+            bands={"E1": {"robust_critical": True, "weight_sensitive": False, "score_lo": 0.75, "score_hi": 0.85}},
         )
         assert flags["E1"] == "critical"
 
@@ -271,8 +267,7 @@ class TestWriteScoresFlagTiers:
         """score >= 0.7 with robust_critical=False → 'critical_uncertain'."""
         flags = self._run(
             scores={"E1": 0.72},
-            bands={"E1": {"robust_critical": False, "weight_sensitive": True,
-                          "score_lo": 0.65, "score_hi": 0.75}},
+            bands={"E1": {"robust_critical": False, "weight_sensitive": True, "score_lo": 0.65, "score_hi": 0.75}},
         )
         assert flags["E1"] == "critical_uncertain"
 
@@ -303,8 +298,7 @@ class TestWriteScoresFlagTiers:
             scores=scores,
             entropy_trends={"D": -0.1},
             bands={
-                "A": {"robust_critical": True, "weight_sensitive": False,
-                      "score_lo": 0.80, "score_hi": 0.90},
+                "A": {"robust_critical": True, "weight_sensitive": False, "score_lo": 0.80, "score_hi": 0.90},
             },
         )
         assert flags["A"] == "critical"
@@ -340,8 +334,7 @@ class TestScoreAll:
         # The bridge nodes have very different betweenness from non-bridge nodes,
         # so any consistent weight set produces valid (though possibly equal) scores.
         G = nx.DiGraph()
-        for u, v in [("A1","A2"),("A2","A3"),("A3","A1"),
-                     ("B1","B2"),("B2","B3"),("B3","B1")]:
+        for u, v in [("A1", "A2"), ("A2", "A3"), ("A3", "A1"), ("B1", "B2"), ("B2", "B3"), ("B3", "B1")]:
             G.add_edge(u, v, weight=1.0)
             G.add_edge(v, u, weight=1.0)
         G.add_edge("A1", "B1", weight=1.0)

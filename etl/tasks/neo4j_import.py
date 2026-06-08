@@ -74,9 +74,7 @@ def task_import_graph(snapshot_date_str: str, window_days: int = 30) -> dict:
             ]
 
     if not nodes:
-        logger.warning(
-            "No graph_snapshot rows for %s — skipping Neo4j import.", snapshot_date_str
-        )
+        logger.warning("No graph_snapshot rows for %s — skipping Neo4j import.", snapshot_date_str)
         return {"nodes_upserted": 0, "edges_upserted": 0}
 
     # ── Load and aggregate edges ────────────────────────────────────────────
@@ -86,16 +84,15 @@ def task_import_graph(snapshot_date_str: str, window_days: int = 30) -> dict:
     for src, tgt, weight, _, _ in raw_edges:
         edge_weights[(src, tgt)] = edge_weights.get((src, tgt), 0.0) + weight
 
-    edges = [
-        {"source_id": src, "target_id": tgt, "weight": round(w, 4)}
-        for (src, tgt), w in edge_weights.items()
-    ]
+    edges = [{"source_id": src, "target_id": tgt, "weight": round(w, 4)} for (src, tgt), w in edge_weights.items()]
 
     # ── Upsert into Neo4j ───────────────────────────────────────────────────
     result = upsert_graph(snapshot_date_str, nodes, edges)
     logger.info(
         "task_import_graph %s: %d nodes, %d edges upserted",
-        snapshot_date_str, result["nodes_upserted"], result["edges_upserted"],
+        snapshot_date_str,
+        result["nodes_upserted"],
+        result["edges_upserted"],
     )
     return result
 
@@ -134,12 +131,17 @@ def task_verify_import(snapshot_date_str: str) -> dict:
     if not match:
         logger.warning(
             "Neo4j node count (%d) is below PostgreSQL snapshot count (%d) for %s",
-            neo4j_count, postgres_count, snapshot_date_str,
+            neo4j_count,
+            postgres_count,
+            snapshot_date_str,
         )
 
     logger.info(
         "verify_import %s: neo4j=%d postgres=%d match=%s",
-        snapshot_date_str, neo4j_count, postgres_count, match,
+        snapshot_date_str,
+        neo4j_count,
+        postgres_count,
+        match,
     )
     return {
         "neo4j_count": neo4j_count,

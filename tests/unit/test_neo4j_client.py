@@ -8,7 +8,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 
-
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -24,9 +23,7 @@ def _make_mock_driver(session_records=None):
     if session_records is not None:
         mock_result = MagicMock()
         mock_result.__iter__ = MagicMock(return_value=iter(session_records))
-        mock_result.single = MagicMock(
-            return_value=session_records[0] if session_records else None
-        )
+        mock_result.single = MagicMock(return_value=session_records[0] if session_records else None)
         mock_session.run.return_value = mock_result
 
     return mock_driver, mock_session
@@ -41,6 +38,7 @@ def test_neo4j_available_true_when_connectivity_succeeds():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import neo4j_available
+
         assert neo4j_available() is True
 
 
@@ -50,6 +48,7 @@ def test_neo4j_available_false_when_connectivity_fails():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import neo4j_available
+
         assert neo4j_available() is False
 
 
@@ -61,6 +60,7 @@ def test_upsert_graph_empty_input_returns_zeros():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import upsert_graph
+
         result = upsert_graph("2025-04-25", [], [])
 
     assert result == {"nodes_upserted": 0, "edges_upserted": 0}
@@ -71,12 +71,13 @@ def test_upsert_graph_counts_match_inputs():
 
     nodes = [
         {"employee_id": "a", "name": "Alice", "department": "Eng", "spof_score": 0.8},
-        {"employee_id": "b", "name": "Bob",   "department": "HR",  "spof_score": 0.3},
+        {"employee_id": "b", "name": "Bob", "department": "HR", "spof_score": 0.3},
     ]
     edges = [{"source_id": "a", "target_id": "b", "weight": 5.0}]
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import upsert_graph
+
         result = upsert_graph("2025-04-25", nodes, edges)
 
     assert result["nodes_upserted"] == 2
@@ -89,6 +90,7 @@ def test_upsert_graph_calls_session_run_twice():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import upsert_graph
+
         upsert_graph("2025-04-25", [{"employee_id": "x", "name": "X", "department": "A", "spof_score": 0.0}], [])
 
     assert mock_session.run.call_count == 2
@@ -103,6 +105,7 @@ def test_query_shortest_path_returns_none_when_no_path():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_shortest_path
+
         result = query_shortest_path("emp-a", "emp-b")
 
     assert result is None
@@ -110,10 +113,10 @@ def test_query_shortest_path_returns_none_when_no_path():
 
 def test_query_shortest_path_parses_record():
     record = {
-        "node_ids":    ["emp-a", "emp-mid", "emp-b"],
-        "names":       ["Alice", "Midway",  "Bob"],
-        "departments": ["Eng",   "Sales",   "HR"],
-        "hops":        2,
+        "node_ids": ["emp-a", "emp-mid", "emp-b"],
+        "names": ["Alice", "Midway", "Bob"],
+        "departments": ["Eng", "Sales", "HR"],
+        "hops": 2,
     }
     mock_record = MagicMock()
     mock_record.__getitem__ = lambda self, k: record[k]
@@ -123,6 +126,7 @@ def test_query_shortest_path_parses_record():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_shortest_path
+
         result = query_shortest_path("emp-a", "emp-b")
 
     assert result is not None
@@ -138,7 +142,7 @@ def test_query_shortest_path_parses_record():
 def test_query_reachability_returns_list():
     rows = [
         {"employee_id": "emp-b", "name": "Bob", "department": "Sales", "spof_score": 0.3},
-        {"employee_id": "emp-c", "name": "Carol", "department": "HR",  "spof_score": 0.5},
+        {"employee_id": "emp-c", "name": "Carol", "department": "HR", "spof_score": 0.5},
     ]
     _ = [MagicMock(**{"keys.return_value": r.keys(), **{k: v for k, v in r.items()}}) for r in rows]
 
@@ -148,6 +152,7 @@ def test_query_reachability_returns_list():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_reachability
+
         result = query_reachability("emp-a", hops=2)
 
     assert isinstance(result, list)
@@ -160,6 +165,7 @@ def test_query_reachability_empty_when_no_neighbors():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_reachability
+
         result = query_reachability("lonely-emp", hops=2)
 
     assert result == []
@@ -177,6 +183,7 @@ def test_query_knowledge_islands_returns_list():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_knowledge_islands
+
         result = query_knowledge_islands(max_size=2)
 
     assert isinstance(result, list)
@@ -190,6 +197,7 @@ def test_query_knowledge_islands_empty_when_none():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_knowledge_islands
+
         assert query_knowledge_islands() == []
 
 
@@ -202,6 +210,7 @@ def test_query_betweenness_gds_returns_empty_on_failure():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_betweenness_gds
+
         result = query_betweenness_gds()
 
     assert result == []
@@ -213,9 +222,9 @@ def test_query_betweenness_gds_drops_graph_on_success():
 
     mock_driver, mock_session = _make_mock_driver()
     call_results = [
-        MagicMock(),                              # project
+        MagicMock(),  # project
         MagicMock(**{"__iter__": lambda s: iter(rows)}),  # stream
-        MagicMock(),                              # drop (separate session)
+        MagicMock(),  # drop (separate session)
     ]
     mock_session.run.side_effect = call_results
 
@@ -225,6 +234,7 @@ def test_query_betweenness_gds_drops_graph_on_success():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import query_betweenness_gds
+
         query_betweenness_gds()
 
     # session.run was called at least twice (project + stream) + once more for drop
@@ -239,6 +249,7 @@ def test_ensure_indexes_calls_create_constraint():
 
     with patch("graph.neo4j_client.get_driver", return_value=mock_driver):
         from graph.neo4j_client import ensure_indexes
+
         ensure_indexes()
 
     assert mock_session.run.call_count == 2  # constraint + index

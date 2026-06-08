@@ -42,17 +42,17 @@ logger = logging.getLogger(__name__)
 
 # ─── Hyperparameters ──────────────────────────────────────────────────────────
 
-_N_WEEKS          = int(os.environ.get("TGNN_N_WEEKS", "8"))
-_HISTORY_WEEKS    = int(os.environ.get("TGNN_HISTORY_WEEKS", "24"))  # total history to load
-_N_EPOCHS         = int(os.environ.get("TGNN_EPOCHS", "150"))
-_LR               = float(os.environ.get("TGNN_LR", "1e-3"))
-_WEIGHT_DECAY     = float(os.environ.get("TGNN_WEIGHT_DECAY", "1e-5"))
-_HIDDEN           = int(os.environ.get("TGNN_HIDDEN", "32"))
-_K                = int(os.environ.get("TGNN_K", "1"))
-_DROPOUT          = float(os.environ.get("TGNN_DROPOUT", "0.1"))
-_PATIENCE         = int(os.environ.get("TGNN_PATIENCE", "15"))
-_VAL_FRACTION     = float(os.environ.get("TGNN_VAL_FRACTION", "0.2"))
-_CHECKPOINT_DIR   = os.environ.get("TGNN_CHECKPOINT_DIR", "checkpoints")
+_N_WEEKS = int(os.environ.get("TGNN_N_WEEKS", "8"))
+_HISTORY_WEEKS = int(os.environ.get("TGNN_HISTORY_WEEKS", "24"))  # total history to load
+_N_EPOCHS = int(os.environ.get("TGNN_EPOCHS", "150"))
+_LR = float(os.environ.get("TGNN_LR", "1e-3"))
+_WEIGHT_DECAY = float(os.environ.get("TGNN_WEIGHT_DECAY", "1e-5"))
+_HIDDEN = int(os.environ.get("TGNN_HIDDEN", "32"))
+_K = int(os.environ.get("TGNN_K", "1"))
+_DROPOUT = float(os.environ.get("TGNN_DROPOUT", "0.1"))
+_PATIENCE = int(os.environ.get("TGNN_PATIENCE", "15"))
+_VAL_FRACTION = float(os.environ.get("TGNN_VAL_FRACTION", "0.2"))
+_CHECKPOINT_DIR = os.environ.get("TGNN_CHECKPOINT_DIR", "checkpoints")
 
 
 # ─── Helper ───────────────────────────────────────────────────────────────────
@@ -61,9 +61,10 @@ _CHECKPOINT_DIR   = os.environ.get("TGNN_CHECKPOINT_DIR", "checkpoints")
 def _snapshots_to_tensors(snapshots, device: str) -> list[dict]:
     """Convert TemporalSnapshot list to list of {x, edge_index} tensor dicts."""
     import torch
+
     return [
         {
-            "x":          torch.tensor(s.x, dtype=torch.float).to(device),
+            "x": torch.tensor(s.x, dtype=torch.float).to(device),
             "edge_index": torch.tensor(s.edge_index, dtype=torch.long).to(device),
         }
         for s in snapshots
@@ -100,7 +101,9 @@ def train(
 
     logger.info(
         "Loading %d weekly snapshots from %s to %s …",
-        total_weeks, history_start, end_date,
+        total_weeks,
+        history_start,
+        end_date,
     )
     all_snapshots = build_snapshot_sequence(
         end_date=end_date,
@@ -122,9 +125,7 @@ def train(
     n_val = max(1, int(n_samples * _VAL_FRACTION))
     n_train = n_samples - n_val
 
-    logger.info(
-        "Sliding windows: total=%d train=%d val=%d", n_samples, n_train, n_val
-    )
+    logger.info("Sliding windows: total=%d train=%d val=%d", n_samples, n_train, n_val)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -148,12 +149,12 @@ def train(
         train_loss_total = 0.0
 
         for i in range(n_train):
-            input_snaps  = all_snapshots[i : i + n_weeks]
-            target_snap  = all_snapshots[i + n_weeks]
+            input_snaps = all_snapshots[i : i + n_weeks]
+            target_snap = all_snapshots[i + n_weeks]
 
             input_tensors = _snapshots_to_tensors(input_snaps, device)
             x_target = torch.tensor(target_snap.x, dtype=torch.float).to(device)
-            mask     = torch.tensor(target_snap.presence_mask, dtype=torch.bool).to(device)
+            mask = torch.tensor(target_snap.presence_mask, dtype=torch.bool).to(device)
 
             optimizer.zero_grad()
             x_pred, _ = model(input_tensors)
@@ -170,12 +171,12 @@ def train(
         val_loss_total = 0.0
         with torch.no_grad():
             for i in range(n_train, n_samples):
-                input_snaps  = all_snapshots[i : i + n_weeks]
-                target_snap  = all_snapshots[i + n_weeks]
+                input_snaps = all_snapshots[i : i + n_weeks]
+                target_snap = all_snapshots[i + n_weeks]
 
                 input_tensors = _snapshots_to_tensors(input_snaps, device)
                 x_target = torch.tensor(target_snap.x, dtype=torch.float).to(device)
-                mask     = torch.tensor(target_snap.presence_mask, dtype=torch.bool).to(device)
+                mask = torch.tensor(target_snap.presence_mask, dtype=torch.bool).to(device)
 
                 x_pred, _ = model(input_tensors)
                 val_loss = model.scalar_loss(x_pred, x_target, presence_mask=mask)
@@ -186,7 +187,10 @@ def train(
         if epoch % 30 == 0 or epoch == 1:
             logger.info(
                 "Epoch %d/%d  train_loss=%.6f  val_loss=%.6f",
-                epoch, _N_EPOCHS, train_loss, val_loss,
+                epoch,
+                _N_EPOCHS,
+                train_loss,
+                val_loss,
             )
 
         if val_loss < best_val_loss - 1e-6:
@@ -205,7 +209,8 @@ def train(
 
     logger.info(
         "Training done — best_epoch=%d best_val_loss=%.6f",
-        best_epoch, best_val_loss,
+        best_epoch,
+        best_val_loss,
     )
 
     # ── Save checkpoint ────────────────────────────────────────────────────

@@ -179,12 +179,12 @@ class TestRunRetentionPurge:
         cursor.rowcount = 0
 
         results = run_retention_purge(conn)
-        raw   = next(r for r in results if r["table"] == "raw_events")
+        raw = next(r for r in results if r["table"] == "raw_events")
         graph = next(r for r in results if r["table"] == "graph_snapshots")
 
-        raw_cutoff   = date.today() - timedelta(days=90)
+        raw_cutoff = date.today() - timedelta(days=90)
         graph_cutoff = date.today() - timedelta(days=365)
-        assert raw["cutoff_date"]   == raw_cutoff.isoformat()
+        assert raw["cutoff_date"] == raw_cutoff.isoformat()
         assert graph["cutoff_date"] == graph_cutoff.isoformat()
 
 
@@ -214,25 +214,46 @@ class TestExportEmployeeData:
 
         conn = MagicMock()
         emp_row = {
-            "id": "emp-001", "name": "Alice", "department": "Engineering",
-            "role": "SWE", "active": True, "consent": True, "created_at": datetime.now(),
+            "id": "emp-001",
+            "name": "Alice",
+            "department": "Engineering",
+            "role": "SWE",
+            "active": True,
+            "consent": True,
+            "created_at": datetime.now(),
         }
         cursor = self._make_cursor(emp_row)
         conn.cursor.return_value = cursor
 
         result = export_employee_data("emp-001", conn)
         assert result is not None
-        for key in ("export_generated_at", "article", "employee_id", "employee",
-                    "raw_events", "graph_snapshots", "risk_scores",
-                    "churn_scores", "knowledge_entries", "consent_audit_log"):
+        for key in (
+            "export_generated_at",
+            "article",
+            "employee_id",
+            "employee",
+            "raw_events",
+            "graph_snapshots",
+            "risk_scores",
+            "churn_scores",
+            "knowledge_entries",
+            "consent_audit_log",
+        ):
             assert key in result
 
     def test_article_is_gdpr_article_20(self):
         from graph.compliance import export_employee_data
 
         conn = MagicMock()
-        emp_row = {"id": "emp-001", "name": "Bob", "department": "HR",
-                   "role": "HRBP", "active": True, "consent": True, "created_at": datetime.now()}
+        emp_row = {
+            "id": "emp-001",
+            "name": "Bob",
+            "department": "HR",
+            "role": "HRBP",
+            "active": True,
+            "consent": True,
+            "created_at": datetime.now(),
+        }
         cursor = MagicMock()
         cursor.__enter__ = lambda s: cursor
         cursor.__exit__ = MagicMock(return_value=False)
@@ -300,13 +321,13 @@ class TestGenerateHtmlReport:
 
         conn, cursor = mock_conn
         cursor.fetchone.side_effect = [
-            (0,),   # employees count
-            (0,),   # raw_events count
-            (0,),   # graph_snapshots count
-            (0,),   # risk_scores
-            (0,),   # churn_risk_scores
-            (0,),   # employee_knowledge
-            (0,),   # consent_audit_log
+            (0,),  # employees count
+            (0,),  # raw_events count
+            (0,),  # graph_snapshots count
+            (0,),  # risk_scores
+            (0,),  # churn_risk_scores
+            (0,),  # employee_knowledge
+            (0,),  # consent_audit_log
             {"opted_in": 50, "opted_out": 2},  # consent stats
         ]
         cursor.fetchall.return_value = []
@@ -346,15 +367,18 @@ class TestDataAuditEndpoint:
         cursor.fetchone.return_value = (0,)
         cursor.fetchall.return_value = []
 
-        with patch("graph.compliance.build_data_audit", return_value={
-            "generated_at": "2025-01-01T00:00:00+00:00",
-            "framework": ["GDPR", "CCPA"],
-            "data_controller": "Org Synapse",
-            "dpo_contact": "privacy@org-synapse.internal",
-            "categories": [],
-            "total_tables": 0,
-            "total_personal_rows": 0,
-        }):
+        with patch(
+            "graph.compliance.build_data_audit",
+            return_value={
+                "generated_at": "2025-01-01T00:00:00+00:00",
+                "framework": ["GDPR", "CCPA"],
+                "data_controller": "Org Synapse",
+                "dpo_contact": "privacy@org-synapse.internal",
+                "categories": [],
+                "total_tables": 0,
+                "total_personal_rows": 0,
+            },
+        ):
             resp = client.get("/compliance/data-audit")
         assert resp.status_code == 200
         body = resp.json()
@@ -470,14 +494,16 @@ class TestPurgeEndpoint:
 class TestPurgeHistoryEndpoint:
     def test_returns_200_with_entries(self, api_client):
         client, conn, cursor = api_client
-        rows = [{
-            "purged_at": datetime(2025, 1, 1, 8, 0, tzinfo=UTC),
-            "table_name": "raw_events",
-            "rows_deleted": 200,
-            "cutoff_date": date(2024, 10, 3),
-            "triggered_by": "airflow",
-            "status": "completed",
-        }]
+        rows = [
+            {
+                "purged_at": datetime(2025, 1, 1, 8, 0, tzinfo=UTC),
+                "table_name": "raw_events",
+                "rows_deleted": 200,
+                "cutoff_date": date(2024, 10, 3),
+                "triggered_by": "airflow",
+                "status": "completed",
+            }
+        ]
         with patch("api.routers.compliance.fetch_purge_history", return_value=rows):
             resp = client.get("/compliance/purge-history")
         assert resp.status_code == 200

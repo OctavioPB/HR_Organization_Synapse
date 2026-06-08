@@ -30,6 +30,7 @@ PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "changeme")
 def _kafka_available() -> bool:
     try:
         from kafka import KafkaProducer
+
         p = KafkaProducer(bootstrap_servers=KAFKA_SERVERS.split(","))
         p.close()
         return True
@@ -40,9 +41,8 @@ def _kafka_available() -> bool:
 def _postgres_available() -> bool:
     try:
         import psycopg2
-        conn = psycopg2.connect(
-            host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD
-        )
+
+        conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD)
         conn.close()
         return True
     except Exception:
@@ -65,10 +65,9 @@ def require_services():
 def test_employee_id(require_services) -> str:
     """Insert a throwaway employee so FK constraints pass during the test."""
     import psycopg2
+
     emp_id = str(uuid.uuid4())
-    conn = psycopg2.connect(
-        host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD
-    )
+    conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD)
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO employees (id, name, department, role) VALUES (%s, %s, %s, %s)",
@@ -78,12 +77,9 @@ def test_employee_id(require_services) -> str:
     conn.close()
     yield emp_id
     # Cleanup
-    conn = psycopg2.connect(
-        host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD
-    )
+    conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD)
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM raw_events WHERE source_id = %s OR target_id = %s",
-                    (emp_id, emp_id))
+        cur.execute("DELETE FROM raw_events WHERE source_id = %s OR target_id = %s", (emp_id, emp_id))
         cur.execute("DELETE FROM employees WHERE id = %s", (emp_id,))
     conn.commit()
     conn.close()
@@ -161,14 +157,10 @@ def test_produce_and_consume_100_events(test_employee_id: str):
     t.join(timeout=30)
 
     assert inserted, "Consumer thread did not complete within 30 s"
-    assert inserted[0] == n_events, (
-        f"Expected {n_events} rows inserted, got {inserted[0]}"
-    )
+    assert inserted[0] == n_events, f"Expected {n_events} rows inserted, got {inserted[0]}"
 
     # ── Verify in DB ─────────────────────────────────────────────────────────
-    conn = psycopg2.connect(
-        host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD
-    )
+    conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASSWORD)
     with conn.cursor() as cur:
         cur.execute(
             "SELECT COUNT(*) FROM raw_events WHERE source_id = %s AND channel = 'slack'",

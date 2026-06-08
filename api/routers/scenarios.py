@@ -20,8 +20,8 @@ router = APIRouter(prefix="/scenarios", tags=["scenarios"])
 class ScenarioOperation(BaseModel):
     op: Literal["remove", "merge_depts", "move_team"]
     employee_ids: list[str] | None = None
-    source_dept:  str | None = None
-    target_dept:  str | None = None
+    source_dept: str | None = None
+    target_dept: str | None = None
 
 
 class ScenarioCreateRequest(BaseModel):
@@ -90,9 +90,10 @@ def compute_scenario(
 
     try:
         from graph.scenario_simulator import load_current_graph, apply_operations, compute_impact_report
+
         G_before = load_current_graph(conn)
-        G_after  = apply_operations(G_before, ops)
-        impact   = compute_impact_report(G_before, G_after, conn)
+        G_after = apply_operations(G_before, ops)
+        impact = compute_impact_report(G_before, G_after, conn)
     except Exception as exc:
         logger.exception("Scenario simulation failed: %s", exc)
         with conn.cursor() as cur:
@@ -135,12 +136,12 @@ def list_scenarios(conn=Depends(get_db)) -> dict:
         "total": len(rows),
         "scenarios": [
             {
-                "scenario_id":  r["id"],
-                "name":         r["name"],
-                "description":  r["description"],
-                "status":       r["status"],
-                "created_at":   str(r["created_at"]),
-                "computed_at":  str(r["computed_at"]) if r["computed_at"] else None,
+                "scenario_id": r["id"],
+                "name": r["name"],
+                "description": r["description"],
+                "status": r["status"],
+                "created_at": str(r["created_at"]),
+                "computed_at": str(r["computed_at"]) if r["computed_at"] else None,
                 "path_length_delta_pct": r["path_delta"],
                 "nodes_removed": r["nodes_removed"],
             }
@@ -173,8 +174,8 @@ def compare_scenarios(
     return {
         "scenarios": [
             {
-                "scenario_id":   r["id"],
-                "name":          r["name"],
+                "scenario_id": r["id"],
+                "name": r["name"],
                 "impact_report": r["impact_report"],
             }
             for r in rows
@@ -201,14 +202,14 @@ def get_scenario(scenario_id: str, conn=Depends(get_db)) -> dict:
 
     row = dict(row)
     return {
-        "scenario_id":   row["id"],
-        "name":          row["name"],
-        "description":   row["description"],
-        "operations":    row["operations"],
-        "status":        row["status"],
+        "scenario_id": row["id"],
+        "name": row["name"],
+        "description": row["description"],
+        "operations": row["operations"],
+        "status": row["status"],
         "impact_report": row["impact_report"],
-        "created_at":    str(row["created_at"]),
-        "computed_at":   str(row["computed_at"]) if row["computed_at"] else None,
+        "created_at": str(row["created_at"]),
+        "computed_at": str(row["computed_at"]) if row["computed_at"] else None,
     }
 
 

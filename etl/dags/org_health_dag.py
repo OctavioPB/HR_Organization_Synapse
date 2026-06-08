@@ -41,6 +41,7 @@ def _compute_health(**context) -> dict:
     """Compute and persist the org health score for today's snapshot date."""
     import sys
     from pathlib import Path
+
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
     from ingestion.db import get_conn
@@ -60,6 +61,7 @@ def _generate_brief(**context) -> dict:
     """Generate executive briefing and push to XCom."""
     import sys
     from pathlib import Path
+
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
     from ingestion.db import get_conn
@@ -68,7 +70,7 @@ def _generate_brief(**context) -> dict:
 
     with get_conn() as conn:
         current = queries.fetch_latest_org_health(conn)
-        trend   = queries.fetch_org_health_trend(8, conn)
+        trend = queries.fetch_org_health_trend(8, conn)
 
     if not current:
         raise RuntimeError("No org health score found — compute_health may have failed.")
@@ -76,7 +78,9 @@ def _generate_brief(**context) -> dict:
     briefing = generate_briefing(current, trend)
     logger.info(
         "Briefing generated: score=%.1f tier=%s delta=%+.1f",
-        briefing["score"], briefing["tier"], briefing["trend_delta"],
+        briefing["score"],
+        briefing["tier"],
+        briefing["trend_delta"],
     )
     return briefing
 
@@ -94,42 +98,58 @@ def _deliver_brief(**context) -> None:
         logger.warning("No briefing data in XCom — skipping delivery.")
         return
 
-    score      = briefing["score"]
-    tier       = briefing["tier"]
-    delta      = briefing["trend_delta"]
-    narrative  = briefing["narrative"]
-    actions    = briefing.get("recommended_actions", [])
-    computed   = briefing.get("computed_at", "—")
+    score = briefing["score"]
+    tier = briefing["tier"]
+    delta = briefing["trend_delta"]
+    narrative = briefing["narrative"]
+    actions = briefing.get("recommended_actions", [])
+    computed = briefing.get("computed_at", "—")
 
     _deliver_slack(score, tier, delta, narrative, actions, computed)
     _deliver_email(score, tier, delta, narrative, actions, computed)
 
 
 def _deliver_slack(
-    score: float, tier: str, delta: float,
-    narrative: str, actions: list[str], computed: str,
+    score: float,
+    tier: str,
+    delta: float,
+    narrative: str,
+    actions: list[str],
+    computed: str,
 ) -> None:
-    token   = os.environ.get("SLACK_BOT_TOKEN", "")
+    token = os.environ.get("SLACK_BOT_TOKEN", "")
     channel = os.environ.get("SLACK_BRIEFING_CHANNEL", "")
     if not (token and channel):
         logger.info("Slack delivery skipped — SLACK_BOT_TOKEN or SLACK_BRIEFING_CHANNEL not set.")
         return
 
-    tier_emoji = {"healthy": ":white_check_mark:", "caution": ":warning:",
-                  "at_risk": ":x:", "critical": ":rotating_light:"}.get(tier, ":bar_chart:")
-    delta_str  = f"+{delta:.1f}" if delta >= 0 else f"{delta:.1f}"
+    tier_emoji = {
+        "healthy": ":white_check_mark:",
+        "caution": ":warning:",
+        "at_risk": ":x:",
+        "critical": ":rotating_light:",
+    }.get(tier, ":bar_chart:")
+    delta_str = f"+{delta:.1f}" if delta >= 0 else f"{delta:.1f}"
 
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": "📊 Weekly Org Health Briefing"}},
-        {"type": "section", "text": {"type": "mrkdwn",
-            "text": f"*{score}/100* {tier_emoji} `{tier.upper()}` · {delta_str} pts vs last week · _{computed}_"}},
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{score}/100* {tier_emoji} `{tier.upper()}` · {delta_str} pts vs last week · _{computed}_",
+            },
+        },
         {"type": "section", "text": {"type": "mrkdwn", "text": narrative}},
-        {"type": "section", "text": {"type": "mrkdwn",
-            "text": "*Recommended actions:*\n" + "\n".join(f"• {a}" for a in actions)}},
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "*Recommended actions:*\n" + "\n".join(f"• {a}" for a in actions)},
+        },
     ]
 
     try:
         import urllib.request
+
         payload = json.dumps({"channel": channel, "blocks": blocks}).encode()
         req = urllib.request.Request(
             "https://slack.com/api/chat.postMessage",
@@ -147,10 +167,14 @@ def _deliver_slack(
 
 
 def _deliver_email(
-    score: float, tier: str, delta: float,
-    narrative: str, actions: list[str], computed: str,
+    score: float,
+    tier: str,
+    delta: float,
+    narrative: str,
+    actions: list[str],
+    computed: str,
 ) -> None:
-    api_key  = os.environ.get("SENDGRID_API_KEY", "")
+    api_key = os.environ.get("SENDGRID_API_KEY", "")
     to_email = os.environ.get("BRIEFING_EMAIL_TO", "")
     from_email = os.environ.get("BRIEFING_EMAIL_FROM", "noreply@org-synapse.internal")
     if not (api_key and to_email):
@@ -158,26 +182,27 @@ def _deliver_email(
         return
 
     delta_str = f"+{delta:.1f}" if delta >= 0 else f"{delta:.1f}"
-    subject   = f"[Org Synapse] Weekly Health Briefing — {score}/100 ({tier}) {delta_str} pts"
+    subject = f"[Org Synapse] Weekly Health Briefing — {score}/100 ({tier}) {delta_str} pts"
     body_html = (
         f"<h2>Org Health Score: {score}/100</h2>"
         f"<p><b>Tier:</b> {tier} &nbsp;·&nbsp; <b>Change:</b> {delta_str} pts &nbsp;·&nbsp; "
         f"<b>Computed:</b> {computed}</p>"
         f"<p>{narrative}</p>"
-        f"<h3>Recommended Actions</h3><ul>"
-        + "".join(f"<li>{a}</li>" for a in actions)
-        + "</ul>"
+        f"<h3>Recommended Actions</h3><ul>" + "".join(f"<li>{a}</li>" for a in actions) + "</ul>"
     )
 
-    payload = json.dumps({
-        "personalizations": [{"to": [{"email": to_email}]}],
-        "from": {"email": from_email},
-        "subject": subject,
-        "content": [{"type": "text/html", "value": body_html}],
-    }).encode()
+    payload = json.dumps(
+        {
+            "personalizations": [{"to": [{"email": to_email}]}],
+            "from": {"email": from_email},
+            "subject": subject,
+            "content": [{"type": "text/html", "value": body_html}],
+        }
+    ).encode()
 
     try:
         import urllib.request
+
         req = urllib.request.Request(
             "https://api.sendgrid.com/v3/mail/send",
             data=payload,
@@ -194,13 +219,12 @@ def _deliver_email(
 with DAG(
     dag_id="org_health_dag",
     description="Weekly Org Health Score computation and executive briefing delivery",
-    schedule_interval="0 6 * * 1",   # Every Monday 06:00 UTC
+    schedule_interval="0 6 * * 1",  # Every Monday 06:00 UTC
     start_date=datetime(2025, 1, 6),
     catchup=False,
     default_args=default_args,
     tags=["org-synapse", "f9", "executive"],
 ) as dag:
-
     wait_for_graph = ExternalTaskSensor(
         task_id="wait_for_graph_builder",
         external_dag_id="graph_builder_dag",

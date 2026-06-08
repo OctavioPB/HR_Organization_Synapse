@@ -65,8 +65,8 @@ def _graph_stats_for_date(snap_date: date | None, conn) -> dict:
 
     return {
         "snapshot_date": str(snap_date),
-        "node_count":    int(row["node_count"] or 0),
-        "edge_count":    int(edge_row["edge_count"] or 0),
+        "node_count": int(row["node_count"] or 0),
+        "edge_count": int(edge_row["edge_count"] or 0),
         "avg_betweenness": round(float(row["avg_betweenness"] or 0), 6),
     }
 
@@ -139,7 +139,7 @@ def task_generate_departure_report(employee_id: str, departure_date_str: str, co
         )
         spof_row = cur.fetchone()
     predicted_spof = float(spof_row["spof_score"]) if spof_row else None
-    spof_flag      = spof_row["flag"] if spof_row else None
+    spof_flag = spof_row["flag"] if spof_row else None
 
     # 2. Fetch churn probability at t-90
     with conn.cursor() as cur:
@@ -158,20 +158,17 @@ def task_generate_departure_report(employee_id: str, departure_date_str: str, co
 
     # 3. Gather snapshot stats at four points
     t_minus_90 = _nearest_snapshot_date(departure_date - timedelta(days=90), conn)
-    t_minus_0  = _nearest_snapshot_date(departure_date, conn)
-    t_plus_30  = _nearest_snapshot_date(departure_date + timedelta(days=30), conn)
-    t_plus_60  = _nearest_snapshot_date(departure_date + timedelta(days=60), conn)
+    t_minus_0 = _nearest_snapshot_date(departure_date, conn)
+    t_plus_30 = _nearest_snapshot_date(departure_date + timedelta(days=30), conn)
+    t_plus_60 = _nearest_snapshot_date(departure_date + timedelta(days=60), conn)
 
     stats_before = _graph_stats_for_date(t_minus_0, conn)
-    stats_30     = _graph_stats_for_date(t_plus_30, conn)
-    stats_60     = _graph_stats_for_date(t_plus_60, conn)
+    stats_30 = _graph_stats_for_date(t_plus_30, conn)
+    stats_60 = _graph_stats_for_date(t_plus_60, conn)
 
     bw_before = stats_before["avg_betweenness"]
-    bw_after  = stats_30["avg_betweenness"]
-    bw_delta_pct = (
-        round((bw_after - bw_before) / max(bw_before, 1e-9) * 100, 1)
-        if bw_before > 0 else 0.0
-    )
+    bw_after = stats_30["avg_betweenness"]
+    bw_delta_pct = round((bw_after - bw_before) / max(bw_before, 1e-9) * 100, 1) if bw_before > 0 else 0.0
 
     # 4. New silo alerts after departure
     new_silo_alerts = _count_new_silo_alerts(departure_date, 30, conn)
@@ -184,22 +181,22 @@ def task_generate_departure_report(employee_id: str, departure_date_str: str, co
 
     # Assemble impact_json
     impact_json: dict[str, Any] = {
-        "employee_id":       employee_id,
-        "employee_name":     emp_name,
-        "employee_dept":     emp_dept,
-        "departure_date":    departure_date_str,
-        "predicted_spof_score":  predicted_spof,
-        "predicted_spof_flag":   spof_flag,
-        "predicted_churn_prob":  predicted_churn,
-        "was_flagged_critical":  spof_flag == "critical",
+        "employee_id": employee_id,
+        "employee_name": emp_name,
+        "employee_dept": emp_dept,
+        "departure_date": departure_date_str,
+        "predicted_spof_score": predicted_spof,
+        "predicted_spof_flag": spof_flag,
+        "predicted_churn_prob": predicted_churn,
+        "was_flagged_critical": spof_flag == "critical",
         "graph_diameter_delta_pct": bw_delta_pct,
-        "new_silo_alerts":   new_silo_alerts,
+        "new_silo_alerts": new_silo_alerts,
         "recovery_trajectory": recovery,
         "snapshots": {
             "t_minus_90": _graph_stats_for_date(t_minus_90, conn),
-            "t_minus_0":  stats_before,
-            "t_plus_30":  stats_30,
-            "t_plus_60":  stats_60,
+            "t_minus_0": stats_before,
+            "t_plus_30": stats_30,
+            "t_plus_60": stats_60,
         },
         "succession_candidate": succession_candidate,
     }
@@ -243,10 +240,10 @@ def _generate_narrative(impact: dict) -> str:
         return call_claude(prompt, max_tokens=300)
     except Exception as exc:
         logger.warning("Narrative generation failed: %s", exc)
-        name   = impact.get("employee_name", "This employee")
-        spof   = impact.get("predicted_spof_score")
-        delta  = impact.get("graph_diameter_delta_pct", 0)
-        silos  = impact.get("new_silo_alerts", 0)
+        name = impact.get("employee_name", "This employee")
+        spof = impact.get("predicted_spof_score")
+        delta = impact.get("graph_diameter_delta_pct", 0)
+        silos = impact.get("new_silo_alerts", 0)
         recovery = impact.get("recovery_trajectory", "unknown")
         spof_str = f"{round(spof*100)}%" if spof is not None else "unscored"
         return (

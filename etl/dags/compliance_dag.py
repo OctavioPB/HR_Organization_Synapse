@@ -26,13 +26,13 @@ from airflow.utils.dates import days_ago
 logger = logging.getLogger(__name__)
 
 _REPORT_DIR = os.environ.get("COMPLIANCE_REPORT_DIR", "/tmp/compliance_reports")
-_DPO_EMAIL  = os.environ.get("DPO_EMAIL", "")
+_DPO_EMAIL = os.environ.get("DPO_EMAIL", "")
 _SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 
 default_args = {
-    "owner":          "org-synapse",
-    "retries":        1,
-    "retry_delay":    timedelta(minutes=5),
+    "owner": "org-synapse",
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,
 }
 
@@ -43,6 +43,7 @@ default_args = {
 def _run_purge(**context) -> dict:
     """Delete rows that exceed the data retention policy."""
     import sys
+
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
     from ingestion.db import get_conn
@@ -63,6 +64,7 @@ def _gen_report(**context) -> str:
     """Generate the quarterly compliance HTML report and write to disk."""
     import sys
     from datetime import date
+
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
     from ingestion.db import get_conn
@@ -111,27 +113,30 @@ def _send_email(html_content: str, report_filename: str) -> None:
     import urllib.request
 
     from datetime import date
+
     quarter = (date.today().month - 1) // 3 + 1
     subject = f"Org Synapse — Q{quarter} {date.today().year} Compliance Report"
 
-    payload = json.dumps({
-        "personalizations": [{"to": [{"email": _DPO_EMAIL}]}],
-        "from":             {"email": "compliance@org-synapse.internal"},
-        "subject":          subject,
-        "content": [
-            {
-                "type":  "text/html",
-                "value": html_content,
-            }
-        ],
-    }).encode("utf-8")
+    payload = json.dumps(
+        {
+            "personalizations": [{"to": [{"email": _DPO_EMAIL}]}],
+            "from": {"email": "compliance@org-synapse.internal"},
+            "subject": subject,
+            "content": [
+                {
+                    "type": "text/html",
+                    "value": html_content,
+                }
+            ],
+        }
+    ).encode("utf-8")
 
     req = urllib.request.Request(
         "https://api.sendgrid.com/v3/mail/send",
         data=payload,
         headers={
             "Authorization": f"Bearer {_SENDGRID_API_KEY}",
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
         },
         method="POST",
     )
@@ -154,7 +159,6 @@ with DAG(
     catchup=False,
     tags=["compliance", "gdpr", "ccpa", "retention"],
 ) as dag:
-
     run_purge = PythonOperator(
         task_id="run_purge",
         python_callable=_run_purge,

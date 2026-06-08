@@ -75,7 +75,9 @@ async def broadcast_alerts(
     notified = await publish(message, manager)
     logger.info(
         "internal/alerts/broadcast: source=%s alerts=%d ws_clients=%d",
-        payload.source, len(payload.alerts), manager.connection_count,
+        payload.source,
+        len(payload.alerts),
+        manager.connection_count,
     )
 
     return BroadcastResponse(

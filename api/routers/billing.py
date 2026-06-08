@@ -50,7 +50,7 @@ def get_billing_usage(
     tenant = request.state.tenant
     current = fetch_current_usage(tenant.tenant_id, conn)
     history = fetch_tenant_usage(tenant.tenant_id, months, conn)
-    limit   = PLAN_LIMITS[tenant.plan]["events_per_month"]
+    limit = PLAN_LIMITS[tenant.plan]["events_per_month"]
 
     return BillingUsageResponse(
         tenant_id=tenant.tenant_id,
@@ -77,11 +77,9 @@ def _validate_stripe_signature(body: bytes, sig_header: str, secret: str) -> boo
     try:
         parts = dict(s.split("=", 1) for s in sig_header.split(","))
         timestamp = parts.get("t", "")
-        v1        = parts.get("v1", "")
-        payload   = f"{timestamp}.{body.decode('utf-8')}"
-        expected  = hmac.new(
-            secret.encode(), payload.encode(), hashlib.sha256
-        ).hexdigest()
+        v1 = parts.get("v1", "")
+        payload = f"{timestamp}.{body.decode('utf-8')}"
+        expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, v1)
     except Exception:
         return False
@@ -110,7 +108,7 @@ async def stripe_webhook(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Malformed JSON payload.")
 
-    event_id   = event.get("id", "")
+    event_id = event.get("id", "")
     event_type = event.get("type", "")
 
     if not event_id:
@@ -179,7 +177,7 @@ def _handle_stripe_event(event_type: str, event: dict, conn) -> None:
 
 def _handle_subscription_updated(sub: dict, conn) -> None:
     customer_id = sub.get("customer", "")
-    new_plan    = _stripe_plan_to_internal(sub.get("items", {}).get("data", [{}])[0])
+    new_plan = _stripe_plan_to_internal(sub.get("items", {}).get("data", [{}])[0])
 
     if not customer_id or not new_plan:
         return
@@ -212,22 +210,23 @@ def _handle_payment_failed(invoice: dict, conn) -> None:
     # Don't immediately deactivate on first failure — Stripe retries.
     # Log only; dunning management is handled externally.
     customer_id = invoice.get("customer", "")
-    amount      = invoice.get("amount_due", 0) / 100  # cents → dollars
+    amount = invoice.get("amount_due", 0) / 100  # cents → dollars
     logger.warning(
         "Invoice payment failed: customer=%s amount=$%.2f — dunning initiated.",
-        customer_id, amount,
+        customer_id,
+        amount,
     )
 
 
 def _stripe_plan_to_internal(item: dict) -> str | None:
     """Map a Stripe subscription item to an internal plan name."""
-    price_id   = (item.get("price") or {}).get("id", "")
+    price_id = (item.get("price") or {}).get("id", "")
     product_id = (item.get("price") or {}).get("product", "")
 
     # These mappings are set via env vars so they can change without a deploy
     plan_map = {
-        os.environ.get("STRIPE_PRICE_STARTER",    ""): "starter",
-        os.environ.get("STRIPE_PRICE_PRO",         ""): "pro",
-        os.environ.get("STRIPE_PRICE_ENTERPRISE",  ""): "enterprise",
+        os.environ.get("STRIPE_PRICE_STARTER", ""): "starter",
+        os.environ.get("STRIPE_PRICE_PRO", ""): "pro",
+        os.environ.get("STRIPE_PRICE_ENTERPRISE", ""): "enterprise",
     }
     return plan_map.get(price_id) or plan_map.get(product_id)

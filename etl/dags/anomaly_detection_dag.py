@@ -43,7 +43,6 @@ _DEFAULT_ARGS = {
     tags=["org-synapse", "ml", "weekly"],
 )
 def anomaly_detection_dag():
-
     @task()
     def extract_features(**context) -> dict:
         """Extract rolling graph features for all employees."""

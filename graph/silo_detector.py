@@ -92,27 +92,26 @@ def detect_silos(
         if len(members) >= total_nodes:
             logger.debug(
                 "Skipping dept '%s': contains all %d employees (no dept attribute set)",
-                dept, len(members),
+                dept,
+                len(members),
             )
             continue
 
-        internal = sum(
-            1 for u, v in G.edges()
-            if u in members and v in members
-        )
+        internal = sum(1 for u, v in G.edges() if u in members and v in members)
         # Count only outgoing edges (u in dept, v outside) — this measures how
         # isolated a department's own communication behaviour is, unaffected by
         # how often other active departments reach INTO them.
-        outgoing_external = sum(
-            1 for u, v in G.edges()
-            if u in members and v not in members
-        )
+        outgoing_external = sum(1 for u, v in G.edges() if u in members and v not in members)
 
         isolation_ratio = internal / max(outgoing_external, 1)
 
         logger.debug(
             "Dept '%s': %d members, %d internal, %d outgoing-external, ratio=%.2f",
-            dept, len(members), internal, outgoing_external, isolation_ratio,
+            dept,
+            len(members),
+            internal,
+            outgoing_external,
+            isolation_ratio,
         )
 
         if isolation_ratio <= threshold:
@@ -120,13 +119,15 @@ def detect_silos(
 
         severity = "critical" if isolation_ratio > threshold * 2 else "high"
 
-        alerts.append(SiloAlert(
-            community_id=dept_idx,
-            members=sorted(members),
-            isolation_ratio=round(isolation_ratio, 4),
-            departments={dept},
-            severity=severity,
-        ))
+        alerts.append(
+            SiloAlert(
+                community_id=dept_idx,
+                members=sorted(members),
+                isolation_ratio=round(isolation_ratio, 4),
+                departments={dept},
+                severity=severity,
+            )
+        )
 
     alerts.sort(key=lambda a: a.isolation_ratio, reverse=True)
     return alerts
@@ -151,14 +152,16 @@ def write_alerts(
             str(uuid.uuid4()),
             "silo",
             alert.severity,
-            json.dumps({
-                "community_id": alert.community_id,
-                "member_count": len(alert.members),
-                "member_ids": alert.members,
-                "departments": sorted(alert.departments),
-                "isolation_ratio": alert.isolation_ratio,
-                "snapshot_date": snapshot_date.isoformat(),
-            }),
+            json.dumps(
+                {
+                    "community_id": alert.community_id,
+                    "member_count": len(alert.members),
+                    "member_ids": alert.members,
+                    "departments": sorted(alert.departments),
+                    "isolation_ratio": alert.isolation_ratio,
+                    "snapshot_date": snapshot_date.isoformat(),
+                }
+            ),
             (
                 f"{next(iter(alert.departments), 'Unknown')} dept. isolation_ratio={alert.isolation_ratio:.2f} "
                 f"({len(alert.members)} members)"
@@ -178,9 +181,7 @@ def write_alerts(
                 rows,
             )
 
-    logger.info(
-        "Wrote %d silo alert(s) for %s", len(alerts), snapshot_date
-    )
+    logger.info("Wrote %d silo alert(s) for %s", len(alerts), snapshot_date)
 
 
 def main() -> None:
@@ -189,12 +190,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Detect and persist silo alerts.")
     parser.add_argument("--snapshot-date", type=date.fromisoformat, required=True)
     parser.add_argument(
-        "--threshold", type=float,
+        "--threshold",
+        type=float,
         default=_DEFAULT_SILO_THRESHOLD,
         help=f"Isolation ratio threshold (default: {_DEFAULT_SILO_THRESHOLD})",
     )
     parser.add_argument(
-        "--window-days", type=int,
+        "--window-days",
+        type=int,
         default=int(os.environ.get("GRAPH_WINDOW_DAYS", "30")),
     )
     args = parser.parse_args()
@@ -209,14 +212,15 @@ def main() -> None:
     communities = compute_community(G)
     alerts = detect_silos(G, communities, threshold=args.threshold)
 
-    logger.info(
-        "Detected %d silo(s) (threshold=%.1f)", len(alerts), args.threshold
-    )
+    logger.info("Detected %d silo(s) (threshold=%.1f)", len(alerts), args.threshold)
     for a in alerts:
         logger.info(
             "  Community %d | ratio=%.2f | severity=%s | depts=%s | members=%d",
-            a.community_id, a.isolation_ratio, a.severity,
-            sorted(a.departments), len(a.members),
+            a.community_id,
+            a.isolation_ratio,
+            a.severity,
+            sorted(a.departments),
+            len(a.members),
         )
 
     write_alerts(alerts, args.snapshot_date)

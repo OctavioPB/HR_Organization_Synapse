@@ -213,6 +213,7 @@ def fetch_communities(snapshot_date: date, conn) -> list[dict]:
 
     # Group by community
     from collections import defaultdict
+
     comm_members: dict[int, list[str]] = defaultdict(list)
     comm_depts: dict[int, set[str]] = defaultdict(set)
     for r in rows:
@@ -744,6 +745,7 @@ def fetch_succession_recommendations(
 
     # Group candidates under each source
     from collections import defaultdict
+
     candidates_by_source: dict[str, list[dict]] = defaultdict(list)
     for r in candidate_rows:
         candidates_by_source[r["source_employee_id"]].append(dict(r))
@@ -879,6 +881,7 @@ def fetch_knowledge_scores(
             # impacted_departments is JSONB → already a list from psycopg2
             if isinstance(d["impacted_departments"], str):
                 import json
+
                 d["impacted_departments"] = json.loads(d["impacted_departments"])
             d["impacted_departments"] = d["impacted_departments"] or []
             rows.append(d)

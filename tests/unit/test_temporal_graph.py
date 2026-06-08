@@ -73,9 +73,9 @@ def test_build_x_shape():
 def test_build_x_presence_mask():
     rows = [_make_snapshot_row("aaa"), _make_snapshot_row("ccc")]
     _, presence = _build_x(_VOCAB, rows)
-    assert presence[0] is np.bool_(True)   # "aaa" present
+    assert presence[0] is np.bool_(True)  # "aaa" present
     assert presence[1] is np.bool_(False)  # "bbb" absent
-    assert presence[2] is np.bool_(True)   # "ccc" present
+    assert presence[2] is np.bool_(True)  # "ccc" present
 
 
 def test_build_x_absent_employee_is_zero():
@@ -129,6 +129,7 @@ def test_temporal_gnn_import_error_without_tgnn():
     """TemporalRiskGNN raises ImportError when torch_geometric_temporal is absent."""
     import sys
     import importlib
+
     with patch.dict(
         sys.modules,
         {
@@ -138,6 +139,7 @@ def test_temporal_gnn_import_error_without_tgnn():
         },
     ):
         import graph.temporal.model as tmod
+
         importlib.reload(tmod)
         if not tmod._TGNN_AVAILABLE:
             with pytest.raises(ImportError, match="torch_geometric_temporal"):
@@ -148,6 +150,7 @@ def test_temporal_gnn_import_error_without_tgnn():
 def _make_snapshot_tensors(N: int, E_per_snap: int, F: int, T: int, device: str = "cpu"):
     """Helper: build T synthetic snapshot dicts."""
     import torch
+
     snaps = []
     for _ in range(T):
         x = torch.randn(N, F)
@@ -211,7 +214,7 @@ def test_reconstruction_error_known_values():
     from graph.temporal.model import TemporalRiskGNN
 
     model = TemporalRiskGNN(in_channels=2, hidden_channels=8)
-    x_pred   = torch.tensor([[1.0, 1.0], [0.0, 0.0]], dtype=torch.float)
+    x_pred = torch.tensor([[1.0, 1.0], [0.0, 0.0]], dtype=torch.float)
     x_target = torch.tensor([[0.0, 0.0], [0.0, 0.0]], dtype=torch.float)
     err = model.reconstruction_error(x_pred, x_target)
     # node 0: ((1-0)^2 + (1-0)^2) / 2 = 1.0
@@ -226,7 +229,7 @@ def test_reconstruction_error_presence_mask_zeros_absent():
     from graph.temporal.model import TemporalRiskGNN
 
     model = TemporalRiskGNN(in_channels=2, hidden_channels=8)
-    x_pred   = torch.tensor([[2.0, 2.0], [2.0, 2.0]], dtype=torch.float)
+    x_pred = torch.tensor([[2.0, 2.0], [2.0, 2.0]], dtype=torch.float)
     x_target = torch.zeros(2, 2)
     mask = torch.tensor([True, False])
     err = model.reconstruction_error(x_pred, x_target, presence_mask=mask)
@@ -240,7 +243,7 @@ def test_scalar_loss_matches_mean_present():
     from graph.temporal.model import TemporalRiskGNN
 
     model = TemporalRiskGNN(in_channels=2, hidden_channels=8)
-    x_pred   = torch.tensor([[1.0, 0.0], [0.0, 0.0], [2.0, 0.0]], dtype=torch.float)
+    x_pred = torch.tensor([[1.0, 0.0], [0.0, 0.0], [2.0, 0.0]], dtype=torch.float)
     x_target = torch.zeros(3, 2)
     mask = torch.tensor([True, False, True])
 
@@ -372,9 +375,7 @@ def test_temporal_anomalies_200(client):
 
 def test_temporal_anomalies_404_no_run(client):
     test_client, _ = client
-    with patch(
-        "api.routers.graph.queries.fetch_latest_temporal_anomaly_date", return_value=None
-    ):
+    with patch("api.routers.graph.queries.fetch_latest_temporal_anomaly_date", return_value=None):
         resp = test_client.get("/graph/temporal/anomalies")
     assert resp.status_code == 404
 
@@ -383,9 +384,7 @@ def test_temporal_anomalies_min_score_forwarded(client):
     test_client, _ = client
     with (
         patch("api.routers.graph.queries.fetch_latest_temporal_anomaly_date", return_value=_DATE),
-        patch(
-            "api.routers.graph.queries.fetch_temporal_anomaly_scores", return_value=[]
-        ) as mock_q,
+        patch("api.routers.graph.queries.fetch_temporal_anomaly_scores", return_value=[]) as mock_q,
     ):
         test_client.get("/graph/temporal/anomalies?min_score=0.6")
     # positional args: (scored_at, top, min_score, conn)

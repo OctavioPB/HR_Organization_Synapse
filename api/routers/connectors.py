@@ -170,6 +170,7 @@ def _publish_to_kafka(channel: str, event) -> None:
     """
     try:
         from ingestion.producers.base_producer import BaseProducer
+
         kafka_producer = BaseProducer._build_kafka_producer(_KAFKA_BOOTSTRAP)
         try:
             kafka_producer.send(

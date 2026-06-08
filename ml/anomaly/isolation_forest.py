@@ -138,7 +138,9 @@ def run_isolation_forest(
     anomaly_count = sum(1 for r in results if r["is_anomaly"])
     logger.info(
         "run_isolation_forest: %d employees, %d anomalies (contamination=%.2f)",
-        len(results), anomaly_count, contamination,
+        len(results),
+        anomaly_count,
+        contamination,
     )
     return results
 
@@ -195,7 +197,9 @@ def write_anomaly_alerts(
     critical_count = sum(1 for a in anomalies if _severity(a["anomaly_score"]) == "critical")
     logger.info(
         "write_anomaly_alerts: wrote %d alerts for %s (critical=%d)",
-        len(rows), snapshot_date, critical_count,
+        len(rows),
+        snapshot_date,
+        critical_count,
     )
 
 
@@ -205,16 +209,16 @@ def write_anomaly_alerts(
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    parser = argparse.ArgumentParser(
-        description="Run Isolation Forest anomaly detection and write alerts."
-    )
+    parser = argparse.ArgumentParser(description="Run Isolation Forest anomaly detection and write alerts.")
     parser.add_argument("--snapshot-date", type=date.fromisoformat, required=True)
     parser.add_argument(
-        "--window-days", type=int,
+        "--window-days",
+        type=int,
         default=int(os.environ.get("GRAPH_WINDOW_DAYS", "30")),
     )
     parser.add_argument(
-        "--contamination", type=float,
+        "--contamination",
+        type=float,
         default=_DEFAULT_CONTAMINATION,
     )
     args = parser.parse_args()

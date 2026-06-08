@@ -52,6 +52,7 @@ class GitHubProducer(BaseProducer):
         _raw_map = os.environ.get("GITHUB_EMPLOYEE_MAP", "{}")
         try:
             import json
+
             self._employee_map = json.loads(_raw_map)
         except Exception:
             logger.warning("GITHUB_EMPLOYEE_MAP is not valid JSON; ignoring")
@@ -63,9 +64,7 @@ class GitHubProducer(BaseProducer):
     def connect(self) -> None:
         """Verify webhook secret is configured (no network call — webhook is inbound)."""
         if not self._webhook_secret:
-            logger.warning(
-                "GITHUB_WEBHOOK_SECRET is not set; webhook signature verification disabled"
-            )
+            logger.warning("GITHUB_WEBHOOK_SECRET is not set; webhook signature verification disabled")
         ConnectorRegistry.get().set_healthy("github", healthy=True)
         logger.info("GitHub connector: ready to receive webhook events")
 
@@ -111,7 +110,7 @@ class GitHubProducer(BaseProducer):
             body,
             hashlib.sha256,
         ).hexdigest()
-        received = signature_header[len("sha256="):]
+        received = signature_header[len("sha256=") :]
         return hmac.compare_digest(expected, received)
 
     # ── Webhook parsing ───────────────────────────────────────────────────────
@@ -182,11 +181,7 @@ class GitHubProducer(BaseProducer):
     def _extract_timestamp(self, payload: dict) -> datetime:
         pr = payload.get("pull_request", {})
         review = payload.get("review", {})
-        raw = (
-            review.get("submitted_at")
-            or pr.get("updated_at")
-            or pr.get("created_at")
-        )
+        raw = review.get("submitted_at") or pr.get("updated_at") or pr.get("created_at")
         if raw:
             try:
                 return datetime.fromisoformat(raw.replace("Z", "+00:00"))

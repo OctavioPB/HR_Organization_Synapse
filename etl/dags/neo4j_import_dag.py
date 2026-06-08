@@ -38,20 +38,22 @@ _DEFAULT_ARGS = {
     tags=["org-synapse", "neo4j", "graph"],
 )
 def neo4j_import_dag():
-
     @task()
     def ensure_indexes() -> dict:
         from etl.tasks.neo4j_import import task_ensure_indexes as _ensure
+
         return _ensure()
 
     @task()
     def import_graph(**context) -> dict:
         from etl.tasks.neo4j_import import task_import_graph as _import
+
         return _import(context["ds"], window_days=_WINDOW_DAYS)
 
     @task()
     def verify_import(**context) -> dict:
         from etl.tasks.neo4j_import import task_verify_import as _verify
+
         return _verify(context["ds"])
 
     idx = ensure_indexes()

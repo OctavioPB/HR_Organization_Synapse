@@ -33,9 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 logger = logging.getLogger(__name__)
 
-_CHECKPOINT_DIR  = os.environ.get("GNN_CHECKPOINT_DIR", "checkpoints")
-_HIGH_THRESHOLD  = float(os.environ.get("CHURN_HIGH_THRESHOLD", "0.6"))
-_MED_THRESHOLD   = float(os.environ.get("CHURN_MED_THRESHOLD", "0.3"))
+_CHECKPOINT_DIR = os.environ.get("GNN_CHECKPOINT_DIR", "checkpoints")
+_HIGH_THRESHOLD = float(os.environ.get("CHURN_HIGH_THRESHOLD", "0.6"))
+_MED_THRESHOLD = float(os.environ.get("CHURN_MED_THRESHOLD", "0.3"))
 # Number of top-attention neighbors surfaced per employee for explainability.
 _INFLUENCE_TOP_K = int(os.environ.get("CHURN_INFLUENCE_TOP_K", "3"))
 
@@ -99,10 +99,7 @@ def _latest_checkpoint() -> str:
     pattern = str(Path(_CHECKPOINT_DIR) / "churn_gat_*.pt")
     candidates = sorted(glob.glob(pattern))
     if not candidates:
-        raise FileNotFoundError(
-            f"No churn_gat_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. "
-            "Run trainer.py first."
-        )
+        raise FileNotFoundError(f"No churn_gat_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. " "Run trainer.py first.")
     return candidates[-1]
 
 
@@ -155,9 +152,7 @@ def score(
     influence_by_idx: dict[int, list[dict]] = {}
     try:
         att_edge_index, att_weights = attention
-        influence_by_idx = _top_influence_neighbors(
-            att_edge_index, att_weights, dataset["employee_ids"]
-        )
+        influence_by_idx = _top_influence_neighbors(att_edge_index, att_weights, dataset["employee_ids"])
     except Exception as exc:  # pragma: no cover — never block scoring on XAI
         logger.warning("Could not extract attention neighbors: %s", exc)
 

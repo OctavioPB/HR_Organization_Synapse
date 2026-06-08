@@ -29,33 +29,91 @@ _CHANNEL_WEIGHTS: list[tuple[str, float]] = [
 ]
 
 _DIRECTION_BY_CHANNEL: dict[str, list[str]] = {
-    "slack":    ["sent", "mentioned"],
-    "email":    ["sent"],
-    "jira":     ["assigned", "mentioned"],
+    "slack": ["sent", "mentioned"],
+    "email": ["sent"],
+    "jira": ["assigned", "mentioned"],
     "calendar": ["invited"],
-    "github":   ["reviewed", "assigned"],
+    "github": ["reviewed", "assigned"],
 }
 
 _ROLES_BY_DEPT: dict[str, list[str]] = {
     "Engineering": ["Software Engineer", "Senior Engineer", "Tech Lead", "Engineering Manager"],
-    "Sales":       ["Account Executive", "Sales Representative", "Sales Manager", "BDR"],
-    "HR":          ["HR Specialist", "Recruiter", "HR Manager", "People Ops Analyst"],
+    "Sales": ["Account Executive", "Sales Representative", "Sales Manager", "BDR"],
+    "HR": ["HR Specialist", "Recruiter", "HR Manager", "People Ops Analyst"],
 }
 
 _FIRST_NAMES = [
-    "Alice", "Bob", "Carol", "Dave", "Eva", "Frank", "Grace", "Hector",
-    "Ivy", "James", "Kate", "Liam", "Mia", "Noah", "Olivia", "Paul",
-    "Quinn", "Rita", "Sam", "Tara", "Uma", "Victor", "Wendy", "Xavier",
-    "Yara", "Zoe", "Aaron", "Beth", "Carl", "Diana", "Ethan", "Fiona",
-    "George", "Hana", "Ian", "Julia", "Kevin", "Laura",
+    "Alice",
+    "Bob",
+    "Carol",
+    "Dave",
+    "Eva",
+    "Frank",
+    "Grace",
+    "Hector",
+    "Ivy",
+    "James",
+    "Kate",
+    "Liam",
+    "Mia",
+    "Noah",
+    "Olivia",
+    "Paul",
+    "Quinn",
+    "Rita",
+    "Sam",
+    "Tara",
+    "Uma",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yara",
+    "Zoe",
+    "Aaron",
+    "Beth",
+    "Carl",
+    "Diana",
+    "Ethan",
+    "Fiona",
+    "George",
+    "Hana",
+    "Ian",
+    "Julia",
+    "Kevin",
+    "Laura",
 ]
 
 _LAST_NAMES = [
-    "Smith", "Jones", "Williams", "Brown", "Davis", "Miller", "Wilson",
-    "Moore", "Taylor", "Anderson", "Thomas", "Jackson", "White", "Harris",
-    "Martin", "Garcia", "Martinez", "Robinson", "Clark", "Rodriguez",
-    "Lewis", "Lee", "Walker", "Hall", "Allen", "Young", "Hernandez",
-    "King", "Wright", "Lopez",
+    "Smith",
+    "Jones",
+    "Williams",
+    "Brown",
+    "Davis",
+    "Miller",
+    "Wilson",
+    "Moore",
+    "Taylor",
+    "Anderson",
+    "Thomas",
+    "Jackson",
+    "White",
+    "Harris",
+    "Martin",
+    "Garcia",
+    "Martinez",
+    "Robinson",
+    "Clark",
+    "Rodriguez",
+    "Lewis",
+    "Lee",
+    "Walker",
+    "Hall",
+    "Allen",
+    "Young",
+    "Hernandez",
+    "King",
+    "Wright",
+    "Lopez",
 ]
 
 # ─── Data types ───────────────────────────────────────────────────────────────
@@ -126,14 +184,16 @@ def generate_employees(
         dept = departments[i]
         role_options = _ROLES_BY_DEPT.get(dept, ["Employee"])
         role = role_options[int(rng.integers(len(role_options)))]
-        employees.append(Employee(
-            employee_id=str(uuid.uuid4()),
-            name=names[i],
-            department=dept,
-            role=role,
-            active=True,
-            consent=True,
-        ))
+        employees.append(
+            Employee(
+                employee_id=str(uuid.uuid4()),
+                name=names[i],
+                department=dept,
+                role=role,
+                active=True,
+                consent=True,
+            )
+        )
 
     return employees
 
@@ -265,8 +325,8 @@ def generate_edges(
 
             for _ in range(n_interactions):
                 is_connector = emp.employee_id in connector_ids
-                is_silo     = emp.employee_id in _silo_ids
-                cross_prob  = 0.85 if is_connector else (0.03 if is_silo else 0.08)
+                is_silo = emp.employee_id in _silo_ids
+                cross_prob = 0.85 if is_connector else (0.03 if is_silo else 0.08)
 
                 if rng.random() < cross_prob:
                     other_depts = [d for d in emp_by_dept if d != emp.department]
@@ -276,10 +336,8 @@ def generate_edges(
                     else:
                         candidates = [e for e in employees if e.employee_id != emp.employee_id]
                 else:
-                    same_dept = [e for e in emp_by_dept.get(emp.department, [])
-                                 if e.employee_id != emp.employee_id]
-                    candidates = same_dept or [e for e in employees
-                                               if e.employee_id != emp.employee_id]
+                    same_dept = [e for e in emp_by_dept.get(emp.department, []) if e.employee_id != emp.employee_id]
+                    candidates = same_dept or [e for e in employees if e.employee_id != emp.employee_id]
 
                 if not candidates:
                     continue
@@ -293,17 +351,19 @@ def generate_edges(
                 minute = int(rng.integers(0, 60))
                 ts = day_ts.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-                edges.append(EdgeRecord(
-                    event_id=str(uuid.uuid4()),
-                    source_employee_id=emp.employee_id,
-                    target_employee_id=target.employee_id,
-                    channel=channel,
-                    direction=direction,
-                    department_source=emp.department,
-                    department_target=target.department,
-                    timestamp=ts.isoformat(),
-                    weight=1.0,
-                ))
+                edges.append(
+                    EdgeRecord(
+                        event_id=str(uuid.uuid4()),
+                        source_employee_id=emp.employee_id,
+                        target_employee_id=target.employee_id,
+                        channel=channel,
+                        direction=direction,
+                        department_source=emp.department,
+                        department_target=target.department,
+                        timestamp=ts.isoformat(),
+                        weight=1.0,
+                    )
+                )
 
     edges.sort(key=lambda e: e.timestamp)
     return edges
@@ -373,8 +433,7 @@ def write_to_postgres(
                 VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO NOTHING
                 """,
-                [(e.employee_id, e.name, e.department, e.role, e.active, e.consent)
-                 for e in employees],
+                [(e.employee_id, e.name, e.department, e.role, e.active, e.consent) for e in employees],
                 page_size=500,
             )
             logger.info("Inserted %d employees", len(employees))
@@ -386,9 +445,18 @@ def write_to_postgres(
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 """,
-                [(e.event_id, e.source_employee_id, e.target_employee_id,
-                  e.channel, e.direction, e.timestamp, e.weight)
-                 for e in edges],
+                [
+                    (
+                        e.event_id,
+                        e.source_employee_id,
+                        e.target_employee_id,
+                        e.channel,
+                        e.direction,
+                        e.timestamp,
+                        e.weight,
+                    )
+                    for e in edges
+                ],
                 page_size=1000,
             )
             logger.info("Inserted %d raw_events", len(edges))

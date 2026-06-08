@@ -57,12 +57,12 @@ def _on_failure_callback(context: dict) -> None:
     tags=["org-synapse", "graph", "daily"],
 )
 def graph_builder_dag():
-
     @task(on_failure_callback=_on_failure_callback)
     def sync_hris_data(**context) -> dict:
         """Sync HRIS enrichment fields into employees table (skipped if not configured)."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         enable_hris = os.environ.get("ENABLE_HRIS", "false").lower() == "true"
@@ -152,6 +152,7 @@ def graph_builder_dag():
         # Fetch alerts fired in the last 24h
         try:
             from ingestion.db import get_conn
+
             with get_conn() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
@@ -190,7 +191,8 @@ def graph_builder_dag():
             result = resp.json()
             logger.info(
                 "broadcast_alerts: pushed %d alerts to %d WS clients",
-                result.get("broadcast", 0), result.get("connections", 0),
+                result.get("broadcast", 0),
+                result.get("connections", 0),
             )
             return result
         except Exception as exc:
@@ -198,17 +200,27 @@ def graph_builder_dag():
             return {"broadcast": 0, "connections": 0}
 
     # Chain
-    hris_result  = sync_hris_data()
-    raw_count    = check_raw_events()
-    graph_stats  = build_graph()
+    hris_result = sync_hris_data()
+    raw_count = check_raw_events()
+    graph_stats = build_graph()
     metric_stats = compute_metrics()
     onboard_stats = compute_onboarding()
-    silo_stats   = detect_silos()
-    risk_stats   = score_risks()
-    spof_stats   = flag_spof_critical()
-    ws_result    = broadcast_alerts()
+    silo_stats = detect_silos()
+    risk_stats = score_risks()
+    spof_stats = flag_spof_critical()
+    ws_result = broadcast_alerts()
 
-    hris_result >> raw_count >> graph_stats >> metric_stats >> onboard_stats >> silo_stats >> risk_stats >> spof_stats >> trigger_neo4j
+    (
+        hris_result
+        >> raw_count
+        >> graph_stats
+        >> metric_stats
+        >> onboard_stats
+        >> silo_stats
+        >> risk_stats
+        >> spof_stats
+        >> trigger_neo4j
+    )
     spof_stats >> ws_result
 
 

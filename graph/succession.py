@@ -59,13 +59,13 @@ logger = logging.getLogger(__name__)
 
 # ─── Configurable weights & scope ────────────────────────────────────────────
 
-_W_STRUCT         = float(os.environ.get("SUCCESSION_W_STRUCT",       "0.40"))
-_W_CLUST          = float(os.environ.get("SUCCESSION_W_CLUST",        "0.25"))
-_W_DOMAIN         = float(os.environ.get("SUCCESSION_W_DOMAIN",       "0.35"))
-_TOP_N_SPOF       = int(os.environ.get("SUCCESSION_TOP_N_SPOF",       "20"))
-_N_CANDIDATES     = int(os.environ.get("SUCCESSION_N_CANDIDATES",     "5"))
-_MIN_SPOF_SCORE   = float(os.environ.get("SUCCESSION_MIN_SPOF_SCORE", "0.3"))
-_WINDOW_DAYS      = int(os.environ.get("GRAPH_WINDOW_DAYS",           "30"))
+_W_STRUCT = float(os.environ.get("SUCCESSION_W_STRUCT", "0.40"))
+_W_CLUST = float(os.environ.get("SUCCESSION_W_CLUST", "0.25"))
+_W_DOMAIN = float(os.environ.get("SUCCESSION_W_DOMAIN", "0.35"))
+_TOP_N_SPOF = int(os.environ.get("SUCCESSION_TOP_N_SPOF", "20"))
+_N_CANDIDATES = int(os.environ.get("SUCCESSION_N_CANDIDATES", "5"))
+_MIN_SPOF_SCORE = float(os.environ.get("SUCCESSION_MIN_SPOF_SCORE", "0.3"))
+_WINDOW_DAYS = int(os.environ.get("GRAPH_WINDOW_DAYS", "30"))
 
 
 # ─── Pure computation ─────────────────────────────────────────────────────────
@@ -195,10 +195,7 @@ def find_border_employees(
     source_community = community_map.get(source_id)
 
     if source_community is not None:
-        source_community_members: set[str] = {
-            emp for emp, cid in community_map.items()
-            if cid == source_community
-        }
+        source_community_members: set[str] = {emp for emp, cid in community_map.items() if cid == source_community}
     else:
         source_community_members = {source_id}
 
@@ -262,13 +259,15 @@ def score_candidates(
             w_struct * structural + w_clust * clustering + w_domain * domain,
             4,
         )
-        results.append({
-            "candidate_employee_id": cid,
-            "structural_overlap":    round(structural, 4),
-            "clustering_score":      round(clustering, 4),
-            "domain_overlap":        round(domain, 4),
-            "compatibility_score":   compatibility,
-        })
+        results.append(
+            {
+                "candidate_employee_id": cid,
+                "structural_overlap": round(structural, 4),
+                "clustering_score": round(clustering, 4),
+                "domain_overlap": round(domain, 4),
+                "compatibility_score": compatibility,
+            }
+        )
 
     results.sort(key=lambda r: r["compatibility_score"], reverse=True)
     return results[:n]
@@ -295,7 +294,7 @@ def load_node_metrics(snapshot_date: date, conn) -> dict[str, dict]:
         return {
             str(r[0]): {
                 "betweenness": float(r[1] or 0),
-                "clustering":  float(r[2] or 0),
+                "clustering": float(r[2] or 0),
                 "community_id": r[3],
             }
             for r in cur.fetchall()
@@ -443,16 +442,15 @@ def compute_and_persist(
         return 0
 
     node_metrics = load_node_metrics(snapshot_date, conn)
-    community_map: dict[str, int | None] = {
-        emp_id: m["community_id"] for emp_id, m in node_metrics.items()
-    }
+    community_map: dict[str, int | None] = {emp_id: m["community_id"] for emp_id, m in node_metrics.items()}
     knowledge_domains = load_knowledge_domains(conn)
     spof_list = _load_top_spof(snapshot_date, top_n_spof, min_spof_score, conn)
 
     if not spof_list:
         logger.info(
             "compute_and_persist: no employees meet SPOF threshold %.2f on %s.",
-            min_spof_score, snapshot_date,
+            min_spof_score,
+            snapshot_date,
         )
         return 0
 
@@ -464,25 +462,34 @@ def compute_and_persist(
         candidates = list(border & active_ids - {source_id})
 
         scored = score_candidates(
-            source_id, G, node_metrics, knowledge_domains, candidates, n_candidates,
+            source_id,
+            G,
+            node_metrics,
+            knowledge_domains,
+            candidates,
+            n_candidates,
         )
 
         for rank, entry in enumerate(scored, start=1):
-            rows.append((
-                snapshot_date,
-                source_id,
-                entry["candidate_employee_id"],
-                entry["compatibility_score"],
-                rank,
-                entry["structural_overlap"],
-                entry["clustering_score"],
-                entry["domain_overlap"],
-                json.dumps({
-                    "structural_overlap": entry["structural_overlap"],
-                    "clustering_score":   entry["clustering_score"],
-                    "domain_overlap":     entry["domain_overlap"],
-                }),
-            ))
+            rows.append(
+                (
+                    snapshot_date,
+                    source_id,
+                    entry["candidate_employee_id"],
+                    entry["compatibility_score"],
+                    rank,
+                    entry["structural_overlap"],
+                    entry["clustering_score"],
+                    entry["domain_overlap"],
+                    json.dumps(
+                        {
+                            "structural_overlap": entry["structural_overlap"],
+                            "clustering_score": entry["clustering_score"],
+                            "domain_overlap": entry["domain_overlap"],
+                        }
+                    ),
+                )
+            )
 
     if not rows:
         logger.info("compute_and_persist: no succession candidates found for %s.", snapshot_date)
@@ -511,6 +518,7 @@ def compute_and_persist(
     conn.commit()
     logger.info(
         "compute_and_persist: %d succession rows written for %s.",
-        len(rows), snapshot_date,
+        len(rows),
+        snapshot_date,
     )
     return len(rows)

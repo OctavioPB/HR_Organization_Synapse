@@ -19,11 +19,11 @@ from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
-_MIN_SPOF_SCORE   = float(os.environ.get("TRANSFER_MIN_SPOF_SCORE", "0.5"))
-_MAX_CANDIDATES   = int(os.environ.get("TRANSFER_MAX_CANDIDATES", "2"))
-_MAX_INTRO_ACTIONS   = int(os.environ.get("TRANSFER_MAX_INTROS", "5"))
-_MAX_DOC_ACTIONS     = int(os.environ.get("TRANSFER_MAX_DOCS", "5"))
-_MAX_SHADOW_ACTIONS  = int(os.environ.get("TRANSFER_MAX_SHADOWS", "3"))
+_MIN_SPOF_SCORE = float(os.environ.get("TRANSFER_MIN_SPOF_SCORE", "0.5"))
+_MAX_CANDIDATES = int(os.environ.get("TRANSFER_MAX_CANDIDATES", "2"))
+_MAX_INTRO_ACTIONS = int(os.environ.get("TRANSFER_MAX_INTROS", "5"))
+_MAX_DOC_ACTIONS = int(os.environ.get("TRANSFER_MAX_DOCS", "5"))
+_MAX_SHADOW_ACTIONS = int(os.environ.get("TRANSFER_MAX_SHADOWS", "3"))
 
 
 def task_generate_transfer_plans(snapshot_date_str: str, conn) -> dict:
@@ -65,15 +65,17 @@ def task_generate_transfer_plans(snapshot_date_str: str, conn) -> dict:
     # Load graph for neighbor computation
     try:
         from graph.scenario_simulator import load_current_graph
+
         G = load_current_graph(conn)
     except Exception as exc:
         logger.warning("Could not load graph for transfer plans: %s — using empty graph.", exc)
         import networkx as nx
+
         G = nx.DiGraph()
 
     plans_written = 0
     for pair in pairs:
-        spof_id      = pair["source_employee_id"]
+        spof_id = pair["source_employee_id"]
         candidate_id = pair["candidate_employee_id"]
         try:
             plan_json = _build_plan(spof_id, candidate_id, pair, G, conn)
@@ -88,9 +90,9 @@ def task_generate_transfer_plans(snapshot_date_str: str, conn) -> dict:
 
 
 def _build_plan(spof_id: str, candidate_id: str, pair: dict, G, conn) -> dict:
-    spof_name      = pair["spof_name"]
+    spof_name = pair["spof_name"]
     candidate_name = pair["candidate_name"]
-    spof_dept      = pair["spof_dept"]
+    spof_dept = pair["spof_dept"]
 
     # Phase 1: Relationship bridges
     spof_neighbors = set(G.neighbors(spof_id)) if spof_id in G else set()
@@ -103,11 +105,13 @@ def _build_plan(spof_id: str, candidate_id: str, pair: dict, G, conn) -> dict:
             cur.execute("SELECT name, department FROM employees WHERE id = %s::uuid", (n_id,))
             emp = cur.fetchone()
         if emp:
-            intro_actions.append({
-                "action_type": "introduction",
-                "description": f"Introduce {candidate_name} to {emp['name']} ({emp['department']}) — currently connected only to {spof_name}.",
-                "parties": [n_id],
-            })
+            intro_actions.append(
+                {
+                    "action_type": "introduction",
+                    "description": f"Introduce {candidate_name} to {emp['name']} ({emp['department']}) — currently connected only to {spof_name}.",
+                    "parties": [n_id],
+                }
+            )
 
     # Phase 2: Document gap
     doc_actions = []
@@ -127,11 +131,13 @@ def _build_plan(spof_id: str, candidate_id: str, pair: dict, G, conn) -> dict:
     gap_domains = [(d, c) for d, c in spof_domains.items() if d not in cand_domains]
     gap_domains.sort(key=lambda x: -x[1])
     for domain, doc_count in gap_domains[:_MAX_DOC_ACTIONS]:
-        doc_actions.append({
-            "action_type": "document_review",
-            "description": f"Review {doc_count} document(s) in domain '{domain}' authored by {spof_name}.",
-            "document_domain": domain,
-        })
+        doc_actions.append(
+            {
+                "action_type": "document_review",
+                "description": f"Review {doc_count} document(s) in domain '{domain}' authored by {spof_name}.",
+                "document_domain": domain,
+            }
+        )
 
     # Phase 3: Shadow opportunities (recurring calendar events)
     shadow_actions = []
@@ -155,29 +161,30 @@ def _build_plan(spof_id: str, candidate_id: str, pair: dict, G, conn) -> dict:
                 cur2.execute("SELECT name, department FROM employees WHERE id = %s::uuid", (r["target_id"],))
                 emp = cur2.fetchone()
             if emp:
-                shadow_actions.append({
-                    "action_type": "shadow",
-                    "description": f"Shadow {spof_name}'s recurring meetings with {emp['name']} ({emp['department']}) — {r['cnt']}× in last 30 days.",
-                    "meeting_type": "recurring",
-                })
+                shadow_actions.append(
+                    {
+                        "action_type": "shadow",
+                        "description": f"Shadow {spof_name}'s recurring meetings with {emp['name']} ({emp['department']}) — {r['cnt']}× in last 30 days.",
+                        "meeting_type": "recurring",
+                    }
+                )
 
     # Generate narrative
     narrative = _generate_narrative(spof_name, candidate_name, spof_dept, intro_actions, doc_actions, shadow_actions)
 
     return {
-        "spof_name":      spof_name,
+        "spof_name": spof_name,
         "candidate_name": candidate_name,
-        "spof_score":     round(float(pair.get("spof_score", 0)), 4),
-        "weeks_1_4":      intro_actions,
-        "weeks_5_8":      doc_actions,
-        "weeks_9_12":     shadow_actions,
-        "narrative":      narrative,
-        "generated_at":   str(date.today()),
+        "spof_score": round(float(pair.get("spof_score", 0)), 4),
+        "weeks_1_4": intro_actions,
+        "weeks_5_8": doc_actions,
+        "weeks_9_12": shadow_actions,
+        "narrative": narrative,
+        "generated_at": str(date.today()),
     }
 
 
-def _generate_narrative(spof_name: str, candidate_name: str, dept: str,
-                        intros: list, docs: list, shadows: list) -> str:
+def _generate_narrative(spof_name: str, candidate_name: str, dept: str, intros: list, docs: list, shadows: list) -> str:
     try:
         from graph.claude_client import call_claude
 

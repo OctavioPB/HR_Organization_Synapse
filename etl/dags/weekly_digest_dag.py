@@ -42,7 +42,6 @@ _DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://localhost:5173")
     tags=["digest", "weekly", "notifications"],
 )
 def weekly_digest_dag():
-
     wait_for_org_health = ExternalTaskSensor(
         task_id="wait_for_org_health",
         external_dag_id="org_health_dag",
@@ -57,6 +56,7 @@ def weekly_digest_dag():
     def compile_digest_data(**context) -> dict:
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ingestion.db import get_conn
@@ -78,7 +78,7 @@ def weekly_digest_dag():
             rows = cur.fetchall()
             health_row = rows[0] if rows else {}
             score = float(health_row.get("score", 0)) if health_row else 0.0
-            tier  = health_row.get("tier", "caution") if health_row else "caution"
+            tier = health_row.get("tier", "caution") if health_row else "caution"
             delta = float(health_row.get("delta") or 0.0) if health_row else 0.0
 
             # Active silos
@@ -124,14 +124,12 @@ def weekly_digest_dag():
                 LIMIT 3
                 """
             )
-            top_risks = [
-                {"department": r["department"], "avg_spof": float(r["avg_spof"])}
-                for r in cur.fetchall()
-            ]
+            top_risks = [{"department": r["department"], "avg_spof": float(r["avg_spof"])} for r in cur.fetchall()]
 
             cur.close()
 
         import datetime as dt
+
         now = dt.datetime.utcnow()
         week_label = now.strftime("Week of %B %d, %Y")
         generated_at = now.strftime("%Y-%m-%d %H:%M UTC")
@@ -177,6 +175,7 @@ def weekly_digest_dag():
     def send_email_digest(digest_data: dict) -> dict:
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ingestion.db import get_conn
@@ -184,9 +183,7 @@ def weekly_digest_dag():
         with get_conn() as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT email_recipients, enabled_email FROM digest_config LIMIT 1"
-                )
+                cur.execute("SELECT email_recipients, enabled_email FROM digest_config LIMIT 1")
                 config_row = cur.fetchone()
 
         if not config_row or not config_row["enabled_email"]:
@@ -205,6 +202,7 @@ def weekly_digest_dag():
 
         try:
             from jinja2 import Environment, FileSystemLoader
+
             template_dir = Path(__file__).parents[1] / "templates"
             env = Environment(loader=FileSystemLoader(str(template_dir)))
             template = env.get_template("digest_email.html")
@@ -234,6 +232,7 @@ def weekly_digest_dag():
     def send_slack_digest(digest_data: dict) -> dict:
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ingestion.db import get_conn
@@ -241,9 +240,7 @@ def weekly_digest_dag():
         with get_conn() as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT slack_webhook_url, enabled_slack FROM digest_config LIMIT 1"
-                )
+                cur.execute("SELECT slack_webhook_url, enabled_slack FROM digest_config LIMIT 1")
                 config_row = cur.fetchone()
 
         if not config_row or not config_row["enabled_slack"] or not config_row["slack_webhook_url"]:
@@ -252,7 +249,7 @@ def weekly_digest_dag():
 
         webhook_url = config_row["slack_webhook_url"]
         score = digest_data.get("score", 0)
-        tier  = digest_data.get("tier", "caution").replace("_", " ").title()
+        tier = digest_data.get("tier", "caution").replace("_", " ").title()
         delta = digest_data.get("delta", 0)
         delta_text = f"+{delta}" if delta > 0 else str(delta)
         narrative = digest_data.get("narrative", "")
@@ -293,6 +290,7 @@ def weekly_digest_dag():
 
         try:
             import httpx
+
             resp = httpx.post(webhook_url, json={"blocks": blocks}, timeout=10)
             resp.raise_for_status()
             logger.info("Slack digest sent successfully.")
@@ -303,7 +301,7 @@ def weekly_digest_dag():
 
     # DAG wiring
     digest_data = compile_digest_data()
-    full_data   = generate_digest_narrative(digest_data)
+    full_data = generate_digest_narrative(digest_data)
 
     wait_for_org_health >> digest_data
     send_email_digest(full_data)

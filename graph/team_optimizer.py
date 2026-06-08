@@ -45,7 +45,7 @@ def _bridge_coverage(members: list[str], dept_pairs: list[tuple], G: nx.DiGraph,
     if not dept_pairs:
         return 1.0
     bridged = 0
-    for (d1, d2) in dept_pairs:
+    for d1, d2 in dept_pairs:
         for m in members:
             m_dept = dept_map.get(m, "")
             neighbors = list(G.neighbors(m)) if m in G else []
@@ -71,11 +71,11 @@ def optimize_team(
         max_size:    int         — maximum team size (default 6)
         exclude_spof_above: float — exclude employees with SPOF > threshold (default 0.7)
     """
-    departments   = constraints.get("departments", [])
-    domains       = constraints.get("domains", [])
-    min_size      = int(constraints.get("min_size", 3))
-    max_size      = int(constraints.get("max_size", 6))
-    spof_limit    = float(constraints.get("exclude_spof_above", 0.7))
+    departments = constraints.get("departments", [])
+    domains = constraints.get("domains", [])
+    min_size = int(constraints.get("min_size", 3))
+    max_size = int(constraints.get("max_size", 6))
+    spof_limit = float(constraints.get("exclude_spof_above", 0.7))
 
     dept_pairs = list(combinations(departments, 2)) if len(departments) >= 2 else []
 
@@ -155,11 +155,15 @@ def optimize_team(
             for c in remaining:
                 cid = c["id"]
                 # Marginal bridge coverage
-                new_depts = ({c["department"]} | {dept_map.get(nb, "") for nb in (G.neighbors(cid) if cid in G else [])}) & set(departments)
+                new_depts = (
+                    {c["department"]} | {dept_map.get(nb, "") for nb in (G.neighbors(cid) if cid in G else [])}
+                ) & set(departments)
                 dept_gain = len(new_depts - covered_depts) / max(len(departments), 1)
                 # Marginal domain coverage
                 new_domains = domain_map.get(cid, set()) & required_domains
-                domain_gain = len(new_domains - covered_domains) / max(len(required_domains), 1) if required_domains else 0.0
+                domain_gain = (
+                    len(new_domains - covered_domains) / max(len(required_domains), 1) if required_domains else 0.0
+                )
                 score = 0.55 * dept_gain + 0.45 * domain_gain
                 if score > best_score:
                     best_score = score
@@ -195,22 +199,26 @@ def optimize_team(
         members = []
         for mid in team_ids:
             c = id_to_cand.get(mid, {})
-            members.append({
-                "employee_id": mid,
-                "name":        c.get("name", ""),
-                "department":  c.get("department", ""),
-                "role":        c.get("role", ""),
-                "spof_score":  round(float(c.get("spof_score", 0)), 4),
-            })
+            members.append(
+                {
+                    "employee_id": mid,
+                    "name": c.get("name", ""),
+                    "department": c.get("department", ""),
+                    "role": c.get("role", ""),
+                    "spof_score": round(float(c.get("spof_score", 0)), 4),
+                }
+            )
 
-        results.append({
-            "members":              members,
-            "bridge_coverage":      round(bc, 4),
-            "domain_coverage":      round(dc, 4),
-            "structural_load":      round(total_spof, 4),
-            "relationship_density": round(rd, 4),
-            "composite_score":      round(composite, 4),
-        })
+        results.append(
+            {
+                "members": members,
+                "bridge_coverage": round(bc, 4),
+                "domain_coverage": round(dc, 4),
+                "structural_load": round(total_spof, 4),
+                "relationship_density": round(rd, 4),
+                "composite_score": round(composite, 4),
+            }
+        )
 
     results.sort(key=lambda x: -x["composite_score"])
     for i, r in enumerate(results[:top_n]):

@@ -58,25 +58,19 @@ class TeamsProducer(BaseProducer):
         self._client_secret: str = os.environ.get("TEAMS_CLIENT_SECRET", "")
         self._poll_interval: int = int(os.environ.get("TEAMS_POLL_INTERVAL", _DEFAULT_POLL_INTERVAL))
         self._lookback_days: int = int(os.environ.get("TEAMS_LOOKBACK_DAYS", _DEFAULT_LOOKBACK_DAYS))
-        self._employee_map: dict[str, str] = json.loads(
-            os.environ.get("TEAMS_EMPLOYEE_MAP", "{}")
-        )
+        self._employee_map: dict[str, str] = json.loads(os.environ.get("TEAMS_EMPLOYEE_MAP", "{}"))
         self._http: httpx.Client | None = None
         self._access_token: str = ""
         self._token_expires_at: float = 0.0
         self._running = False
-        self._last_call_end_time: datetime = datetime.now(tz=UTC) - timedelta(
-            days=self._lookback_days
-        )
+        self._last_call_end_time: datetime = datetime.now(tz=UTC) - timedelta(days=self._lookback_days)
 
     # ── BaseProducer contract ─────────────────────────────────────────────────
 
     def connect(self) -> None:
         """Obtain an OAuth2 client-credentials token from Azure AD."""
         if not all([self._tenant_id, self._client_id, self._client_secret]):
-            raise ValueError(
-                "TEAMS_TENANT_ID, TEAMS_CLIENT_ID, and TEAMS_CLIENT_SECRET must all be set"
-            )
+            raise ValueError("TEAMS_TENANT_ID, TEAMS_CLIENT_ID, and TEAMS_CLIENT_SECRET must all be set")
         self._http = httpx.Client(timeout=15.0)
         self._refresh_token()
         ConnectorRegistry.get().set_healthy("teams", healthy=True)
@@ -160,9 +154,7 @@ class TeamsProducer(BaseProducer):
             for record in page.get("value", []):
                 yield from self._process_call_record(record)
                 # Advance the watermark to avoid re-processing
-                end_dt = datetime.fromisoformat(
-                    record["endDateTime"].replace("Z", "+00:00")
-                )
+                end_dt = datetime.fromisoformat(record["endDateTime"].replace("Z", "+00:00"))
                 if end_dt > self._last_call_end_time:
                     self._last_call_end_time = end_dt
 
@@ -175,35 +167,22 @@ class TeamsProducer(BaseProducer):
         # Collect all unique participant identities from sessions/segments
         for session in record.get("sessions", []):
             for role in ("caller", "callee"):
-                identity = (
-                    session
-                    .get(role, {})
-                    .get("identity", {})
-                    .get("user", {})
-                    .get("id")
-                )
+                identity = session.get(role, {}).get("identity", {}).get("user", {}).get("id")
                 if identity and identity not in participants:
                     participants.append(identity)
             for segment in session.get("segments", []):
                 for role in ("caller", "callee"):
-                    identity = (
-                        segment
-                        .get(role, {})
-                        .get("identity", {})
-                        .get("user", {})
-                        .get("id")
-                    )
+                    identity = segment.get(role, {}).get("identity", {}).get("user", {}).get("id")
                     if identity and identity not in participants:
                         participants.append(identity)
 
         call_ts = datetime.fromisoformat(
-            record.get("startDateTime", datetime.now(tz=UTC).isoformat())
-            .replace("Z", "+00:00")
+            record.get("startDateTime", datetime.now(tz=UTC).isoformat()).replace("Z", "+00:00")
         )
 
         # Emit one directed edge per ordered pair
         for i, source_aad_id in enumerate(participants):
-            for target_aad_id in participants[i + 1:]:
+            for target_aad_id in participants[i + 1 :]:
                 event = self._build_event(source_aad_id, target_aad_id, call_ts)
                 if event:
                     ConnectorRegistry.get().record_event("teams")

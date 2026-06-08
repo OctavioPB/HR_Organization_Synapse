@@ -41,9 +41,14 @@ def _health_row(score=75.0, tier="caution", **kwargs) -> dict:
         "avg_entropy_trend": -0.01,
         "wcc_count": 3,
         "node_count": 150,
-        "component_scores": json.dumps({
-            "silo": 0.2, "spof": 0.42, "entropy": 0.2, "frag": 0.01,
-        }),
+        "component_scores": json.dumps(
+            {
+                "silo": 0.2,
+                "spof": 0.42,
+                "entropy": 0.2,
+                "frag": 0.01,
+            }
+        ),
         **kwargs,
     }
 
@@ -52,16 +57,18 @@ def _trend_rows(n=4) -> list[dict]:
     base = 70.0
     rows = []
     for i in range(n):
-        rows.append({
-            "computed_at": date(2025, 4, 7 + i * 7),
-            "score": base + i * 2,
-            "tier": "caution",
-            "silo_count": 2,
-            "avg_spof_score": 0.42,
-            "avg_entropy_trend": -0.01,
-            "wcc_count": 3,
-            "node_count": 150,
-        })
+        rows.append(
+            {
+                "computed_at": date(2025, 4, 7 + i * 7),
+                "score": base + i * 2,
+                "tier": "caution",
+                "silo_count": 2,
+                "avg_spof_score": 0.42,
+                "avg_entropy_trend": -0.01,
+                "wcc_count": 3,
+                "node_count": 150,
+            }
+        )
     return rows
 
 
@@ -135,7 +142,7 @@ class TestComputeOrgHealth:
     def test_fragmentation_increases_with_components(self):
         from graph.org_health import compute_org_health
 
-        low  = compute_org_health(0, 0.0, None, 2, 100)
+        low = compute_org_health(0, 0.0, None, 2, 100)
         high = compute_org_health(0, 0.0, None, 10, 100)
         assert high["component_scores"]["frag"] > low["component_scores"]["frag"]
 
@@ -160,7 +167,7 @@ class TestComputeOrgHealth:
         from graph.org_health import compute_org_health
 
         # 3 silos, threshold = max(floor(d/3), 2)
-        few_depts  = compute_org_health(3, 0.0, None, 1, 100, dept_count=3)   # thr=2 → capped 1.0
+        few_depts = compute_org_health(3, 0.0, None, 1, 100, dept_count=3)  # thr=2 → capped 1.0
         many_depts = compute_org_health(3, 0.0, None, 1, 100, dept_count=30)  # thr=10 → 0.3
         assert few_depts["component_scores"]["silo"] > many_depts["component_scores"]["silo"]
 
@@ -176,8 +183,16 @@ class TestComputeOrgHealth:
         from graph.org_health import compute_org_health
 
         result = compute_org_health(1, 0.4, -0.01, 2, 80)
-        for key in ("score", "tier", "silo_count", "avg_spof_score",
-                    "avg_entropy_trend", "wcc_count", "node_count", "component_scores"):
+        for key in (
+            "score",
+            "tier",
+            "silo_count",
+            "avg_spof_score",
+            "avg_entropy_trend",
+            "wcc_count",
+            "node_count",
+            "component_scores",
+        ):
             assert key in result
 
     def test_component_scores_are_0_to_1(self):
@@ -192,16 +207,19 @@ class TestComputeOrgHealth:
 
 
 class TestScoreTier:
-    @pytest.mark.parametrize("score,expected", [
-        (100.0, "healthy"),
-        (80.0,  "healthy"),
-        (79.9,  "caution"),
-        (60.0,  "caution"),
-        (59.9,  "at_risk"),
-        (40.0,  "at_risk"),
-        (39.9,  "critical"),
-        (0.0,   "critical"),
-    ])
+    @pytest.mark.parametrize(
+        "score,expected",
+        [
+            (100.0, "healthy"),
+            (80.0, "healthy"),
+            (79.9, "caution"),
+            (60.0, "caution"),
+            (59.9, "at_risk"),
+            (40.0, "at_risk"),
+            (39.9, "critical"),
+            (0.0, "critical"),
+        ],
+    )
     def test_tier_boundaries(self, score, expected):
         from graph.org_health import score_tier
 
@@ -216,14 +234,22 @@ class TestGenerateBriefing:
         from graph.org_health import generate_briefing
 
         current = current or _health_row()
-        trend   = trend   or _trend_rows(4)
+        trend = trend or _trend_rows(4)
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}, clear=False):
             return generate_briefing(current, trend)
 
     def test_returns_required_keys(self):
         b = self._call()
-        for key in ("score", "tier", "trend_delta", "trend_direction",
-                    "top_risks", "recommended_actions", "narrative", "computed_at"):
+        for key in (
+            "score",
+            "tier",
+            "trend_delta",
+            "trend_direction",
+            "top_risks",
+            "recommended_actions",
+            "narrative",
+            "computed_at",
+        ):
             assert key in b
 
     def test_trend_delta_computed_correctly(self):
@@ -261,9 +287,14 @@ class TestGenerateBriefing:
 
     def test_silo_recommendation_fires(self):
         row = _health_row()
-        row["component_scores"] = json.dumps({
-            "silo": 0.8, "spof": 0.1, "entropy": 0.0, "frag": 0.0,
-        })
+        row["component_scores"] = json.dumps(
+            {
+                "silo": 0.8,
+                "spof": 0.1,
+                "entropy": 0.0,
+                "frag": 0.0,
+            }
+        )
         b = self._call(current=row)
         assert any("silo" in a.lower() for a in b["recommended_actions"])
 

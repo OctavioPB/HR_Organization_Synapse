@@ -92,7 +92,9 @@ def get_snapshot(
 
     logger.info(
         "GET /graph/snapshot date=%s nodes=%d edges=%d",
-        snapshot_date, len(nodes), len(edges),
+        snapshot_date,
+        len(nodes),
+        len(edges),
     )
     return response
 
@@ -181,7 +183,10 @@ def get_shortest_path(
 
     logger.info(
         "GET /graph/path source=%s hops=%d from=%s to=%s",
-        source, result["hops"], from_employee_id[:8], to_employee_id[:8],
+        source,
+        result["hops"],
+        from_employee_id[:8],
+        to_employee_id[:8],
     )
     return ShortestPathResponse(
         from_employee_id=from_employee_id,
@@ -215,7 +220,10 @@ def get_reachability(
 
     logger.info(
         "GET /graph/reachability/%s hops=%d reachable=%d source=%s",
-        employee_id[:8], hops, len(reachable), source,
+        employee_id[:8],
+        hops,
+        len(reachable),
+        source,
     )
     return ReachabilityResponse(
         employee_id=employee_id,
@@ -249,7 +257,9 @@ def get_knowledge_islands(
 
     logger.info(
         "GET /graph/knowledge-islands max_size=%d found=%d source=%s",
-        max_size, len(islands), source,
+        max_size,
+        len(islands),
+        source,
     )
     return KnowledgeIslandsResponse(
         total=len(islands),
@@ -321,10 +331,7 @@ def get_temporal_anomalies(
         if scored_at is None:
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    "No temporal anomaly scores found. "
-                    "Run the temporal_gnn_score DAG first."
-                ),
+                detail=("No temporal anomaly scores found. " "Run the temporal_gnn_score DAG first."),
             )
 
     rows = queries.fetch_temporal_anomaly_scores(scored_at, top, min_score, conn)
@@ -332,7 +339,8 @@ def get_temporal_anomalies(
 
     logger.info(
         "GET /graph/temporal/anomalies scored_at=%s returned=%d",
-        scored_at, len(scores),
+        scored_at,
+        len(scores),
     )
     return TemporalAnomalyResponse(
         scored_at=scored_at,

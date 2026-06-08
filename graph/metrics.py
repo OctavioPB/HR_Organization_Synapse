@@ -30,12 +30,14 @@ import psycopg2.extras
 
 try:
     import community as community_louvain
+
     _LOUVAIN_AVAILABLE = True
 except ImportError:
     _LOUVAIN_AVAILABLE = False
 
 try:
     from joblib import Parallel, delayed
+
     _JOBLIB_AVAILABLE = True
 except ImportError:
     _JOBLIB_AVAILABLE = False
@@ -85,11 +87,11 @@ def compute_betweenness(G: nx.DiGraph) -> dict[str, float]:
         k = min(n, BETWEENNESS_K_PIVOTS)
         logger.info(
             "Graph has %d nodes (> %d threshold): using approximate betweenness k=%d",
-            n, BETWEENNESS_EXACT_THRESHOLD, k,
+            n,
+            BETWEENNESS_EXACT_THRESHOLD,
+            k,
         )
-        return nx.betweenness_centrality(
-            G_inv, normalized=True, weight="inv_weight", k=k, seed=42
-        )
+        return nx.betweenness_centrality(G_inv, normalized=True, weight="inv_weight", k=k, seed=42)
 
     return nx.betweenness_centrality(G_inv, normalized=True, weight="inv_weight")
 
@@ -180,12 +182,9 @@ def compute_community(
     n = U.number_of_nodes()
     if _JOBLIB_AVAILABLE and n > BETWEENNESS_EXACT_THRESHOLD:
         n_trials = min(8, max(2, (n_jobs if n_jobs > 0 else 4)))
-        logger.info(
-            "Graph has %d nodes: running %d parallel Louvain trials", n, n_trials
-        )
+        logger.info("Graph has %d nodes: running %d parallel Louvain trials", n, n_trials)
         results = Parallel(n_jobs=n_jobs)(
-            delayed(community_louvain.best_partition)(U, random_state=random_state + i)
-            for i in range(n_trials)
+            delayed(community_louvain.best_partition)(U, random_state=random_state + i) for i in range(n_trials)
         )
         # Select partition with highest modularity
         best = max(
@@ -216,10 +215,7 @@ def compute_cross_dept_ratio(G: nx.DiGraph) -> dict[str, float]:
         if not out_edges:
             ratios[node] = 0.0
             continue
-        cross = sum(
-            1 for _, target in out_edges
-            if G.nodes[target].get("department", "") != node_dept
-        )
+        cross = sum(1 for _, target in out_edges if G.nodes[target].get("department", "") != node_dept)
         ratios[node] = cross / len(out_edges)
     return ratios
 
@@ -282,9 +278,7 @@ def write_snapshot(
                 page_size=500,
             )
 
-    logger.info(
-        "Wrote %d rows to graph_snapshots for %s", len(rows), snapshot_date
-    )
+    logger.info("Wrote %d rows to graph_snapshots for %s", len(rows), snapshot_date)
 
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
@@ -293,15 +287,16 @@ def write_snapshot(
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    parser = argparse.ArgumentParser(
-        description="Compute graph metrics and write to graph_snapshots."
-    )
+    parser = argparse.ArgumentParser(description="Compute graph metrics and write to graph_snapshots.")
     parser.add_argument(
-        "--snapshot-date", type=date.fromisoformat, required=True,
+        "--snapshot-date",
+        type=date.fromisoformat,
+        required=True,
         help="Date to compute metrics for (YYYY-MM-DD)",
     )
     parser.add_argument(
-        "--window-days", type=int,
+        "--window-days",
+        type=int,
         default=int(os.environ.get("GRAPH_WINDOW_DAYS", "30")),
     )
     args = parser.parse_args()

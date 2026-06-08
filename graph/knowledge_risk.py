@@ -48,10 +48,10 @@ logger = logging.getLogger(__name__)
 
 # ─── Configurable weights ─────────────────────────────────────────────────────
 
-_ALPHA_SOLE  = float(os.environ.get("KNOWLEDGE_ALPHA_SOLE", "0.5"))
-_ALPHA_VOL   = float(os.environ.get("KNOWLEDGE_ALPHA_VOL",  "0.3"))
-_ALPHA_BRD   = float(os.environ.get("KNOWLEDGE_ALPHA_BRD",  "0.2"))
-_DELTA_K     = float(os.environ.get("KNOWLEDGE_DELTA",      "0.3"))
+_ALPHA_SOLE = float(os.environ.get("KNOWLEDGE_ALPHA_SOLE", "0.5"))
+_ALPHA_VOL = float(os.environ.get("KNOWLEDGE_ALPHA_VOL", "0.3"))
+_ALPHA_BRD = float(os.environ.get("KNOWLEDGE_ALPHA_BRD", "0.2"))
+_DELTA_K = float(os.environ.get("KNOWLEDGE_DELTA", "0.3"))
 
 
 # ─── Pure computation ─────────────────────────────────────────────────────────
@@ -107,10 +107,10 @@ def compute_knowledge_scores_from_contributions(
     sole_pairs = compute_sole_experts(contributions)
 
     # Per-employee aggregates
-    emp_doc_count:    dict[str, int]       = defaultdict(int)
-    emp_domains:      dict[str, set[str]]  = defaultdict(set)
+    emp_doc_count: dict[str, int] = defaultdict(int)
+    emp_domains: dict[str, set[str]] = defaultdict(set)
     emp_sole_domains: dict[str, list[str]] = defaultdict(list)
-    domain_detail:    dict[str, dict]      = defaultdict(dict)  # emp → {domain: {...}}
+    domain_detail: dict[str, dict] = defaultdict(dict)  # emp → {domain: {...}}
 
     for (emp_id, domain), count in contributions.items():
         if count <= 0:
@@ -121,50 +121,44 @@ def compute_knowledge_scores_from_contributions(
         if is_sole:
             emp_sole_domains[emp_id].append(domain)
         domain_detail[emp_id][domain] = {
-            "doc_count":   count,
+            "doc_count": count,
             "is_sole_expert": is_sole,
         }
 
     if not emp_doc_count:
         return {}
 
-    org_max_docs    = max(emp_doc_count.values(), default=1)
+    org_max_docs = max(emp_doc_count.values(), default=1)
     org_domain_count = len({d for _, d in contributions})
-    all_employees   = list(emp_doc_count.keys())
+    all_employees = list(emp_doc_count.keys())
 
     results: dict[str, dict] = {}
     for emp_id in all_employees:
-        doc_count    = emp_doc_count[emp_id]
+        doc_count = emp_doc_count[emp_id]
         domain_count = len(emp_domains[emp_id])
-        sole_count   = len(emp_sole_domains[emp_id])
+        sole_count = len(emp_sole_domains[emp_id])
 
-        sole_fraction    = sole_count / max(domain_count, 1)
-        norm_doc_count   = doc_count / org_max_docs
+        sole_fraction = sole_count / max(domain_count, 1)
+        norm_doc_count = doc_count / org_max_docs
         norm_domain_count = domain_count / max(org_domain_count, 1)
 
         knowledge_score = min(
             1.0,
-            _ALPHA_SOLE * sole_fraction
-            + _ALPHA_VOL  * norm_doc_count
-            + _ALPHA_BRD  * norm_domain_count,
+            _ALPHA_SOLE * sole_fraction + _ALPHA_VOL * norm_doc_count + _ALPHA_BRD * norm_domain_count,
         )
 
         # Per-domain expertise_score (for employee_knowledge table)
         for domain, detail in domain_detail[emp_id].items():
             # Expertise = normalised doc_count in this domain + sole bonus
-            domain_max = max(
-                contributions.get((e, domain), 0) for e in all_employees
-            )
-            expertise = (detail["doc_count"] / max(domain_max, 1)) * (
-                1.2 if detail["is_sole_expert"] else 1.0
-            )
+            domain_max = max(contributions.get((e, domain), 0) for e in all_employees)
+            expertise = (detail["doc_count"] / max(domain_max, 1)) * (1.2 if detail["is_sole_expert"] else 1.0)
             domain_detail[emp_id][domain]["expertise_score"] = min(1.0, expertise)
 
         results[emp_id] = {
-            "knowledge_score":     round(knowledge_score, 4),
-            "sole_expert_count":   sole_count,
-            "domain_count":        domain_count,
-            "doc_count":           doc_count,
+            "knowledge_score": round(knowledge_score, 4),
+            "sole_expert_count": sole_count,
+            "domain_count": domain_count,
+            "doc_count": doc_count,
             "sole_expert_domains": emp_sole_domains[emp_id],
             "expertise_per_domain": domain_detail[emp_id],
         }
@@ -281,8 +275,7 @@ def compute_and_persist(snapshot_date: date, conn) -> int:
     contributions = load_contributions(conn)
     if not contributions:
         logger.warning(
-            "compute_and_persist: no document_knowledge rows found — "
-            "run Confluence/Notion connectors first."
+            "compute_and_persist: no document_knowledge rows found — " "run Confluence/Notion connectors first."
         )
         return 0
 
@@ -295,14 +288,16 @@ def compute_and_persist(snapshot_date: date, conn) -> int:
         ek_rows = []
         for emp_id, score_data in scores.items():
             for domain, detail in score_data["expertise_per_domain"].items():
-                ek_rows.append((
-                    emp_id,
-                    domain,
-                    detail["doc_count"],
-                    detail["is_sole_expert"],
-                    detail["expertise_score"],
-                    snapshot_date,
-                ))
+                ek_rows.append(
+                    (
+                        emp_id,
+                        domain,
+                        detail["doc_count"],
+                        detail["is_sole_expert"],
+                        detail["expertise_score"],
+                        snapshot_date,
+                    )
+                )
         cur.executemany(
             """
             INSERT INTO employee_knowledge
@@ -321,19 +316,19 @@ def compute_and_persist(snapshot_date: date, conn) -> int:
         # ── knowledge_risk_scores ─────────────────────────────────────────
         kr_rows = []
         for emp_id, score_data in scores.items():
-            impacted = _compute_impacted_departments(
-                emp_id, score_data["sole_expert_domains"], scores, conn
+            impacted = _compute_impacted_departments(emp_id, score_data["sole_expert_domains"], scores, conn)
+            kr_rows.append(
+                (
+                    emp_id,
+                    score_data["knowledge_score"],
+                    score_data["sole_expert_count"],
+                    score_data["domain_count"],
+                    score_data["doc_count"],
+                    enhanced.get(emp_id),
+                    json.dumps(impacted),
+                    snapshot_date,
+                )
             )
-            kr_rows.append((
-                emp_id,
-                score_data["knowledge_score"],
-                score_data["sole_expert_count"],
-                score_data["domain_count"],
-                score_data["doc_count"],
-                enhanced.get(emp_id),
-                json.dumps(impacted),
-                snapshot_date,
-            ))
 
         cur.executemany(
             """
@@ -356,7 +351,8 @@ def compute_and_persist(snapshot_date: date, conn) -> int:
     conn.commit()
     logger.info(
         "compute_and_persist: %d employees scored for %s",
-        len(scores), snapshot_date,
+        len(scores),
+        snapshot_date,
     )
     return len(scores)
 
@@ -425,10 +421,10 @@ def get_impact_statement(employee_id: str, conn) -> dict:
     if not row:
         return {}
 
-    (name, dept, sole_count, domain_count, k_score,
-     enhanced_spof, impacted_depts_json, computed_at) = row
+    (name, dept, sole_count, domain_count, k_score, enhanced_spof, impacted_depts_json, computed_at) = row
 
     import json
+
     impacted = json.loads(impacted_depts_json) if isinstance(impacted_depts_json, str) else impacted_depts_json or []
 
     # Sole expert domain names
@@ -448,8 +444,8 @@ def get_impact_statement(employee_id: str, conn) -> dict:
 
     if sole_domains and impacted:
         domain_list = ", ".join(sole_domains)
-        dept_count  = len(impacted)
-        statement   = (
+        dept_count = len(impacted)
+        statement = (
             f"If {name} leaves, {dept_count} department"
             f"{'s' if dept_count != 1 else ''} lose their only expert in: "
             f"{domain_list}."
@@ -463,15 +459,15 @@ def get_impact_statement(employee_id: str, conn) -> dict:
         statement = f"{name} has no sole-expert domains at this time."
 
     return {
-        "employee_id":         employee_id,
-        "name":                name,
-        "department":          dept,
-        "sole_expert_count":   sole_count,
-        "domain_count":        domain_count,
-        "knowledge_score":     k_score,
+        "employee_id": employee_id,
+        "name": name,
+        "department": dept,
+        "sole_expert_count": sole_count,
+        "domain_count": domain_count,
+        "knowledge_score": k_score,
         "enhanced_spof_score": enhanced_spof,
         "sole_expert_domains": sole_domains,
         "impacted_departments": impacted,
-        "statement":           statement,
-        "computed_at":         str(computed_at),
+        "statement": statement,
+        "computed_at": str(computed_at),
     }

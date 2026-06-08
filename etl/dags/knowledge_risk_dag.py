@@ -59,6 +59,7 @@ def knowledge_ingest_dag():
 
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ingestion.connectors.confluence_connector import ConfluenceConnector
@@ -88,6 +89,7 @@ def knowledge_ingest_dag():
 
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ingestion.connectors.notion_connector import NotionConnector
@@ -119,8 +121,7 @@ def knowledge_ingest_dag():
         )
         if total == 0:
             logger.warning(
-                "No documents ingested.  Check connector credentials and "
-                "ENABLE_CONFLUENCE / ENABLE_NOTION env vars."
+                "No documents ingested.  Check connector credentials and " "ENABLE_CONFLUENCE / ENABLE_NOTION env vars."
             )
 
     c_result = ingest_confluence()
@@ -171,6 +172,7 @@ def knowledge_score_dag():
         """Compute knowledge concentration scores for all employees."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from graph.knowledge_risk import compute_and_persist

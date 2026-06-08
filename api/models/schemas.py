@@ -345,8 +345,7 @@ class SuccessionResponse(BaseModel):
 
 
 class TenantCreateRequest(BaseModel):
-    slug: str = Field(..., min_length=3, max_length=63,
-                      pattern=r"^[a-z0-9][a-z0-9_-]{1,61}[a-z0-9]$")
+    slug: str = Field(..., min_length=3, max_length=63, pattern=r"^[a-z0-9][a-z0-9_-]{1,61}[a-z0-9]$")
     name: str = Field(..., min_length=2, max_length=200)
     plan: Literal["free", "starter", "pro", "enterprise"] = "free"
 
@@ -357,7 +356,7 @@ class TenantCreateResponse(BaseModel):
     name: str
     plan: str
     schema_name: str
-    raw_api_key: str   # shown once — not stored
+    raw_api_key: str  # shown once — not stored
 
 
 class TenantDetail(BaseModel):
@@ -380,7 +379,7 @@ class TenantApiKeyResponse(BaseModel):
     key_id: str
     tenant_id: str
     name: str
-    raw_api_key: str   # shown once — not stored
+    raw_api_key: str  # shown once — not stored
     created_at: datetime
 
 

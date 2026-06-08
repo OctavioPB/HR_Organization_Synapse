@@ -33,9 +33,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_LOOKBACK_DAYS  = int(os.environ.get("CONFLUENCE_LOOKBACK_DAYS", "7"))
-_PAGE_SIZE      = 100
-_TIMEOUT_SEC    = 30
+_LOOKBACK_DAYS = int(os.environ.get("CONFLUENCE_LOOKBACK_DAYS", "7"))
+_PAGE_SIZE = 100
+_TIMEOUT_SEC = 30
 
 
 class ConfluenceConnector:
@@ -49,26 +49,19 @@ class ConfluenceConnector:
     source: str = "confluence"
 
     def __init__(self) -> None:
-        self._base_url    = os.environ.get("CONFLUENCE_BASE_URL", "").rstrip("/")
-        self._email       = os.environ.get("CONFLUENCE_EMAIL", "")
-        self._api_token   = os.environ.get("CONFLUENCE_API_TOKEN", "")
-        self._spaces      = [
-            s.strip()
-            for s in os.environ.get("CONFLUENCE_SPACES", "").split(",")
-            if s.strip()
-        ]
-        self._employee_map: dict[str, str] = json.loads(
-            os.environ.get("CONFLUENCE_EMPLOYEE_MAP", "{}")
-        )
+        self._base_url = os.environ.get("CONFLUENCE_BASE_URL", "").rstrip("/")
+        self._email = os.environ.get("CONFLUENCE_EMAIL", "")
+        self._api_token = os.environ.get("CONFLUENCE_API_TOKEN", "")
+        self._spaces = [s.strip() for s in os.environ.get("CONFLUENCE_SPACES", "").split(",") if s.strip()]
+        self._employee_map: dict[str, str] = json.loads(os.environ.get("CONFLUENCE_EMPLOYEE_MAP", "{}"))
         self._lookback_days = int(os.environ.get("CONFLUENCE_LOOKBACK_DAYS", str(_LOOKBACK_DAYS)))
 
     # ── Connectivity ──────────────────────────────────────────────────────
 
     def _headers(self) -> dict:
         import base64
-        credentials = base64.b64encode(
-            f"{self._email}:{self._api_token}".encode()
-        ).decode()
+
+        credentials = base64.b64encode(f"{self._email}:{self._api_token}".encode()).decode()
         return {
             "Authorization": f"Basic {credentials}",
             "Accept": "application/json",
@@ -97,9 +90,7 @@ class ConfluenceConnector:
         Fetches pages modified in the last lookback_days.  Paginates via
         the cursor returned in each response.
         """
-        since = (
-            datetime.now(tz=UTC) - timedelta(days=self._lookback_days)
-        ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        since = (datetime.now(tz=UTC) - timedelta(days=self._lookback_days)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         params: dict = {
             "limit": _PAGE_SIZE,
@@ -128,10 +119,7 @@ class ConfluenceConnector:
 
                 for page in pages:
                     # Filter out pages older than lookback window
-                    modified_str = (
-                        page.get("version", {}).get("createdAt")
-                        or page.get("createdAt", "")
-                    )
+                    modified_str = page.get("version", {}).get("createdAt") or page.get("createdAt", "")
                     if modified_str < since:
                         return
                     yield page
@@ -142,6 +130,7 @@ class ConfluenceConnector:
                     break
                 # Extract cursor from next link query string
                 from urllib.parse import parse_qs, urlparse
+
                 qs = parse_qs(urlparse(next_link).query)
                 cursor = qs.get("cursor", [None])[0]
                 if not cursor:
@@ -178,10 +167,7 @@ class ConfluenceConnector:
         """Extract all distinct contributor employee UUIDs from a page."""
         contributors: set[str] = set()
         # Author
-        author_acc = (
-            page.get("version", {}).get("authorId")
-            or page.get("authorId")
-        )
+        author_acc = page.get("version", {}).get("authorId") or page.get("authorId")
         emp = self._map_user(author_acc)
         if emp:
             contributors.add(emp)
@@ -218,32 +204,26 @@ class ConfluenceConnector:
         ) as client:
             for page in self._fetch_pages():
                 page_id = page.get("id", "")
-                title   = page.get("title", "")
-                labels  = self._fetch_page_labels(client, page_id)
+                title = page.get("title", "")
+                labels = self._fetch_page_labels(client, page_id)
                 domains = self._extract_domains(page, labels)
 
                 if not domains:
                     continue  # skip untagged pages — no domain signal
 
-                author_acc = (
-                    page.get("version", {}).get("authorId")
-                    or page.get("authorId")
-                )
+                author_acc = page.get("version", {}).get("authorId") or page.get("authorId")
                 author_emp = self._map_user(author_acc)
                 contributors = self._extract_contributors(page)
                 # Ensure all unique contributors (including author)
                 if author_emp and author_emp not in contributors:
                     contributors.append(author_emp)
 
-                modified_str = (
-                    page.get("version", {}).get("createdAt")
-                    or page.get("createdAt", "")
-                ) or datetime.now(tz=UTC).isoformat()
+                modified_str = (page.get("version", {}).get("createdAt") or page.get("createdAt", "")) or datetime.now(
+                    tz=UTC
+                ).isoformat()
 
                 try:
-                    modified_at = datetime.fromisoformat(
-                        modified_str.replace("Z", "+00:00")
-                    )
+                    modified_at = datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
                 except ValueError:
                     modified_at = datetime.now(tz=UTC)
 
@@ -276,13 +256,12 @@ class ConfluenceConnector:
                     conn.commit()
                     upserted += 1
                 except Exception as exc:
-                    logger.error(
-                        "Failed to upsert page %s: %s", page_id[:16], exc
-                    )
+                    logger.error("Failed to upsert page %s: %s", page_id[:16], exc)
                     conn.rollback()
 
         logger.info(
             "ConfluenceConnector: ingested %d pages (lookback=%dd)",
-            upserted, self._lookback_days,
+            upserted,
+            self._lookback_days,
         )
         return upserted

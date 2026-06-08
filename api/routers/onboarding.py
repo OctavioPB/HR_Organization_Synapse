@@ -49,7 +49,7 @@ def get_onboarding_cohort(
         rows = [dict(r) for r in cur.fetchall()]
 
     scores = [float(r["integration_score"]) for r in rows]
-    cohort_median = (sorted(scores)[len(scores) // 2] if scores else 0.0)
+    cohort_median = sorted(scores)[len(scores) // 2] if scores else 0.0
     at_risk_count = sum(1 for r in rows if r["below_cohort_threshold"])
 
     return {
@@ -59,16 +59,16 @@ def get_onboarding_cohort(
         "at_risk_count": at_risk_count,
         "cohort": [
             {
-                "employee_id":          r["employee_id"],
-                "name":                 r["name"],
-                "department":           r["department"],
-                "hire_date":            str(r["hire_date"]) if r["hire_date"] else None,
-                "tenure_days":          int(r["tenure_days"] or 0),
-                "integration_score":    round(float(r["integration_score"]), 4),
+                "employee_id": r["employee_id"],
+                "name": r["name"],
+                "department": r["department"],
+                "hire_date": str(r["hire_date"]) if r["hire_date"] else None,
+                "tenure_days": int(r["tenure_days"] or 0),
+                "integration_score": round(float(r["integration_score"]), 4),
                 "degree_centrality_pct": round(float(r["degree_centrality_pct"] or 0), 4),
                 "cross_dept_edge_count": int(r["cross_dept_edge_count"] or 0),
-                "community_stability":  round(float(r["community_stability"] or 0), 4),
-                "cohort_size":          int(r["cohort_size"] or 0),
+                "community_stability": round(float(r["community_stability"] or 0), 4),
+                "cohort_size": int(r["cohort_size"] or 0),
                 "below_cohort_threshold": bool(r["below_cohort_threshold"]),
             }
             for r in rows
@@ -105,8 +105,8 @@ def get_onboarding_history(
         "employee_id": employee_id,
         "history": [
             {
-                "scored_date":           str(r["scored_date"]),
-                "integration_score":     round(float(r["integration_score"]), 4),
+                "scored_date": str(r["scored_date"]),
+                "integration_score": round(float(r["integration_score"]), 4),
                 "degree_centrality_pct": round(float(r["degree_centrality_pct"] or 0), 4),
                 "cross_dept_edge_count": int(r["cross_dept_edge_count"] or 0),
                 "below_cohort_threshold": bool(r["below_cohort_threshold"]),

@@ -71,7 +71,7 @@ def run_query(question: str, conn) -> dict[str, Any]:
             max_tokens=1024,
             system=_SYSTEM_PROMPT,
             tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
-            messages=messages,       # type: ignore[arg-type]
+            messages=messages,  # type: ignore[arg-type]
         )
 
         # Append assistant message (may contain tool_use blocks)
@@ -95,9 +95,7 @@ def run_query(question: str, conn) -> dict[str, Any]:
 
                 result = execute_tool(tool_name, tool_input, conn)
                 result_summary = _summarise(result)
-                tools_used.append(
-                    {"name": tool_name, "input": tool_input, "result_summary": result_summary}
-                )
+                tools_used.append({"name": tool_name, "input": tool_input, "result_summary": result_summary})
 
                 tool_results.append(
                     {
@@ -161,6 +159,7 @@ def _serialise(obj: Any) -> str:
 
     def _default(o: Any) -> str:
         from datetime import date, datetime
+
         if isinstance(o, (date, datetime)):
             return o.isoformat()
         return str(o)

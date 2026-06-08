@@ -147,9 +147,9 @@ def test_connectors_have_more_edges_than_average():
     edge_counts = Counter(e.source_employee_id for e in edges)
     mean_count = sum(edge_counts.values()) / len(employees)
     for cid in connector_ids:
-        assert edge_counts[cid] > mean_count * 5, (
-            f"Connector {cid} has {edge_counts[cid]} edges, expected > {mean_count * 5:.1f}"
-        )
+        assert (
+            edge_counts[cid] > mean_count * 5
+        ), f"Connector {cid} has {edge_counts[cid]} edges, expected > {mean_count * 5:.1f}"
 
 
 def test_connectors_have_more_cross_dept_edges():
@@ -162,18 +162,14 @@ def test_connectors_have_more_cross_dept_edges():
         my_edges = [e for e in edges if e.source_employee_id == cid]
         cross = sum(1 for e in my_edges if e.department_target != my_dept)
         same = len(my_edges) - cross
-        assert cross > same, (
-            f"Connector {cid}: cross={cross} same={same}; expected cross > same"
-        )
+        assert cross > same, f"Connector {cid}: cross={cross} same={same}; expected cross > same"
 
 
 def test_withdrawing_employee_decays_in_last_15_days():
     """Withdrawing employee must have fewer edges/day in last 15 days than the first 75."""
     from datetime import timedelta
 
-    employees, edges, connector_ids, withdrawing_id = _make_edges(
-        n_employees=60, n_days=90
-    )
+    employees, edges, connector_ids, withdrawing_id = _make_edges(n_employees=60, n_days=90)
     w_edges = [e for e in edges if e.source_employee_id == withdrawing_id]
     if not w_edges:
         pytest.skip("No withdrawing edges generated (small dataset)")
@@ -184,7 +180,7 @@ def test_withdrawing_employee_decays_in_last_15_days():
     late = [e for e in w_edges if e.timestamp >= cutoff_iso]
 
     early_rate = len(early) / 75  # events per day
-    late_rate = len(late) / 15    # events per day (0 if no late edges)
+    late_rate = len(late) / 15  # events per day (0 if no late edges)
 
     # 70% decay → late_rate ≈ 0.3 × early_rate, well below 60% threshold
     assert late_rate < early_rate * 0.6, (

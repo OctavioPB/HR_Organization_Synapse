@@ -58,11 +58,7 @@ def compute_entropy(partner_counts: dict[str, int]) -> float:
     total = sum(partner_counts.values())
     if total == 0:
         return 0.0
-    return -sum(
-        (c / total) * math.log2(c / total)
-        for c in partner_counts.values()
-        if c > 0
-    )
+    return -sum((c / total) * math.log2(c / total) for c in partner_counts.values() if c > 0)
 
 
 def compute_entropy_trend(weekly_entropies: list[float]) -> float:
@@ -152,11 +148,7 @@ def _load_weekly_interactions(
     )
     weekly: dict[str, dict[int, dict[str, int]]] = {}
     for emp_id, week_idx, partner_id, cnt in cur.fetchall():
-        (
-            weekly
-            .setdefault(emp_id, {})
-            .setdefault(int(week_idx), {})
-        )[partner_id] = int(cnt)
+        (weekly.setdefault(emp_id, {}).setdefault(int(week_idx), {}))[partner_id] = int(cnt)
     return weekly
 
 
@@ -183,9 +175,7 @@ def compute_entropy_trends(
             weekly = _load_weekly_interactions(window_start, snapshot_date, cur)
 
     return {
-        emp_id: compute_entropy_trend(
-            [compute_entropy(week_data.get(w, {})) for w in range(_N_WEEKS)]
-        )
+        emp_id: compute_entropy_trend([compute_entropy(week_data.get(w, {})) for w in range(_N_WEEKS)])
         for emp_id, week_data in weekly.items()
     }
 
@@ -245,14 +235,15 @@ def extract_features(
         return []
 
     current = {
-        r[0]: {"betweenness": float(r[1]), "degree_in": float(r[2]),
-               "degree_out": float(r[3]), "clustering": float(r[4])}
+        r[0]: {
+            "betweenness": float(r[1]),
+            "degree_in": float(r[2]),
+            "degree_out": float(r[3]),
+            "clustering": float(r[4]),
+        }
         for r in current_rows
     }
-    prior = {
-        r[0]: {"betweenness": float(r[1]), "degree_out": float(r[2])}
-        for r in prior_rows
-    }
+    prior = {r[0]: {"betweenness": float(r[1]), "degree_out": float(r[2])} for r in prior_rows}
 
     features: list[dict] = []
     for emp_id, metrics in current.items():
@@ -270,7 +261,10 @@ def extract_features(
 
     logger.info(
         "extract_features: %d employees, snapshot=%s, prior=%s, window=%dd",
-        len(features), snapshot_date, prior_date, window_days,
+        len(features),
+        snapshot_date,
+        prior_date,
+        window_days,
     )
     return features
 
@@ -284,7 +278,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Extract graph features for a snapshot date.")
     parser.add_argument("--snapshot-date", type=date.fromisoformat, required=True)
     parser.add_argument(
-        "--window-days", type=int,
+        "--window-days",
+        type=int,
         default=int(os.environ.get("GRAPH_WINDOW_DAYS", "30")),
     )
     args = parser.parse_args()
@@ -296,7 +291,9 @@ def main() -> None:
         withdrawing = sum(1 for t in trends if t < 0)
         logger.info(
             "Entropy trend — min=%.3f max=%.3f withdrawing=%d",
-            min(trends), max(trends), withdrawing,
+            min(trends),
+            max(trends),
+            withdrawing,
         )
 
 

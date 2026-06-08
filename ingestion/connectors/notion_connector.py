@@ -29,9 +29,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _LOOKBACK_DAYS = int(os.environ.get("NOTION_LOOKBACK_DAYS", "7"))
-_PAGE_SIZE     = 100
-_TIMEOUT_SEC   = 30
-_API_VERSION   = "2022-06-28"
+_PAGE_SIZE = 100
+_TIMEOUT_SEC = 30
+_API_VERSION = "2022-06-28"
 
 
 class NotionConnector:
@@ -45,11 +45,9 @@ class NotionConnector:
     source: str = "notion"
 
     def __init__(self) -> None:
-        self._api_token  = os.environ.get("NOTION_API_TOKEN", "")
+        self._api_token = os.environ.get("NOTION_API_TOKEN", "")
         self._lookback_days = int(os.environ.get("NOTION_LOOKBACK_DAYS", str(_LOOKBACK_DAYS)))
-        self._employee_map: dict[str, str] = json.loads(
-            os.environ.get("NOTION_EMPLOYEE_MAP", "{}")
-        )
+        self._employee_map: dict[str, str] = json.loads(os.environ.get("NOTION_EMPLOYEE_MAP", "{}"))
 
     # ── Connectivity ──────────────────────────────────────────────────────
 
@@ -83,9 +81,7 @@ class NotionConnector:
         Uses POST /v1/search with filter: {property: "object", value: "page"}
         and sorts by last_edited_time descending.
         """
-        since = (
-            datetime.now(tz=UTC) - timedelta(days=self._lookback_days)
-        ).isoformat()
+        since = (datetime.now(tz=UTC) - timedelta(days=self._lookback_days)).isoformat()
 
         cursor: str | None = None
 
@@ -130,9 +126,7 @@ class NotionConnector:
             if prop.get("type") == "title":
                 title_parts = prop.get("title", [])
                 if title_parts:
-                    return "".join(
-                        t.get("plain_text", "") for t in title_parts
-                    )
+                    return "".join(t.get("plain_text", "") for t in title_parts)
         return ""
 
     def _extract_domains(self, page: dict) -> list[str]:
@@ -188,35 +182,33 @@ class NotionConnector:
             Number of pages upserted.
         """
         if not self._api_token:
-            logger.warning(
-                "NotionConnector: missing NOTION_API_TOKEN — skipping ingestion."
-            )
+            logger.warning("NotionConnector: missing NOTION_API_TOKEN — skipping ingestion.")
             return 0
 
         upserted = 0
         for page in self._fetch_pages():
             page_id = page.get("id", "")
-            title   = self._extract_title(page)
+            title = self._extract_title(page)
             domains = self._extract_domains(page)
 
             if not domains:
                 continue  # skip untagged pages
 
-            created_by_id    = (page.get("created_by") or {}).get("id")
-            last_edited_id   = (page.get("last_edited_by") or {}).get("id")
+            created_by_id = (page.get("created_by") or {}).get("id")
+            last_edited_id = (page.get("last_edited_by") or {}).get("id")
 
-            author_emp   = self._map_user(created_by_id)
+            author_emp = self._map_user(created_by_id)
             modifier_emp = self._map_user(last_edited_id)
 
-            contributors: list[str] = list(
-                {e for e in [author_emp, modifier_emp] if e}
-            )
+            contributors: list[str] = list({e for e in [author_emp, modifier_emp] if e})
 
             modified_str = page.get("last_edited_time", "")
             try:
-                modified_at = datetime.fromisoformat(
-                    modified_str.replace("Z", "+00:00")
-                ) if modified_str else datetime.now(tz=UTC)
+                modified_at = (
+                    datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
+                    if modified_str
+                    else datetime.now(tz=UTC)
+                )
             except ValueError:
                 modified_at = datetime.now(tz=UTC)
 
@@ -254,6 +246,7 @@ class NotionConnector:
 
         logger.info(
             "NotionConnector: ingested %d pages (lookback=%dd)",
-            upserted, self._lookback_days,
+            upserted,
+            self._lookback_days,
         )
         return upserted

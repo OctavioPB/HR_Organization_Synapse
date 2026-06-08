@@ -143,14 +143,14 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
 
     with conn.cursor() as cur:
         for row in rows:
-            emp_id       = row["employee_id"]
-            tenure_days  = int(row["tenure_days"] or 0)
+            emp_id = row["employee_id"]
+            tenure_days = int(row["tenure_days"] or 0)
             degree_total = float(row["degree_total"] or 0)
             median_degree = float(row["median_degree"] or 1)
-            p25_degree   = float(row["p25_degree"] or 0)
-            cohort_size  = int(row["cohort_size"] or 0)
-            _clustering  = float(row["clustering"] or 0)  # stored; not yet used in integration score
-            dept         = row["department"]
+            p25_degree = float(row["p25_degree"] or 0)
+            cohort_size = int(row["cohort_size"] or 0)
+            _clustering = float(row["clustering"] or 0)  # stored; not yet used in integration score
+            dept = row["department"]
 
             # Cross-dept edge count in last 30 days
             cur.execute(
@@ -185,22 +185,16 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
             curr = cur.fetchone()
             cid_prev = prev["community_id"] if prev else None
             cid_curr = curr["community_id"] if curr else None
-            community_stability = compute_cs_overlap(
-                emp_id, cid_curr, cid_prev, curr_members, prev_members
-            )
+            community_stability = compute_cs_overlap(emp_id, cid_curr, cid_prev, curr_members, prev_members)
             if community_stability >= _CS_OVERLAP_THRESHOLD:
                 stable_count += 1
 
             # Integration score: 50% degree percentile, 30% cross-dept, 20% CS_overlap
             degree_pct_norm = min(degree_total / max(median_degree, 1), 1.0)
             cross_dept_norm = min(cross_dept / 5.0, 1.0)
-            integration_score = (
-                0.5 * degree_pct_norm +
-                0.3 * cross_dept_norm +
-                0.2 * community_stability
-            )
+            integration_score = 0.5 * degree_pct_norm + 0.3 * cross_dept_norm + 0.2 * community_stability
 
-            below_threshold = (degree_total <= p25_degree and tenure_days >= _COHORT_ALERT_DAY)
+            below_threshold = degree_total <= p25_degree and tenure_days >= _COHORT_ALERT_DAY
 
             # Upsert onboarding score
             cur.execute(
@@ -217,9 +211,16 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
                   cohort_size            = EXCLUDED.cohort_size,
                   below_cohort_threshold = EXCLUDED.below_cohort_threshold
                 """,
-                (emp_id, snapshot_date, round(integration_score, 4),
-                 round(degree_pct_norm, 4), cross_dept, round(community_stability, 4),
-                 cohort_size, below_threshold),
+                (
+                    emp_id,
+                    snapshot_date,
+                    round(integration_score, 4),
+                    round(degree_pct_norm, 4),
+                    cross_dept,
+                    round(community_stability, 4),
+                    cohort_size,
+                    below_threshold,
+                ),
             )
             upserted += 1
 
@@ -234,12 +235,14 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
                     ON CONFLICT DO NOTHING
                     """,
                     (
-                        __import__("json").dumps({
-                            "employee_id": emp_id,
-                            "department": dept,
-                            "tenure_days": tenure_days,
-                            "integration_score": round(integration_score, 4),
-                        }),
+                        __import__("json").dumps(
+                            {
+                                "employee_id": emp_id,
+                                "department": dept,
+                                "tenure_days": tenure_days,
+                                "integration_score": round(integration_score, 4),
+                            }
+                        ),
                         f"New hire in {dept} is below cohort threshold after {tenure_days} days "
                         f"(score={round(integration_score, 2)})",
                     ),
@@ -249,7 +252,10 @@ def task_compute_onboarding(snapshot_date_str: str, conn) -> dict:
     conn.commit()
     logger.info(
         "Onboarding: %d scores upserted, %d alerts fired, %d cohorts structurally stable (CS_overlap ≥ %.2f).",
-        upserted, alerts_fired, stable_count, _CS_OVERLAP_THRESHOLD,
+        upserted,
+        alerts_fired,
+        stable_count,
+        _CS_OVERLAP_THRESHOLD,
     )
     return {
         "processed": upserted,

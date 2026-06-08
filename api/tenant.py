@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 # ─── Plan limits ──────────────────────────────────────────────────────────────
 
 PLAN_LIMITS: dict[str, dict] = {
-    "free":       {"events_per_month": 10_000,     "employees_max": 50},
-    "starter":    {"events_per_month": 100_000,    "employees_max": 200},
-    "pro":        {"events_per_month": 1_000_000,  "employees_max": 1_000},
-    "enterprise": {"events_per_month": None,        "employees_max": None},
+    "free": {"events_per_month": 10_000, "employees_max": 50},
+    "starter": {"events_per_month": 100_000, "employees_max": 200},
+    "pro": {"events_per_month": 1_000_000, "employees_max": 1_000},
+    "enterprise": {"events_per_month": None, "employees_max": None},
 }
 
 # ─── Per-tenant table DDL ─────────────────────────────────────────────────────

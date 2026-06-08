@@ -58,12 +58,13 @@ def temporal_gnn_train_dag():
         """Verify sufficient graph_snapshots exist before training."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         import os
         from ingestion.db import get_conn
 
-        _n_weeks    = int(os.environ.get("TGNN_N_WEEKS", "8"))  # reserved for future use
+        _n_weeks = int(os.environ.get("TGNN_N_WEEKS", "8"))  # reserved for future use
         history_req = int(os.environ.get("TGNN_HISTORY_WEEKS", "24")) + 1
 
         with get_conn() as conn:
@@ -75,13 +76,15 @@ def temporal_gnn_train_dag():
             logger.warning(
                 "Only %d distinct snapshot dates found; need %d for training. "
                 "Skipping this week — run graph_builder_dag daily to build history.",
-                n_distinct, history_req,
+                n_distinct,
+                history_req,
             )
             return {"sufficient": False, "n_available": n_distinct, "n_required": history_req}
 
         logger.info(
             "History check passed: %d snapshot dates available (need %d)",
-            n_distinct, history_req,
+            n_distinct,
+            history_req,
         )
         return {"sufficient": True, "n_available": n_distinct}
 
@@ -94,6 +97,7 @@ def temporal_gnn_train_dag():
 
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from graph.temporal.trainer import train
@@ -117,8 +121,7 @@ def temporal_gnn_train_dag():
 
         val_loss = metrics.get("val_loss", float("nan"))
         logger.info(
-            "TemporalRiskGNN training — best_epoch=%d val_loss=%.6f "
-            "train_windows=%d val_windows=%d",
+            "TemporalRiskGNN training — best_epoch=%d val_loss=%.6f " "train_windows=%d val_windows=%d",
             metrics.get("best_epoch", 0),
             val_loss,
             metrics.get("n_train_windows", 0),
@@ -128,7 +131,8 @@ def temporal_gnn_train_dag():
             logger.warning(
                 "val_loss=%.6f exceeds threshold %.4f — model quality may be degraded. "
                 "Check feature pipeline and snapshot coverage.",
-                val_loss, _VAL_LOSS_WARN_THRESHOLD,
+                val_loss,
+                _VAL_LOSS_WARN_THRESHOLD,
             )
 
     history_check = check_history()
@@ -167,6 +171,7 @@ def temporal_gnn_score_dag():
         """Load latest checkpoint and write temporal_anomaly_scores for today."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from graph.temporal.scorer import score
@@ -178,18 +183,21 @@ def temporal_gnn_score_dag():
             results = score(end_date=end_date)
         except FileNotFoundError as exc:
             logger.warning(
-                "No checkpoint found — skipping scoring. "
-                "Run temporal_gnn_train first. Error: %s", exc,
+                "No checkpoint found — skipping scoring. " "Run temporal_gnn_train first. Error: %s",
+                exc,
             )
             return {"scored": 0, "skipped": True}
 
-        high_count   = sum(1 for r in results if r["anomaly_tier"] == "high")
+        high_count = sum(1 for r in results if r["anomaly_tier"] == "high")
         medium_count = sum(1 for r in results if r["anomaly_tier"] == "medium")
-        low_count    = sum(1 for r in results if r["anomaly_tier"] == "low")
+        low_count = sum(1 for r in results if r["anomaly_tier"] == "low")
 
         logger.info(
             "Temporal scoring complete — total=%d high=%d medium=%d low=%d",
-            len(results), high_count, medium_count, low_count,
+            len(results),
+            high_count,
+            medium_count,
+            low_count,
         )
         return {
             "scored": len(results),

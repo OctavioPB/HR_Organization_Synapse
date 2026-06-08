@@ -56,9 +56,7 @@ def task_run_isolation_forest(
     features = extract_features(d, window_days)
 
     if not features:
-        logger.warning(
-            "task_run_isolation_forest: no features for %s — skipping", snapshot_date_str
-        )
+        logger.warning("task_run_isolation_forest: no features for %s — skipping", snapshot_date_str)
         return {
             "snapshot_date": snapshot_date_str,
             "employees_scored": 0,
@@ -96,11 +94,14 @@ def task_summarise_anomalies(anomaly_stats: dict) -> dict:
     if anomalies > 0:
         logger.warning(
             "task_summarise_anomalies: %d/%d employees flagged as anomalies on %s",
-            anomalies, scored, snapshot,
+            anomalies,
+            scored,
+            snapshot,
         )
     else:
         logger.info(
             "task_summarise_anomalies: no connectivity anomalies on %s (%d employees scored)",
-            snapshot, scored,
+            snapshot,
+            scored,
         )
     return anomaly_stats

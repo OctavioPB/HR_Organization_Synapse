@@ -131,7 +131,7 @@ INJECTED_ANOMALIES: list[tuple[str, str, int, dict]] = [
             betweenness=0.06,
             degree_in=0.18,
             degree_out=0.32,
-            clustering=0.85,     # tightly clustered because talks to only one person
+            clustering=0.85,  # tightly clustered because talks to only one person
             betweenness_delta_7d=-0.12,
             degree_out_delta_7d=-0.04,
             entropy_current=0.04,  # ~0 bits diversity
@@ -162,7 +162,7 @@ INJECTED_ANOMALIES: list[tuple[str, str, int, dict]] = [
         2,
         dict(
             betweenness=0.96,
-            degree_in=0.04,      # asymmetric: sends but doesn't receive
+            degree_in=0.04,  # asymmetric: sends but doesn't receive
             degree_out=0.98,
             clustering=0.05,
             betweenness_delta_7d=0.58,
@@ -198,8 +198,8 @@ INJECTED_ANOMALIES: list[tuple[str, str, int, dict]] = [
             degree_in=0.22,
             degree_out=0.18,
             clustering=0.42,
-            betweenness_delta_7d=-0.54,   # was ~0.59, now 0.05
-            degree_out_delta_7d=-0.40,    # was ~0.58, now 0.18
+            betweenness_delta_7d=-0.54,  # was ~0.59, now 0.05
+            degree_out_delta_7d=-0.40,  # was ~0.58, now 0.18
             entropy_current=0.85,
             entropy_trend=-0.38,
         ),
@@ -213,7 +213,7 @@ INJECTED_ANOMALIES: list[tuple[str, str, int, dict]] = [
             degree_in=0.28,
             degree_out=0.26,
             clustering=0.38,
-            betweenness_delta_7d=-0.28,   # was ~0.42, now 0.14
+            betweenness_delta_7d=-0.28,  # was ~0.42, now 0.14
             degree_out_delta_7d=-0.22,
             entropy_current=1.10,
             entropy_trend=-0.18,
@@ -237,17 +237,19 @@ def _make_normal_population(n: int, seed: int) -> list[dict]:
     rng = np.random.default_rng(seed)
     records = []
     for i in range(n):
-        records.append(_fv(
-            f"NORMAL_{i:03d}",
-            betweenness=float(rng.uniform(0.05, 0.62)),
-            degree_in=float(rng.uniform(0.12, 0.72)),
-            degree_out=float(rng.uniform(0.18, 0.76)),
-            clustering=float(rng.uniform(0.18, 0.78)),
-            betweenness_delta_7d=float(np.clip(rng.normal(0.0, 0.05), -0.18, 0.18)),
-            degree_out_delta_7d=float(np.clip(rng.normal(0.0, 0.04), -0.15, 0.15)),
-            entropy_current=float(rng.uniform(0.90, 3.10)),
-            entropy_trend=float(np.clip(rng.normal(0.0, 0.09), -0.28, 0.28)),
-        ))
+        records.append(
+            _fv(
+                f"NORMAL_{i:03d}",
+                betweenness=float(rng.uniform(0.05, 0.62)),
+                degree_in=float(rng.uniform(0.12, 0.72)),
+                degree_out=float(rng.uniform(0.18, 0.76)),
+                clustering=float(rng.uniform(0.18, 0.78)),
+                betweenness_delta_7d=float(np.clip(rng.normal(0.0, 0.05), -0.18, 0.18)),
+                degree_out_delta_7d=float(np.clip(rng.normal(0.0, 0.04), -0.15, 0.15)),
+                entropy_current=float(rng.uniform(0.90, 3.10)),
+                entropy_trend=float(np.clip(rng.normal(0.0, 0.09), -0.28, 0.28)),
+            )
+        )
     return records
 
 
@@ -259,14 +261,14 @@ class AnomalyEvalReport:
     # Per-injected-anomaly results
     per_anomaly: list[dict]
     # Aggregate metrics
-    recall_severe: float          # fraction of severe anomalies detected (any contamination)
-    recall_all: float             # fraction of all 8 detected
-    precision_oracle: float       # precision at oracle-contamination flagged set
-    recall_oracle: float          # recall at oracle-contamination flagged set
-    recall_production: float      # recall at production contamination (0.05)
-    severity_order_holds: bool    # severe score > moderate for ALL 4 archetypes
-    severity_spearman: float      # Spearman(group_severity, group_median_score)
-    hardest_archetype: str        # archetype with lowest severe anomaly score
+    recall_severe: float  # fraction of severe anomalies detected (any contamination)
+    recall_all: float  # fraction of all 8 detected
+    precision_oracle: float  # precision at oracle-contamination flagged set
+    recall_oracle: float  # recall at oracle-contamination flagged set
+    recall_production: float  # recall at production contamination (0.05)
+    severity_order_holds: bool  # severe score > moderate for ALL 4 archetypes
+    severity_spearman: float  # Spearman(group_severity, group_median_score)
+    hardest_archetype: str  # archetype with lowest severe anomaly score
     n_total: int
     n_anomalies: int
     n_normal: int
@@ -286,19 +288,16 @@ def _spearman(x: list[float], y: list[float]) -> float:
     ay = np.array(y, dtype=float)
     rx = np.argsort(np.argsort(ax)).astype(float)
     ry = np.argsort(np.argsort(ay)).astype(float)
-    d  = rx - ry
+    d = rx - ry
     return float(1.0 - 6.0 * np.sum(d**2) / (n * (n**2 - 1)))
 
 
 def run_evaluation(seed: int = SEED) -> AnomalyEvalReport:
     """Build dataset, run IF at two contamination levels, compute all metrics."""
     normal_pop = _make_normal_population(N_NORMAL, seed)
-    anomaly_pop = [
-        _fv(emp_id, **feat_kw)
-        for emp_id, archetype, severity_rank, feat_kw in INJECTED_ANOMALIES
-    ]
+    anomaly_pop = [_fv(emp_id, **feat_kw) for emp_id, archetype, severity_rank, feat_kw in INJECTED_ANOMALIES]
     all_features = normal_pop + anomaly_pop
-    n_total    = len(all_features)
+    n_total = len(all_features)
     n_anomalies = len(anomaly_pop)
     contamination_oracle = n_anomalies / n_total
 
@@ -317,7 +316,7 @@ def run_evaluation(seed: int = SEED) -> AnomalyEvalReport:
     )
 
     # Index results by employee_id
-    oracle_by_id     = {r["employee_id"]: r for r in oracle_results}
+    oracle_by_id = {r["employee_id"]: r for r in oracle_results}
     production_by_id = {r["employee_id"]: r for r in production_results}
 
     # ── Per-anomaly metrics ───────────────────────────────────────────────────
@@ -328,37 +327,39 @@ def run_evaluation(seed: int = SEED) -> AnomalyEvalReport:
 
     per_anomaly = []
     for emp_id, archetype, severity_rank, _ in INJECTED_ANOMALIES:
-        oracle_r     = oracle_by_id[emp_id]
+        oracle_r = oracle_by_id[emp_id]
         production_r = production_by_id[emp_id]
-        percentile   = 1.0 - (rank_of[emp_id] - 1) / (n_total - 1)  # 1.0 = top rank
-        per_anomaly.append({
-            "employee_id":       emp_id,
-            "archetype":         archetype,
-            "severity":          severity_rank,
-            "anomaly_score":     round(oracle_r["anomaly_score"], 4),
-            "rank":              rank_of[emp_id],
-            "percentile":        round(percentile, 3),
-            "detected_oracle":   oracle_r["is_anomaly"],
-            "detected_prod":     production_r["is_anomaly"],
-        })
+        percentile = 1.0 - (rank_of[emp_id] - 1) / (n_total - 1)  # 1.0 = top rank
+        per_anomaly.append(
+            {
+                "employee_id": emp_id,
+                "archetype": archetype,
+                "severity": severity_rank,
+                "anomaly_score": round(oracle_r["anomaly_score"], 4),
+                "rank": rank_of[emp_id],
+                "percentile": round(percentile, 3),
+                "detected_oracle": oracle_r["is_anomaly"],
+                "detected_prod": production_r["is_anomaly"],
+            }
+        )
 
     # ── Aggregate metrics ─────────────────────────────────────────────────────
-    severe_rows   = [p for p in per_anomaly if p["severity"] == 2]
+    severe_rows = [p for p in per_anomaly if p["severity"] == 2]
     moderate_rows = [p for p in per_anomaly if p["severity"] == 1]
 
     recall_severe = sum(1 for p in severe_rows if p["detected_oracle"]) / len(severe_rows)
-    recall_all    = sum(1 for p in per_anomaly if p["detected_oracle"]) / len(per_anomaly)
+    recall_all = sum(1 for p in per_anomaly if p["detected_oracle"]) / len(per_anomaly)
 
     # Oracle precision/recall
-    oracle_flagged_ids  = {r["employee_id"] for r in oracle_results if r["is_anomaly"]}
+    oracle_flagged_ids = {r["employee_id"] for r in oracle_results if r["is_anomaly"]}
     tp_oracle = len(oracle_flagged_ids & anomaly_ids)
     fp_oracle = len(oracle_flagged_ids - anomaly_ids)
     precision_oracle = tp_oracle / max(tp_oracle + fp_oracle, 1)
-    recall_oracle    = tp_oracle / max(n_anomalies, 1)
+    recall_oracle = tp_oracle / max(n_anomalies, 1)
 
     # Production recall
     prod_flagged_ids = {r["employee_id"] for r in production_results if r["is_anomaly"]}
-    tp_prod          = len(prod_flagged_ids & anomaly_ids)
+    tp_prod = len(prod_flagged_ids & anomaly_ids)
     recall_production = tp_prod / max(n_anomalies, 1)
 
     # Severity ordering: for each archetype, severe.score > moderate.score?
@@ -373,12 +374,12 @@ def run_evaluation(seed: int = SEED) -> AnomalyEvalReport:
             severity_order_holds = False
 
     # Spearman on 3 group medians: NORMAL vs MODERATE vs SEVERE
-    normal_scores   = [oracle_by_id[f"NORMAL_{i:03d}"]["anomaly_score"] for i in range(N_NORMAL)]
+    normal_scores = [oracle_by_id[f"NORMAL_{i:03d}"]["anomaly_score"] for i in range(N_NORMAL)]
     moderate_scores = [p["anomaly_score"] for p in moderate_rows]
-    severe_scores   = [p["anomaly_score"] for p in severe_rows]
+    severe_scores = [p["anomaly_score"] for p in severe_rows]
 
     grp_severity = [0.0, 1.0, 2.0]
-    grp_median   = [
+    grp_median = [
         float(np.median(normal_scores)),
         float(np.median(moderate_scores)),
         float(np.median(severe_scores)),
@@ -434,17 +435,21 @@ def print_report(report: AnomalyEvalReport) -> None:
     print(f"    Spearman (3 group medians) : {report.severity_spearman:.3f}")
 
     print(f"\n  PER-ANOMALY RESULTS  (oracle contamination = {report.contamination_oracle:.4f})")
-    hdr = (f"  {'Employee':<18} {'Archetype':<18} {'Sev':>3} "
-           f"{'Score':>7} {'Rank':>5} {'Pct':>6} {'Oracle':>8} {'Prod':>7}")
+    hdr = (
+        f"  {'Employee':<18} {'Archetype':<18} {'Sev':>3} "
+        f"{'Score':>7} {'Rank':>5} {'Pct':>6} {'Oracle':>8} {'Prod':>7}"
+    )
     print(hdr)
     print(f"  {'-'*18} {'-'*18} {'-'*3} {'-'*7} {'-'*5} {'-'*6} {'-'*8} {'-'*7}")
     for p in sorted(report.per_anomaly, key=lambda x: x["severity"], reverse=True):
         ok_o = "YES" if p["detected_oracle"] else "NO"
         ok_p = "YES" if p["detected_prod"] else "NO"
         sev_label = "SEVERE" if p["severity"] == 2 else "moderate"
-        print(f"  {p['employee_id']:<18} {p['archetype']:<18} {sev_label:>8} "
-              f"{p['anomaly_score']:>7.4f} {p['rank']:>5} {p['percentile']:>6.1%} "
-              f"{ok_o:>8} {ok_p:>7}")
+        print(
+            f"  {p['employee_id']:<18} {p['archetype']:<18} {sev_label:>8} "
+            f"{p['anomaly_score']:>7.4f} {p['rank']:>5} {p['percentile']:>6.1%} "
+            f"{ok_o:>8} {ok_p:>7}"
+        )
 
     print("\n  AGGREGATE METRICS")
     print(f"    Recall@severe  (oracle) : {report.recall_severe:.1%}  (all 4 severe detected?)")
@@ -577,10 +582,7 @@ def test_recall_at_production_contamination():
     the production alert system misses the most extreme withdrawal patterns.
     """
     report = _get_report()
-    severe_detected_prod = sum(
-        1 for p in report.per_anomaly
-        if p["severity"] == 2 and p["detected_prod"]
-    )
+    severe_detected_prod = sum(1 for p in report.per_anomaly if p["severity"] == 2 and p["detected_prod"])
     assert severe_detected_prod >= 2, (
         f"Only {severe_detected_prod}/4 severe anomalies detected at production "
         f"contamination ({_PRODUCTION_CONTAMINATION}). "
@@ -603,12 +605,9 @@ def test_severity_ordering_within_archetypes():
         if 2 in rows and 1 in rows:
             if rows[2]["anomaly_score"] <= rows[1]["anomaly_score"]:
                 violations.append(
-                    f"{arch}: severe={rows[2]['anomaly_score']:.4f} "
-                    f"<= moderate={rows[1]['anomaly_score']:.4f}"
+                    f"{arch}: severe={rows[2]['anomaly_score']:.4f} " f"<= moderate={rows[1]['anomaly_score']:.4f}"
                 )
-    assert not violations, (
-        "Severity ordering violated for:\n  " + "\n  ".join(violations)
-    )
+    assert not violations, "Severity ordering violated for:\n  " + "\n  ".join(violations)
 
 
 def test_group_score_ordering():

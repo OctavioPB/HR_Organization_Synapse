@@ -46,10 +46,7 @@ def peer_churn_rate(neighbors: set[str], departed: set[str]) -> float:
 
 def _undirected_neighbors(G: nx.DiGraph) -> dict[str, set[str]]:
     """Map each node to its undirected neighbor set (predecessors ∪ successors)."""
-    return {
-        n: set(G.predecessors(n)) | set(G.successors(n))
-        for n in G.nodes()
-    }
+    return {n: set(G.predecessors(n)) | set(G.successors(n)) for n in G.nodes()}
 
 
 def task_compute_peer_contagion(
@@ -83,6 +80,7 @@ def task_compute_peer_contagion(
     own_conn = conn is None
     if own_conn:
         from ingestion.db import get_conn
+
         conn = get_conn()
 
     try:
@@ -124,13 +122,15 @@ def task_compute_peer_contagion(
                         ON CONFLICT DO NOTHING
                         """,
                         (
-                            json.dumps({
-                                "employee_id": emp_id,
-                                "peer_churn_rate": round(rate, 4),
-                                "departed_peers": len(neighbors & departed),
-                                "total_peers": len(neighbors),
-                                "snapshot_date": snapshot_date_str,
-                            }),
+                            json.dumps(
+                                {
+                                    "employee_id": emp_id,
+                                    "peer_churn_rate": round(rate, 4),
+                                    "departed_peers": len(neighbors & departed),
+                                    "total_peers": len(neighbors),
+                                    "snapshot_date": snapshot_date_str,
+                                }
+                            ),
                             f"Employee {emp_id[:8]}… has {round(rate * 100)}% of peers departed "
                             f"in the last {_PEER_CHURN_WINDOW_DAYS} days "
                             f"(> {round(_PEER_CONTAGION_THRESHOLD * 100)}% contagion threshold).",

@@ -127,10 +127,10 @@ def trigger_retention_purge(conn=Depends(get_admin_db)):
     from graph.compliance import run_retention_purge
 
     results = run_retention_purge(conn, triggered_by="api")
-    total   = sum(r["rows_deleted"] for r in results)
+    total = sum(r["rows_deleted"] for r in results)
     return {
-        "triggered_at":     datetime.now(UTC).isoformat(),
-        "results":          results,
+        "triggered_at": datetime.now(UTC).isoformat(),
+        "results": results,
         "total_rows_deleted": total,
     }
 
@@ -215,13 +215,13 @@ def get_departure_impact_report(employee_id: str, conn=Depends(get_db)) -> dict:
 
     row = dict(row)
     return {
-        "report_id":      row["id"],
-        "employee_id":    row["employee_id"],
-        "name":           row["name"],
-        "department":     row["department"],
+        "report_id": row["id"],
+        "employee_id": row["employee_id"],
+        "name": row["name"],
+        "department": row["department"],
         "departure_date": str(row["departure_date"]),
-        "generated_at":   str(row["generated_at"]),
-        "impact_json":    row["impact_json"],
+        "generated_at": str(row["generated_at"]),
+        "impact_json": row["impact_json"],
         "narrative_text": row["narrative_text"],
-        "status":         row["status"],
+        "status": row["status"],
     }

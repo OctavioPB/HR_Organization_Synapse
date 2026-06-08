@@ -443,7 +443,8 @@ def _simulate_removal(inp: dict, conn) -> dict:
     components_added = after["weakly_connected_components"] - before["weakly_connected_components"]
     bw_pct_change = (
         round((after["avg_betweenness"] - before["avg_betweenness"]) / max(before["avg_betweenness"], 1e-9) * 100, 1)
-        if before["avg_betweenness"] > 0 else 0.0
+        if before["avg_betweenness"] > 0
+        else 0.0
     )
 
     return {

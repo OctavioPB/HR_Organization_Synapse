@@ -35,11 +35,11 @@ _DEFAULT_ARGS = {
     tags=["departure", "reporting", "daily"],
 )
 def departure_report_dag():
-
     @task()
     def detect_departures(**context) -> list[dict]:
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ingestion.db import get_conn
@@ -75,6 +75,7 @@ def departure_report_dag():
 
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from ingestion.db import get_conn
@@ -92,7 +93,9 @@ def departure_report_dag():
                     results.append(result)
                     logger.info(
                         "Report generated: %s (%s) — %s",
-                        d["name"], d["departure_date"], result.get("status", "unknown"),
+                        d["name"],
+                        d["departure_date"],
+                        result.get("status", "unknown"),
                     )
             except Exception as exc:
                 logger.error("Report failed for %s: %s", d["employee_id"], exc)
@@ -137,7 +140,7 @@ def departure_report_dag():
             return {"broadcast": 0, "error": str(exc)}
 
     departures = detect_departures()
-    results    = generate_reports(departures)
+    results = generate_reports(departures)
     broadcast_departure_alerts(results)
 
 

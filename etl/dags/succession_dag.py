@@ -59,6 +59,7 @@ def succession_dag():
         """Compute and persist succession planning recommendations."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from graph.succession import compute_and_persist
@@ -87,7 +88,8 @@ def succession_dag():
         else:
             logger.info(
                 "Succession DAG complete for %s: %d cross-training pairs identified.",
-                dt, n,
+                dt,
+                n,
             )
 
     @task()
@@ -95,6 +97,7 @@ def succession_dag():
         """Generate 90-day knowledge transfer plans for high-SPOF employees."""
         import sys
         from pathlib import Path
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
         from etl.tasks.generate_transfer_plans import task_generate_transfer_plans
@@ -104,7 +107,7 @@ def succession_dag():
         with get_conn() as conn:
             return task_generate_transfer_plans(snapshot_date, conn)
 
-    result      = compute_succession()
+    result = compute_succession()
     generate_transfer_plans(result)
     wait_for_graph >> result
     log_summary(result)

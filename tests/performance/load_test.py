@@ -117,6 +117,7 @@ class OrgSynapseSimulateUser(HttpUser):
                 return
 
         import random
+
         emp_id = random.choice(self._employee_ids)
         self.client.post(
             "/risk/simulate",
@@ -129,6 +130,7 @@ class OrgSynapseSimulateUser(HttpUser):
         if not self._employee_ids:
             return
         import random
+
         emp_id = random.choice(self._employee_ids)
         self.client.get(
             f"/risk/employee/{emp_id}/history",

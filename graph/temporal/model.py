@@ -30,6 +30,7 @@ import torch.nn as nn
 
 try:
     from torch_geometric_temporal.nn.recurrent import GConvGRU
+
     _TGNN_AVAILABLE = True
 except ImportError:
     _TGNN_AVAILABLE = False
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 DEFAULT_HIDDEN: int = 32
-DEFAULT_K: int = 1       # Chebyshev filter order; K=1 → simple 1-hop convolution
+DEFAULT_K: int = 1  # Chebyshev filter order; K=1 → simple 1-hop convolution
 
 
 # ─── Model ────────────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ class TemporalRiskGNN(nn.Module):
         H: Optional[torch.Tensor] = None
 
         for snap in snapshots:
-            x = snap["x"]           # (N, F)
+            x = snap["x"]  # (N, F)
             edge_index = snap["edge_index"]  # (2, E)
 
             H = self.gconv_gru(x, edge_index, H)

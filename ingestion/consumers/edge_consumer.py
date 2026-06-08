@@ -47,8 +47,7 @@ def _flush_batch(batch: list[CollaborationEvent]) -> int:
         return 0
 
     rows = [
-        (e.event_id, e.source_employee_id, e.target_employee_id,
-         e.channel, e.direction, e.timestamp, e.weight)
+        (e.event_id, e.source_employee_id, e.target_employee_id, e.channel, e.direction, e.timestamp, e.weight)
         for e in batch
     ]
 
@@ -143,7 +142,9 @@ def consume(
 
     logger.info(
         "Consumer stopped | processed=%d inserted=%d dead=%d",
-        total_processed, total_inserted, total_dead,
+        total_processed,
+        total_inserted,
+        total_dead,
     )
     return total_inserted
 
@@ -152,8 +153,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Kafka → Postgres edge consumer")
     parser.add_argument("--bootstrap-servers", default="localhost:9092")
     parser.add_argument("--group-id", default="org-synapse-consumer")
-    parser.add_argument("--max-messages", type=int, default=None,
-                        help="Exit after N messages (default: run until Ctrl-C)")
+    parser.add_argument(
+        "--max-messages", type=int, default=None, help="Exit after N messages (default: run until Ctrl-C)"
+    )
     args = parser.parse_args()
 
     consume(

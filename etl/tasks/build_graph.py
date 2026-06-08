@@ -43,8 +43,7 @@ def check_raw_events(snapshot_date_str: str, min_events: int = 100) -> int:
 
     if count < min_events:
         raise ValueError(
-            f"Insufficient data for {snapshot_date_str}: "
-            f"found {count} events, required >= {min_events}"
+            f"Insufficient data for {snapshot_date_str}: " f"found {count} events, required >= {min_events}"
         )
 
     logger.info("check_raw_events OK: %d events on %s", count, snapshot_date_str)

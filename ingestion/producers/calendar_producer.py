@@ -90,7 +90,7 @@ def produce_from_csv(
                     event_id=row["event_id"],
                     source_employee_id=row["source_employee_id"],
                     target_employee_id=row["target_employee_id"],
-                    channel=row["channel"],      # type: ignore[arg-type]
+                    channel=row["channel"],  # type: ignore[arg-type]
                     direction="invited",
                     department_source=row["department_source"],
                     department_target=row["department_target"],
@@ -119,14 +119,11 @@ def produce_from_csv(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=f"Kafka producer — channel: {CHANNEL} (bidirectional)"
-    )
+    parser = argparse.ArgumentParser(description=f"Kafka producer — channel: {CHANNEL} (bidirectional)")
     parser.add_argument("--edges-csv", type=Path, default=Path("data/synthetic/edges.csv"))
     parser.add_argument("--bootstrap-servers", default="localhost:9092")
     parser.add_argument("--delay-ms", type=int, default=100)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Count events without publishing")
+    parser.add_argument("--dry-run", action="store_true", help="Count events without publishing")
     args = parser.parse_args()
 
     if args.dry_run:

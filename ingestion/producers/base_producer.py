@@ -81,6 +81,7 @@ class BaseProducer(ABC):
     @staticmethod
     def _build_kafka_producer(bootstrap_servers: str) -> KafkaProducer:
         from kafka import KafkaProducer as _KafkaProducer
+
         return _KafkaProducer(
             bootstrap_servers=bootstrap_servers.split(","),
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
@@ -95,12 +96,15 @@ class BaseProducer(ABC):
         continue streaming or abort.
         """
         from kafka.errors import KafkaError
+
         try:
             kafka_producer.send(KAFKA_TOPIC, value=event.model_dump(mode="json"))
         except KafkaError as exc:
             logger.error(
                 "%s: Kafka publish failed event_id=%s: %s",
-                self.channel, event.event_id, exc,
+                self.channel,
+                event.event_id,
+                exc,
             )
             raise
 

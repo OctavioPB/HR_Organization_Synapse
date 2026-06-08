@@ -65,7 +65,9 @@ def load_raw_edges(
 
     logger.info(
         "Loaded %d raw interactions for window [%s → %s]",
-        len(rows), start_ts.date(), snapshot_date,
+        len(rows),
+        start_ts.date(),
+        snapshot_date,
     )
     return rows
 
@@ -100,9 +102,7 @@ def build_graph(
         else:
             source_id, target_id, weight, source_dept, target_dept = row
 
-        edge_weights[(source_id, target_id)] = (
-            edge_weights.get((source_id, target_id), 0.0) + float(weight)
-        )
+        edge_weights[(source_id, target_id)] = edge_weights.get((source_id, target_id), 0.0) + float(weight)
         node_dept[source_id] = source_dept
         node_dept[target_id] = target_dept
 
@@ -114,7 +114,9 @@ def build_graph(
 
     logger.info(
         "Built DiGraph: %d nodes, %d directed edges (from %d raw interactions)",
-        G.number_of_nodes(), G.number_of_edges(), len(raw_edges),
+        G.number_of_nodes(),
+        G.number_of_edges(),
+        len(raw_edges),
     )
     return G
 
@@ -129,29 +131,24 @@ def graph_to_adjacency(G: nx.DiGraph) -> dict[str, Any]:
         Dict with 'nodes' and 'edges' lists, ready for JSON serialisation.
     """
     return {
-        "nodes": [
-            {"id": n, "department": G.nodes[n].get("department", "")}
-            for n in G.nodes()
-        ],
-        "edges": [
-            {"source": u, "target": v, "weight": G[u][v]["weight"]}
-            for u, v in G.edges()
-        ],
+        "nodes": [{"id": n, "department": G.nodes[n].get("department", "")} for n in G.nodes()],
+        "edges": [{"source": u, "target": v, "weight": G[u][v]["weight"]} for u, v in G.edges()],
     }
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    parser = argparse.ArgumentParser(
-        description="Build collaboration graph from raw_events in Postgres."
-    )
+    parser = argparse.ArgumentParser(description="Build collaboration graph from raw_events in Postgres.")
     parser.add_argument(
-        "--date", type=date.fromisoformat, required=True,
+        "--date",
+        type=date.fromisoformat,
+        required=True,
         help="Snapshot date YYYY-MM-DD (end of the rolling window, inclusive)",
     )
     parser.add_argument(
-        "--window-days", type=int,
+        "--window-days",
+        type=int,
         default=int(os.environ.get("GRAPH_WINDOW_DAYS", "30")),
         help="Rolling window in days (default: GRAPH_WINDOW_DAYS env var or 30)",
     )
@@ -161,7 +158,8 @@ def main() -> None:
     G = build_graph(raw_edges)
     logger.info(
         "Graph ready: %d nodes, %d edges",
-        G.number_of_nodes(), G.number_of_edges(),
+        G.number_of_nodes(),
+        G.number_of_edges(),
     )
 
 

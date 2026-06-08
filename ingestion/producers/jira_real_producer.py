@@ -57,21 +57,13 @@ class JiraRealProducer(BaseProducer):
         self._base_url: str = os.environ.get("JIRA_BASE_URL", "").rstrip("/")
         self._email: str = os.environ.get("JIRA_EMAIL", "")
         self._api_token: str = os.environ.get("JIRA_API_TOKEN", "")
-        self._projects: list[str] = [
-            p.strip()
-            for p in os.environ.get("JIRA_PROJECTS", "").split(",")
-            if p.strip()
-        ]
+        self._projects: list[str] = [p.strip() for p in os.environ.get("JIRA_PROJECTS", "").split(",") if p.strip()]
         self._poll_interval: int = int(os.environ.get("JIRA_POLL_INTERVAL", _DEFAULT_POLL_INTERVAL))
-        self._employee_map: dict[str, str] = json.loads(
-            os.environ.get("JIRA_EMPLOYEE_MAP", "{}")
-        )
+        self._employee_map: dict[str, str] = json.loads(os.environ.get("JIRA_EMPLOYEE_MAP", "{}"))
         self._http: httpx.Client | None = None
         self._running = False
         # Watermark: only pull issues updated after this timestamp
-        self._since: datetime = datetime.now(tz=UTC) - timedelta(
-            minutes=_DEFAULT_LOOKBACK_MINUTES
-        )
+        self._since: datetime = datetime.now(tz=UTC) - timedelta(minutes=_DEFAULT_LOOKBACK_MINUTES)
 
     # ── BaseProducer contract ─────────────────────────────────────────────────
 
@@ -80,9 +72,7 @@ class JiraRealProducer(BaseProducer):
         if not all([self._base_url, self._email, self._api_token]):
             raise ValueError("JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN must all be set")
 
-        token = base64.b64encode(
-            f"{self._email}:{self._api_token}".encode()
-        ).decode("utf-8")
+        token = base64.b64encode(f"{self._email}:{self._api_token}".encode()).decode("utf-8")
 
         self._http = httpx.Client(
             base_url=self._base_url,
@@ -198,9 +188,7 @@ class JiraRealProducer(BaseProducer):
             author_id = (comment.get("author") or {}).get("accountId")
             if author_id and assignee_id and author_id != assignee_id:
                 try:
-                    comment_ts = datetime.fromisoformat(
-                        comment.get("created", updated_str).replace("Z", "+00:00")
-                    )
+                    comment_ts = datetime.fromisoformat(comment.get("created", updated_str).replace("Z", "+00:00"))
                 except (ValueError, AttributeError):
                     comment_ts = ts
                 event = self._build_event(author_id, assignee_id, "mentioned", comment_ts)

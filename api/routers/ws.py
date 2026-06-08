@@ -51,6 +51,7 @@ def _get_recent_alerts(limit: int) -> list[dict]:
     """
     try:
         from ingestion.db import get_conn
+
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -79,27 +80,25 @@ async def websocket_alerts(ws: WebSocket) -> None:
     as they are broadcast by Airflow DAGs via POST /internal/alerts/broadcast.
     """
     await manager.connect(ws)
-    logger.info(
-        "WS /alerts/live: new client connected (total: %d)", manager.connection_count
-    )
+    logger.info("WS /alerts/live: new client connected (total: %d)", manager.connection_count)
 
     try:
         # Send recent alerts so the client doesn't start with a blank slate
         recent = _get_recent_alerts(_INITIAL_ALERT_LIMIT)
-        await ws.send_json({
-            "type": "initial",
-            "alerts": recent,
-            "connection_count": manager.connection_count,
-        })
+        await ws.send_json(
+            {
+                "type": "initial",
+                "alerts": recent,
+                "connection_count": manager.connection_count,
+            }
+        )
 
         # Keep-alive loop: wait for client messages or send periodic pings
         while True:
             if ws.client_state == WebSocketState.DISCONNECTED:
                 break
             try:
-                msg = await asyncio.wait_for(
-                    ws.receive_text(), timeout=_KEEPALIVE_TIMEOUT
-                )
+                msg = await asyncio.wait_for(ws.receive_text(), timeout=_KEEPALIVE_TIMEOUT)
                 if msg.strip() == "ping":
                     await ws.send_json({"type": "pong"})
             except TimeoutError:
@@ -113,6 +112,4 @@ async def websocket_alerts(ws: WebSocket) -> None:
 
     finally:
         await manager.disconnect(ws)
-        logger.info(
-            "WS /alerts/live: client disconnected (remaining: %d)", manager.connection_count
-        )
+        logger.info("WS /alerts/live: client disconnected (remaining: %d)", manager.connection_count)

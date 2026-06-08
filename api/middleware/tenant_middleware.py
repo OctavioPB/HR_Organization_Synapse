@@ -21,5 +21,5 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         request.state.tenant_id = request.headers.get("X-Tenant-ID", "")
-        request.state.api_key   = request.headers.get("X-Api-Key", "")
+        request.state.api_key = request.headers.get("X-Api-Key", "")
         return await call_next(request)

@@ -4,7 +4,6 @@ Tests cover run_isolation_forest() with synthetic feature dicts.
 write_anomaly_alerts() is not tested here (requires DB; covered by integration tests).
 """
 
-
 from ml.anomaly.isolation_forest import FEATURE_KEYS, run_isolation_forest
 
 
@@ -93,9 +92,7 @@ def test_run_isolation_forest_scores_in_01():
     features = [_make_feature(f"E{i}") for i in range(20)]
     results = run_isolation_forest(features, contamination=0.1)
     for r in results:
-        assert 0.0 <= r["anomaly_score"] <= 1.0, (
-            f"Employee {r['employee_id']} score {r['anomaly_score']} out of [0, 1]"
-        )
+        assert 0.0 <= r["anomaly_score"] <= 1.0, f"Employee {r['employee_id']} score {r['anomaly_score']} out of [0, 1]"
 
 
 def test_run_isolation_forest_is_anomaly_is_bool():
@@ -108,6 +105,7 @@ def test_run_isolation_forest_is_anomaly_is_bool():
 def test_run_isolation_forest_anomaly_fraction_matches_contamination():
     """contamination=0.1 on a population with variance → expect ~10% flagged."""
     import random as _random
+
     rng = _random.Random(0)
     # Varied features so StandardScaler has non-zero variance to work with
     features = [
@@ -122,9 +120,7 @@ def test_run_isolation_forest_anomaly_fraction_matches_contamination():
     ]
     results = run_isolation_forest(features, contamination=0.1, random_state=42)
     anomaly_count = sum(1 for r in results if r["is_anomaly"])
-    assert 1 <= anomaly_count <= 3, (
-        f"Expected ~2 anomalies (10% of 20), got {anomaly_count}"
-    )
+    assert 1 <= anomaly_count <= 3, f"Expected ~2 anomalies (10% of 20), got {anomaly_count}"
 
 
 # ─── Anomaly detection quality ────────────────────────────────────────────────
@@ -137,13 +133,11 @@ def test_run_isolation_forest_outlier_gets_higher_score():
     results = run_isolation_forest(normal + [outlier], contamination=0.1, random_state=42)
 
     outlier_score = next(r["anomaly_score"] for r in results if r["employee_id"] == "OUTLIER")
-    avg_normal = sum(
-        r["anomaly_score"] for r in results if r["employee_id"] != "OUTLIER"
-    ) / 18
+    avg_normal = sum(r["anomaly_score"] for r in results if r["employee_id"] != "OUTLIER") / 18
 
-    assert outlier_score > avg_normal, (
-        f"Outlier score {outlier_score:.3f} should exceed average normal {avg_normal:.3f}"
-    )
+    assert (
+        outlier_score > avg_normal
+    ), f"Outlier score {outlier_score:.3f} should exceed average normal {avg_normal:.3f}"
 
 
 def test_run_isolation_forest_outlier_is_flagged():
@@ -153,9 +147,9 @@ def test_run_isolation_forest_outlier_is_flagged():
     results = run_isolation_forest(normal + [outlier], contamination=0.1, random_state=42)
 
     outlier_result = next(r for r in results if r["employee_id"] == "OUTLIER")
-    assert outlier_result["is_anomaly"] is True, (
-        f"Outlier should be flagged; score={outlier_result['anomaly_score']:.3f}"
-    )
+    assert (
+        outlier_result["is_anomaly"] is True
+    ), f"Outlier should be flagged; score={outlier_result['anomaly_score']:.3f}"
 
 
 def test_run_isolation_forest_reproducible_with_same_seed():
@@ -176,6 +170,6 @@ def test_run_isolation_forest_all_identical_features():
     results = run_isolation_forest(features, contamination=0.1, random_state=42)
     scores = [r["anomaly_score"] for r in results]
     # All scores should be very close (uniform anomaly landscape)
-    assert max(scores) - min(scores) < 0.01, (
-        f"Expected uniform scores, got range [{min(scores):.3f}, {max(scores):.3f}]"
-    )
+    assert (
+        max(scores) - min(scores) < 0.01
+    ), f"Expected uniform scores, got range [{min(scores):.3f}, {max(scores):.3f}]"

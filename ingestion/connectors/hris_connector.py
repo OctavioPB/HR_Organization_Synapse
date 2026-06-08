@@ -32,13 +32,13 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_PROVIDER         = os.environ.get("HRIS_PROVIDER", "bamboohr").lower()
-_BASE_URL         = os.environ.get("HRIS_BASE_URL", "")
-_CLIENT_ID        = os.environ.get("HRIS_CLIENT_ID", "")
-_CLIENT_SECRET    = os.environ.get("HRIS_CLIENT_SECRET", "")
-_TENANT_ID        = os.environ.get("HRIS_TENANT_ID", "")  # Workday tenant name
+_PROVIDER = os.environ.get("HRIS_PROVIDER", "bamboohr").lower()
+_BASE_URL = os.environ.get("HRIS_BASE_URL", "")
+_CLIENT_ID = os.environ.get("HRIS_CLIENT_ID", "")
+_CLIENT_SECRET = os.environ.get("HRIS_CLIENT_SECRET", "")
+_TENANT_ID = os.environ.get("HRIS_TENANT_ID", "")  # Workday tenant name
 _BAMBOOHR_SUBDOMAIN = os.environ.get("BAMBOOHR_SUBDOMAIN", "")
-_BAMBOOHR_API_KEY   = os.environ.get("BAMBOOHR_API_KEY", "")
+_BAMBOOHR_API_KEY = os.environ.get("BAMBOOHR_API_KEY", "")
 
 
 class HRISConnector:
@@ -107,26 +107,26 @@ class HRISConnector:
 
     def _parse_workday_worker(self, worker: dict) -> dict:
         hire_date_str = worker.get("hireDate", "")
-        hire_date     = _parse_date(hire_date_str)
+        hire_date = _parse_date(hire_date_str)
         tenure_months = _months_since(hire_date) if hire_date else None
 
         # Last promotion / position change date
-        promo_str  = worker.get("lastPositionChangeDate", "")
+        promo_str = worker.get("lastPositionChangeDate", "")
         promo_date = _parse_date(promo_str)
         days_since_promo = _days_since(promo_date) if promo_date else None
 
         management_level = worker.get("managementLevel", {}).get("descriptor", "")
-        reporting_level  = _workday_level_to_int(management_level)
+        reporting_level = _workday_level_to_int(management_level)
 
         return {
-            "external_id":        worker.get("id", ""),
-            "email":              _extract_email(worker),
-            "tenure_months":      tenure_months,
+            "external_id": worker.get("id", ""),
+            "email": _extract_email(worker),
+            "tenure_months": tenure_months,
             "days_since_promotion": days_since_promo,
-            "is_comp_band_max":   worker.get("isAtCompBandMax", False),
-            "pto_days_ytd":       int(worker.get("ptoDaysUsedYTD", 0) or 0),
-            "reporting_level":    reporting_level,
-            "hris_source":        "workday",
+            "is_comp_band_max": worker.get("isAtCompBandMax", False),
+            "pto_days_ytd": int(worker.get("ptoDaysUsedYTD", 0) or 0),
+            "reporting_level": reporting_level,
+            "hris_source": "workday",
         }
 
     # ── BambooHR ──────────────────────────────────────────────────────────
@@ -154,20 +154,20 @@ class HRISConnector:
 
     def _parse_bamboohr_employee(self, emp: dict, base: str) -> dict:
         hire_date_str = emp.get("hireDate", "")
-        hire_date     = _parse_date(hire_date_str)
+        hire_date = _parse_date(hire_date_str)
         tenure_months = _months_since(hire_date) if hire_date else None
 
         pto_balance = float(emp.get("ptoBalance", 0) or 0)
 
         return {
-            "external_id":        str(emp.get("id", "")),
-            "email":              emp.get("workEmail", ""),
-            "tenure_months":      tenure_months,
+            "external_id": str(emp.get("id", "")),
+            "email": emp.get("workEmail", ""),
+            "tenure_months": tenure_months,
             "days_since_promotion": None,
-            "is_comp_band_max":   False,
-            "pto_days_ytd":       int(pto_balance),
-            "reporting_level":    _bamboohr_title_to_level(emp.get("jobTitle", "")),
-            "hris_source":        "bamboohr",
+            "is_comp_band_max": False,
+            "pto_days_ytd": int(pto_balance),
+            "reporting_level": _bamboohr_title_to_level(emp.get("jobTitle", "")),
+            "hris_source": "bamboohr",
         }
 
     # ── Upsert ────────────────────────────────────────────────────────────

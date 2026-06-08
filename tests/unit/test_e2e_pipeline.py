@@ -60,9 +60,7 @@ def pipeline():
 
     # Build graph from synthetic edges (no DB needed)
     raw_edges = [
-        (e.source_employee_id, e.target_employee_id, e.weight,
-         e.department_source, e.department_target)
-        for e in edges
+        (e.source_employee_id, e.target_employee_id, e.weight, e.department_source, e.department_target) for e in edges
     ]
     G = build_graph(raw_edges)
 
@@ -74,16 +72,14 @@ def pipeline():
 
     # Build per-employee entropy from edges (without DB)
     from collections import defaultdict
+
     partner_counts: dict[str, dict[str, int]] = defaultdict(dict)
     for e in edges:
         src = e.source_employee_id
         tgt = e.target_employee_id
         partner_counts[src][tgt] = partner_counts[src].get(tgt, 0) + 1
 
-    entropy_current = {
-        emp_id: compute_entropy(counts)
-        for emp_id, counts in partner_counts.items()
-    }
+    entropy_current = {emp_id: compute_entropy(counts) for emp_id, counts in partner_counts.items()}
 
     scores = score_all(G, betweenness, clustering, entropy_trends={})
     silo_alerts = detect_silos(G, communities)
@@ -120,9 +116,9 @@ def test_graph_has_edges(pipeline):
 def test_graph_covers_all_employees(pipeline):
     """Every employee with at least one edge must appear in the graph."""
     G = pipeline["G"]
-    emp_ids_in_edges = {
-        e.source_employee_id for e in pipeline["edges"]
-    } | {e.target_employee_id for e in pipeline["edges"]}
+    emp_ids_in_edges = {e.source_employee_id for e in pipeline["edges"]} | {
+        e.target_employee_id for e in pipeline["edges"]
+    }
     # Graph should contain all employees who appeared in any edge
     assert set(G.nodes()) == emp_ids_in_edges
 
@@ -176,8 +172,7 @@ def test_connectors_have_highest_betweenness(pipeline):
     for cid in connector_ids:
         if cid in betweenness:
             assert cid in top_10pct, (
-                f"Connector {cid[:8]} not in top-10% betweenness. "
-                f"Score: {betweenness.get(cid, 0):.4f}"
+                f"Connector {cid[:8]} not in top-10% betweenness. " f"Score: {betweenness.get(cid, 0):.4f}"
             )
 
 
@@ -190,8 +185,7 @@ def test_connectors_have_highest_spof_scores(pipeline):
     top_5 = set(sorted_nodes[:5])
 
     assert connector_ids & top_5, (
-        f"No connector found in top-5 SPOF scores. "
-        f"Top 5: {[(n[:8], scores[n]) for n in sorted_nodes[:5]]}"
+        f"No connector found in top-5 SPOF scores. " f"Top 5: {[(n[:8], scores[n]) for n in sorted_nodes[:5]]}"
     )
 
 
@@ -206,9 +200,9 @@ def test_connectors_above_average_spof(pipeline):
     mean_score = sum(scores.values()) / len(scores)
     for cid in connector_ids:
         if cid in scores:
-            assert scores[cid] > mean_score, (
-                f"Connector {cid[:8]} score {scores[cid]:.4f} not above mean {mean_score:.4f}"
-            )
+            assert (
+                scores[cid] > mean_score
+            ), f"Connector {cid[:8]} score {scores[cid]:.4f} not above mean {mean_score:.4f}"
 
 
 # ─── Demo scenario: withdrawing employee ──────────────────────────────────────
@@ -241,8 +235,7 @@ def test_withdrawing_employee_entropy_lower_in_late_period(pipeline):
     late_entropy = compute_entropy(dict(late_partners)) if late_partners else 0.0
 
     assert late_entropy <= early_entropy, (
-        f"Withdrawing employee entropy did not decline: "
-        f"early={early_entropy:.4f} late={late_entropy:.4f}"
+        f"Withdrawing employee entropy did not decline: " f"early={early_entropy:.4f} late={late_entropy:.4f}"
     )
 
 
@@ -262,6 +255,7 @@ def test_silo_alerts_have_valid_severity(pipeline):
 def test_silo_isolation_ratios_above_threshold(pipeline):
     """All returned silo alerts must exceed the detection threshold."""
     from graph.silo_detector import _DEFAULT_SILO_THRESHOLD
+
     for alert in pipeline["silo_alerts"]:
         assert alert.isolation_ratio > _DEFAULT_SILO_THRESHOLD, (
             f"Alert community_id={alert.community_id} ratio={alert.isolation_ratio:.2f} "
@@ -291,6 +285,4 @@ def test_entropy_computed_for_active_nodes(pipeline):
     active_senders = {e.source_employee_id for e in pipeline["edges"]}
     entropy = pipeline["entropy_current"]
     missing = active_senders - set(entropy.keys())
-    assert not missing, (
-        f"{len(missing)} active senders have no entropy: {list(missing)[:5]}"
-    )
+    assert not missing, f"{len(missing)} active senders have no entropy: {list(missing)[:5]}"

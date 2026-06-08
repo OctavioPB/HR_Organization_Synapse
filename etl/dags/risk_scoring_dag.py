@@ -32,7 +32,6 @@ _DEFAULT_ARGS = {
     tags=["org-synapse", "risk", "on-demand"],
 )
 def risk_scoring_dag():
-
     @task()
     def resolve_snapshot_date(**context) -> str:
         """Return the most recent snapshot date from graph_snapshots.
@@ -43,18 +42,14 @@ def risk_scoring_dag():
 
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT MAX(snapshot_date) FROM graph_snapshots"
-                )
+                cur.execute("SELECT MAX(snapshot_date) FROM graph_snapshots")
                 row = cur.fetchone()
 
         if row and row[0]:
             resolved = row[0].isoformat()
         else:
             resolved = context["ds"]
-            logger.warning(
-                "graph_snapshots is empty — falling back to execution date %s", resolved
-            )
+            logger.warning("graph_snapshots is empty — falling back to execution date %s", resolved)
 
         logger.info("resolve_snapshot_date: using %s", resolved)
         return resolved

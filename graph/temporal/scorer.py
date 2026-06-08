@@ -40,10 +40,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 logger = logging.getLogger(__name__)
 
-_CHECKPOINT_DIR  = os.environ.get("TGNN_CHECKPOINT_DIR", "checkpoints")
-_N_WEEKS         = int(os.environ.get("TGNN_N_WEEKS", "8"))
-_HIGH_THRESHOLD  = float(os.environ.get("TEMPORAL_HIGH_THRESHOLD", "0.6"))
-_MED_THRESHOLD   = float(os.environ.get("TEMPORAL_MED_THRESHOLD", "0.3"))
+_CHECKPOINT_DIR = os.environ.get("TGNN_CHECKPOINT_DIR", "checkpoints")
+_N_WEEKS = int(os.environ.get("TGNN_N_WEEKS", "8"))
+_HIGH_THRESHOLD = float(os.environ.get("TEMPORAL_HIGH_THRESHOLD", "0.6"))
+_MED_THRESHOLD = float(os.environ.get("TEMPORAL_MED_THRESHOLD", "0.3"))
 
 
 def _tier(score: float) -> str:
@@ -59,8 +59,7 @@ def _latest_checkpoint() -> str:
     candidates = sorted(glob.glob(pattern))
     if not candidates:
         raise FileNotFoundError(
-            f"No temporal_risk_gnn_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. "
-            "Run temporal/trainer.py first."
+            f"No temporal_risk_gnn_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. " "Run temporal/trainer.py first."
         )
     return candidates[-1]
 
@@ -77,10 +76,7 @@ def _compute_trend_slopes(
     """
     from ingestion.db import get_conn
 
-    lookback_dates = [
-        scored_at - timedelta(weeks=w)
-        for w in range(1, n_lookback_weeks + 1)
-    ]
+    lookback_dates = [scored_at - timedelta(weeks=w) for w in range(1, n_lookback_weeks + 1)]
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -170,6 +166,7 @@ def score(
     # We need to know the ordered employee_id list.
     # Re-derive it from DB using the same logic as sequence_builder.
     from ingestion.db import get_conn
+
     with get_conn() as conn:
         with conn.cursor() as cur:
             snap_dates = [s.snapshot_date for s in all_snaps]
@@ -186,22 +183,22 @@ def score(
 
     if len(employee_ids) != vocab_size:
         logger.error(
-            "Vocabulary mismatch: sequence_builder N=%d, re-derived N=%d. "
-            "Aborting — re-train the model.",
-            vocab_size, len(employee_ids),
+            "Vocabulary mismatch: sequence_builder N=%d, re-derived N=%d. " "Aborting — re-train the model.",
+            vocab_size,
+            len(employee_ids),
         )
         return []
 
     # ── Inference ─────────────────────────────────────────────────────────
     input_tensors = [
         {
-            "x":          torch.tensor(s.x, dtype=torch.float).to(device),
+            "x": torch.tensor(s.x, dtype=torch.float).to(device),
             "edge_index": torch.tensor(s.edge_index, dtype=torch.long).to(device),
         }
         for s in input_snaps
     ]
     x_target = torch.tensor(target_snap.x, dtype=torch.float).to(device)
-    mask     = torch.tensor(target_snap.presence_mask, dtype=torch.bool).to(device)
+    mask = torch.tensor(target_snap.presence_mask, dtype=torch.bool).to(device)
 
     model.eval()
     with torch.no_grad():
@@ -227,21 +224,24 @@ def score(
         results.append(
             {
                 "employee_id": emp_id,
-                "anomaly_score":       round(float(normalised[i]), 4),
-                "anomaly_tier":        _tier(float(normalised[i])),
+                "anomaly_score": round(float(normalised[i]), 4),
+                "anomaly_tier": _tier(float(normalised[i])),
                 "reconstruction_error": round(float(raw_errors[i]), 6),
-                "trend_slope":         round(float(slopes[i]), 6),
-                "model_version":       model_version,
+                "trend_slope": round(float(slopes[i]), 6),
+                "model_version": model_version,
             }
         )
 
     _write_scores(results, scored_date, n_weeks)
 
-    high   = sum(1 for r in results if r["anomaly_tier"] == "high")
+    high = sum(1 for r in results if r["anomaly_tier"] == "high")
     medium = sum(1 for r in results if r["anomaly_tier"] == "medium")
     logger.info(
         "Temporal scoring done — %d employees scored  high=%d medium=%d low=%d",
-        len(results), high, medium, len(results) - high - medium,
+        len(results),
+        high,
+        medium,
+        len(results) - high - medium,
     )
     return results
 

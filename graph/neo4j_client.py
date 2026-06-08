@@ -27,6 +27,7 @@ def get_driver():
     global _driver
     if _driver is None:
         from neo4j import GraphDatabase
+
         _driver = GraphDatabase.driver(
             _NEO4J_URI,
             auth=(_NEO4J_USER, _NEO4J_PASSWORD),
@@ -99,7 +100,9 @@ def upsert_graph(
 
     logger.info(
         "Neo4j upsert complete — %d nodes, %d edges (snapshot %s)",
-        len(nodes), len(edges), snapshot_date,
+        len(nodes),
+        len(edges),
+        snapshot_date,
     )
     return {"nodes_upserted": len(nodes), "edges_upserted": len(edges)}
 
@@ -108,14 +111,8 @@ def ensure_indexes() -> None:
     """Create uniqueness constraint and indexes if they don't exist yet."""
     driver = get_driver()
     with driver.session() as session:
-        session.run(
-            "CREATE CONSTRAINT employee_id IF NOT EXISTS "
-            "FOR (e:Employee) REQUIRE e.id IS UNIQUE"
-        )
-        session.run(
-            "CREATE INDEX employee_dept IF NOT EXISTS "
-            "FOR (e:Employee) ON (e.department)"
-        )
+        session.run("CREATE CONSTRAINT employee_id IF NOT EXISTS " "FOR (e:Employee) REQUIRE e.id IS UNIQUE")
+        session.run("CREATE INDEX employee_dept IF NOT EXISTS " "FOR (e:Employee) ON (e.department)")
     logger.info("Neo4j indexes ensured.")
 
 
@@ -167,9 +164,7 @@ def query_shortest_path(
                 "name": name,
                 "department": dept,
             }
-            for nid, name, dept in zip(
-                record["node_ids"], record["names"], record["departments"], strict=False
-            )
+            for nid, name, dept in zip(record["node_ids"], record["names"], record["departments"], strict=False)
         ],
         "hops": record["hops"],
     }
@@ -283,7 +278,5 @@ def query_betweenness_gds(graph_name: str = "orgGraph") -> list[dict[str, Any]]:
         return rows
 
     except Exception as exc:
-        logger.warning(
-            "GDS betweenness failed (plugin may not be installed): %s", exc
-        )
+        logger.warning("GDS betweenness failed (plugin may not be installed): %s", exc)
         return []

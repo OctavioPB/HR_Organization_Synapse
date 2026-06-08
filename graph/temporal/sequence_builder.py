@@ -156,10 +156,7 @@ def build_snapshot_sequence(
     """
     from ingestion.db import get_conn
 
-    snapshot_dates = [
-        end_date - timedelta(days=(n_weeks - 1 - i) * step_days)
-        for i in range(n_weeks)
-    ]
+    snapshot_dates = [end_date - timedelta(days=(n_weeks - 1 - i) * step_days) for i in range(n_weeks)]
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -178,9 +175,9 @@ def build_snapshot_sequence(
 
             if not employee_ids:
                 logger.warning(
-                    "build_snapshot_sequence: no graph_snapshots found for "
-                    "any of the %d dates ending at %s",
-                    n_weeks, end_date,
+                    "build_snapshot_sequence: no graph_snapshots found for " "any of the %d dates ending at %s",
+                    n_weeks,
+                    end_date,
                 )
                 return []
 
@@ -225,9 +222,7 @@ def build_snapshot_sequence(
         # snapshot_feature_rows: list of (employee_id, betweenness, degree_in, degree_out, clustering)
         full_rows = [(r[0], r[1], r[2], r[3], r[4]) for r in snapshot_feature_rows]
         x, presence = _build_x(employee_ids, full_rows)
-        edge_index, edge_weight = _build_edge_index(
-            edges_by_date.get(snap_date, []), id_to_idx
-        )
+        edge_index, edge_weight = _build_edge_index(edges_by_date.get(snap_date, []), id_to_idx)
 
         snapshots.append(
             TemporalSnapshot(
@@ -250,6 +245,10 @@ def build_snapshot_sequence(
     n_loaded = sum(1 for s in snapshots if s.presence_mask.any())
     logger.info(
         "build_snapshot_sequence: %d weeks ending %s, vocab=%d, loaded=%d/%d",
-        n_weeks, end_date, len(employee_ids), n_loaded, n_weeks,
+        n_weeks,
+        end_date,
+        len(employee_ids),
+        n_loaded,
+        n_weeks,
     )
     return snapshots
