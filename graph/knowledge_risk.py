@@ -275,7 +275,7 @@ def compute_and_persist(snapshot_date: date, conn) -> int:
     contributions = load_contributions(conn)
     if not contributions:
         logger.warning(
-            "compute_and_persist: no document_knowledge rows found — " "run Confluence/Notion connectors first."
+            "compute_and_persist: no document_knowledge rows found — run Confluence/Notion connectors first."
         )
         return 0
 

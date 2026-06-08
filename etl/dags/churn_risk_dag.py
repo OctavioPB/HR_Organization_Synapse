@@ -85,14 +85,13 @@ def churn_gnn_train_dag():
 
         if n_train < 10:
             logger.warning(
-                "Low training sample count (%d). " "Consider adding more churn_labels rows.",
+                "Low training sample count (%d). Consider adding more churn_labels rows.",
                 n_train,
             )
 
         if val_auroc < 0.65:
             logger.warning(
-                "val_auroc=%.4f is below the 0.65 alert threshold. "
-                "Model quality degraded — review feature pipeline.",
+                "val_auroc=%.4f is below the 0.65 alert threshold. Model quality degraded — review feature pipeline.",
                 val_auroc,
             )
 
@@ -143,7 +142,7 @@ def churn_gnn_score_dag():
         try:
             results = score(snapshot_date=snapshot_date, window_days=30)
         except FileNotFoundError as exc:
-            logger.warning("No checkpoint found — skipping scoring. " "Run churn_gnn_train first. Error: %s", exc)
+            logger.warning("No checkpoint found — skipping scoring. Run churn_gnn_train first. Error: %s", exc)
             return {"scored": 0, "skipped": True}
 
         high_count = sum(1 for r in results if r["risk_tier"] == "high")

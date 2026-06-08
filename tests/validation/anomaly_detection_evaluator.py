@@ -436,11 +436,10 @@ def print_report(report: AnomalyEvalReport) -> None:
 
     print(f"\n  PER-ANOMALY RESULTS  (oracle contamination = {report.contamination_oracle:.4f})")
     hdr = (
-        f"  {'Employee':<18} {'Archetype':<18} {'Sev':>3} "
-        f"{'Score':>7} {'Rank':>5} {'Pct':>6} {'Oracle':>8} {'Prod':>7}"
+        f"  {'Employee':<18} {'Archetype':<18} {'Sev':>3} {'Score':>7} {'Rank':>5} {'Pct':>6} {'Oracle':>8} {'Prod':>7}"
     )
     print(hdr)
-    print(f"  {'-'*18} {'-'*18} {'-'*3} {'-'*7} {'-'*5} {'-'*6} {'-'*8} {'-'*7}")
+    print(f"  {'-' * 18} {'-' * 18} {'-' * 3} {'-' * 7} {'-' * 5} {'-' * 6} {'-' * 8} {'-' * 7}")
     for p in sorted(report.per_anomaly, key=lambda x: x["severity"], reverse=True):
         ok_o = "YES" if p["detected_oracle"] else "NO"
         ok_p = "YES" if p["detected_prod"] else "NO"
@@ -605,7 +604,7 @@ def test_severity_ordering_within_archetypes():
         if 2 in rows and 1 in rows:
             if rows[2]["anomaly_score"] <= rows[1]["anomaly_score"]:
                 violations.append(
-                    f"{arch}: severe={rows[2]['anomaly_score']:.4f} " f"<= moderate={rows[1]['anomaly_score']:.4f}"
+                    f"{arch}: severe={rows[2]['anomaly_score']:.4f} <= moderate={rows[1]['anomaly_score']:.4f}"
                 )
     assert not violations, "Severity ordering violated for:\n  " + "\n  ".join(violations)
 
@@ -618,12 +617,10 @@ def test_group_score_ordering():
     """
     report = _get_report()
     assert report.normal_median_score < report.moderate_median_score, (
-        f"Normal median ({report.normal_median_score:.4f}) not < "
-        f"Moderate median ({report.moderate_median_score:.4f})"
+        f"Normal median ({report.normal_median_score:.4f}) not < Moderate median ({report.moderate_median_score:.4f})"
     )
     assert report.moderate_median_score < report.severe_median_score, (
-        f"Moderate median ({report.moderate_median_score:.4f}) not < "
-        f"Severe median ({report.severe_median_score:.4f})"
+        f"Moderate median ({report.moderate_median_score:.4f}) not < Severe median ({report.severe_median_score:.4f})"
     )
 
 

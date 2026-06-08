@@ -176,8 +176,7 @@ def get_shortest_path(
         raise HTTPException(
             status_code=404,
             detail=(
-                f"No collaboration path found between {from_employee_id[:8]}… "
-                f"and {to_employee_id[:8]}… within 6 hops."
+                f"No collaboration path found between {from_employee_id[:8]}… and {to_employee_id[:8]}… within 6 hops."
             ),
         )
 
@@ -331,7 +330,7 @@ def get_temporal_anomalies(
         if scored_at is None:
             raise HTTPException(
                 status_code=404,
-                detail=("No temporal anomaly scores found. " "Run the temporal_gnn_score DAG first."),
+                detail=("No temporal anomaly scores found. Run the temporal_gnn_score DAG first."),
             )
 
     rows = queries.fetch_temporal_anomaly_scores(scored_at, top, min_score, conn)

@@ -314,21 +314,21 @@ def print_report(report: ImpactReport) -> None:
 
     print(f"\n  TOP-{report.k} BY SPOF SCORE  (with their damage rank)")
     print(f"    {'SPOF Rank':<12} {'Archetype':<14} {'SPOF':<8} {'Damage':<10} {'Damage Rank'}")
-    print(f"    {'-'*12} {'-'*14} {'-'*8} {'-'*10} {'-'*11}")
+    print(f"    {'-' * 12} {'-' * 14} {'-' * 8} {'-' * 10} {'-' * 11}")
     for i, r in enumerate(report.top_k_by_spof):
         in_top_k = "*" if r["damage_rank"] <= report.k else " "
         print(
-            f"    #{i+1:<11} {r['archetype']:<14} {r['spof_score']:<8.4f} "
+            f"    #{i + 1:<11} {r['archetype']:<14} {r['spof_score']:<8.4f} "
             f"{r['damage_score']:<10.3f} #{r['damage_rank']}{in_top_k}"
         )
 
     print(f"\n  TOP-{report.k} BY STRUCTURAL DAMAGE  (with their SPOF rank)")
     print(f"    {'Dmg Rank':<12} {'Archetype':<14} {'Damage':<10} {'SPOF':<8} {'SPOF Rank'}")
-    print(f"    {'-'*12} {'-'*14} {'-'*10} {'-'*8} {'-'*9}")
+    print(f"    {'-' * 12} {'-' * 14} {'-' * 10} {'-' * 8} {'-' * 9}")
     for i, r in enumerate(report.top_k_by_damage):
         in_top_k = "*" if r["spof_rank"] <= report.k else " "
         print(
-            f"    #{i+1:<11} {r['archetype']:<14} {r['damage_score']:<10.3f} "
+            f"    #{i + 1:<11} {r['archetype']:<14} {r['damage_score']:<10.3f} "
             f"{r['spof_score']:<8.4f} #{r['spof_rank']}{in_top_k}"
         )
 
@@ -467,8 +467,7 @@ def test_bridge_damage_exceeds_sole_expert():
     """
     _, _, report = _get_fixtures()
     assert report.bridge_mean_damage > report.sole_expert_mean_damage, (
-        f"BRIDGE damage {report.bridge_mean_damage:.3f} not > "
-        f"SOLE_EXPERT damage {report.sole_expert_mean_damage:.3f}"
+        f"BRIDGE damage {report.bridge_mean_damage:.3f} not > SOLE_EXPERT damage {report.sole_expert_mean_damage:.3f}"
     )
 
 
@@ -476,7 +475,7 @@ def test_bridge_damage_exceeds_silo():
     """Bridge employees must cause more structural damage than silo employees."""
     _, _, report = _get_fixtures()
     assert report.bridge_mean_damage > report.silo_mean_damage, (
-        f"BRIDGE damage {report.bridge_mean_damage:.3f} not > " f"SILO damage {report.silo_mean_damage:.3f}"
+        f"BRIDGE damage {report.bridge_mean_damage:.3f} not > SILO damage {report.silo_mean_damage:.3f}"
     )
 
 
@@ -488,7 +487,7 @@ def test_withdrawing_damage_exceeds_silo():
     """
     _, _, report = _get_fixtures()
     assert report.withdrawing_damage > report.silo_mean_damage, (
-        f"WITHDRAWING damage {report.withdrawing_damage:.3f} not > " f"SILO mean {report.silo_mean_damage:.3f}"
+        f"WITHDRAWING damage {report.withdrawing_damage:.3f} not > SILO mean {report.silo_mean_damage:.3f}"
     )
 
 

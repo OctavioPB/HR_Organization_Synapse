@@ -481,24 +481,24 @@ def generate_html_report(conn) -> str:
 <div class="hero">
   <div style="font-size:9px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:12px">Org Synapse · Compliance</div>
   <h1>Quarterly Compliance Report</h1>
-  <p>Generated: {audit['generated_at'][:10]} &nbsp;|&nbsp; Frameworks: GDPR · CCPA &nbsp;|&nbsp; Data Controller: {audit['data_controller']}</p>
+  <p>Generated: {audit["generated_at"][:10]} &nbsp;|&nbsp; Frameworks: GDPR · CCPA &nbsp;|&nbsp; Data Controller: {audit["data_controller"]}</p>
 </div>
 <div class="content">
   <div class="kpi">
     <div class="kpi-box">
-      <div class="num">{audit['total_personal_rows']:,}</div>
+      <div class="num">{audit["total_personal_rows"]:,}</div>
       <div class="lbl">Total Personal Data Rows</div>
     </div>
     <div class="kpi-box">
-      <div class="num">{audit['total_tables']}</div>
+      <div class="num">{audit["total_tables"]}</div>
       <div class="lbl">Tables Containing Personal Data</div>
     </div>
     <div class="kpi-box">
-      <div class="num">{consent_stats.get('opted_in', 0)}</div>
+      <div class="num">{consent_stats.get("opted_in", 0)}</div>
       <div class="lbl">Employees with Consent</div>
     </div>
     <div class="kpi-box">
-      <div class="num">{consent_stats.get('opted_out', 0)}</div>
+      <div class="num">{consent_stats.get("opted_out", 0)}</div>
       <div class="lbl">Employees Opted Out</div>
     </div>
   </div>
@@ -516,7 +516,7 @@ def generate_html_report(conn) -> str:
   </table>
 
   <h2>Data Protection Contact</h2>
-  <p>DPO: <a href="mailto:{audit['dpo_contact']}">{audit['dpo_contact']}</a><br>
+  <p>DPO: <a href="mailto:{audit["dpo_contact"]}">{audit["dpo_contact"]}</a><br>
   For data subject rights requests (access, erasure, portability), contact your HR administrator.</p>
 </div>
 <footer>Org Synapse · Compliance Report · {today} · OPB AI Mastery Lab · For authorized use only</footer>

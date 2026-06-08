@@ -59,7 +59,7 @@ def _latest_checkpoint() -> str:
     candidates = sorted(glob.glob(pattern))
     if not candidates:
         raise FileNotFoundError(
-            f"No temporal_risk_gnn_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. " "Run temporal/trainer.py first."
+            f"No temporal_risk_gnn_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. Run temporal/trainer.py first."
         )
     return candidates[-1]
 
@@ -183,7 +183,7 @@ def score(
 
     if len(employee_ids) != vocab_size:
         logger.error(
-            "Vocabulary mismatch: sequence_builder N=%d, re-derived N=%d. " "Aborting — re-train the model.",
+            "Vocabulary mismatch: sequence_builder N=%d, re-derived N=%d. Aborting — re-train the model.",
             vocab_size,
             len(employee_ids),
         )

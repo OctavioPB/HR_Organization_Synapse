@@ -62,9 +62,7 @@ class ChurnGAT(nn.Module):
         dropout: float = DEFAULT_DROPOUT,
     ) -> None:
         if not _PYG_AVAILABLE:
-            raise ImportError(
-                "torch_geometric is required for ChurnGAT.  " "Install it with: pip install torch-geometric"
-            )
+            raise ImportError("torch_geometric is required for ChurnGAT.  Install it with: pip install torch-geometric")
         super().__init__()
 
         self.dropout = dropout

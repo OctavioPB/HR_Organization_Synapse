@@ -99,7 +99,7 @@ def _latest_checkpoint() -> str:
     pattern = str(Path(_CHECKPOINT_DIR) / "churn_gat_*.pt")
     candidates = sorted(glob.glob(pattern))
     if not candidates:
-        raise FileNotFoundError(f"No churn_gat_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. " "Run trainer.py first.")
+        raise FileNotFoundError(f"No churn_gat_*.pt checkpoint found in {_CHECKPOINT_DIR!r}. Run trainer.py first.")
     return candidates[-1]
 
 

@@ -175,7 +175,7 @@ def build_snapshot_sequence(
 
             if not employee_ids:
                 logger.warning(
-                    "build_snapshot_sequence: no graph_snapshots found for " "any of the %d dates ending at %s",
+                    "build_snapshot_sequence: no graph_snapshots found for any of the %d dates ending at %s",
                     n_weeks,
                     end_date,
                 )

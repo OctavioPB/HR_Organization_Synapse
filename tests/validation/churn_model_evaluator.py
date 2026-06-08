@@ -648,7 +648,7 @@ def print_report(report: EvalReport) -> None:
     print("\n  RESULTS")
     header = f"  {'Metric':<18} {'LogReg (baseline)':<22} {'GraphMLP':>12}  Delta"
     print(header)
-    print(f"  {'-'*18} {'-'*22} {'-'*12}  {'-'*8}")
+    print(f"  {'-' * 18} {'-' * 22} {'-' * 12}  {'-' * 8}")
 
     metrics_display = [
         ("AUROC", "auroc"),
@@ -684,7 +684,7 @@ def print_report(report: EvalReport) -> None:
 
     print("\n  RANDOM BASELINE FLOOR (predict everyone = positive): AUROC = 0.50")
     print("  CHURN-RATE BASELINE  (predict churn_rate for all):   AUROC ~= 0.50")
-    print(f"  Both models beat random: LR={report.baseline['auroc']:.3f}  " f"Graph={report.graph_mlp['auroc']:.3f}")
+    print(f"  Both models beat random: LR={report.baseline['auroc']:.3f}  Graph={report.graph_mlp['auroc']:.3f}")
 
     print("\n  PASS / FAIL")
     checks = _assertion_checks(report)
@@ -769,7 +769,7 @@ def test_baseline_pr_auc_beats_trivial():
     """
     report = _get_report()
     assert report.baseline["pr_auc"] >= report.churn_rate_test, (
-        f"Baseline PR-AUC = {report.baseline['pr_auc']:.4f} not >= " f"churn_rate {report.churn_rate_test:.4f}"
+        f"Baseline PR-AUC = {report.baseline['pr_auc']:.4f} not >= churn_rate {report.churn_rate_test:.4f}"
     )
 
 
@@ -777,7 +777,7 @@ def test_graph_mlp_pr_auc_beats_trivial():
     """GraphMLP PR-AUC must exceed the churn base rate."""
     report = _get_report()
     assert report.graph_mlp["pr_auc"] >= report.churn_rate_test, (
-        f"GraphMLP PR-AUC = {report.graph_mlp['pr_auc']:.4f} not >= " f"churn_rate {report.churn_rate_test:.4f}"
+        f"GraphMLP PR-AUC = {report.graph_mlp['pr_auc']:.4f} not >= churn_rate {report.churn_rate_test:.4f}"
     )
 
 
@@ -791,7 +791,7 @@ def test_graph_not_catastrophically_worse_than_baseline():
     """
     report = _get_report()
     assert report.delta_auroc >= -0.15, (
-        f"GraphMLP AUROC is {abs(report.delta_auroc)*100:.1f}pp below baseline "
+        f"GraphMLP AUROC is {abs(report.delta_auroc) * 100:.1f}pp below baseline "
         f"(threshold: 15pp).  Investigate training stability before deployment."
     )
 
@@ -811,7 +811,7 @@ def test_graph_within_competitive_range_of_baseline():
     """
     report = _get_report()
     assert report.delta_auroc >= -0.15, (
-        f"GraphMLP AUROC is {abs(report.delta_auroc)*100:.1f}pp below baseline "
+        f"GraphMLP AUROC is {abs(report.delta_auroc) * 100:.1f}pp below baseline "
         f"(threshold: 15pp).  This magnitude of underperformance suggests a "
         "training issue (mode collapse, bad pos_weight, gradient explosion), "
         "not just insufficient graph signal.  Investigate the training loop."

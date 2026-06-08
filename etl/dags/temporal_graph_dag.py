@@ -121,7 +121,7 @@ def temporal_gnn_train_dag():
 
         val_loss = metrics.get("val_loss", float("nan"))
         logger.info(
-            "TemporalRiskGNN training — best_epoch=%d val_loss=%.6f " "train_windows=%d val_windows=%d",
+            "TemporalRiskGNN training — best_epoch=%d val_loss=%.6f train_windows=%d val_windows=%d",
             metrics.get("best_epoch", 0),
             val_loss,
             metrics.get("n_train_windows", 0),
@@ -183,7 +183,7 @@ def temporal_gnn_score_dag():
             results = score(end_date=end_date)
         except FileNotFoundError as exc:
             logger.warning(
-                "No checkpoint found — skipping scoring. " "Run temporal_gnn_train first. Error: %s",
+                "No checkpoint found — skipping scoring. Run temporal_gnn_train first. Error: %s",
                 exc,
             )
             return {"scored": 0, "skipped": True}

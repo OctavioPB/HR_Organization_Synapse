@@ -221,7 +221,7 @@ def simulate_removal(
     }
 
     logger.info(
-        "POST /risk/simulate removed=%s before_nodes=%d after_nodes=%d " "components_delta=%d",
+        "POST /risk/simulate removed=%s before_nodes=%d after_nodes=%d components_delta=%d",
         body.remove_employee_id[:8],
         before_stats.node_count,
         after_stats.node_count,

@@ -527,8 +527,7 @@ def _get_succession_plan(inp: dict, conn) -> dict:
     if not data:
         return {
             "error": (
-                f"No succession plan for {employee_id}. "
-                "Either not flagged as high-SPOF or succession_dag hasn't run."
+                f"No succession plan for {employee_id}. Either not flagged as high-SPOF or succession_dag hasn't run."
             )
         }
 

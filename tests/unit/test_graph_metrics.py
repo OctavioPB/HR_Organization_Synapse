@@ -111,7 +111,7 @@ def test_betweenness_bridge_nodes_rank_highest():
     b = compute_betweenness(G)
     max_node = max(b, key=b.get)
     assert max_node in {bridge_a, bridge_b}, (
-        f"Expected bridge node {bridge_a} or {bridge_b} to have max betweenness, " f"got {max_node} ({b[max_node]:.4f})"
+        f"Expected bridge node {bridge_a} or {bridge_b} to have max betweenness, got {max_node} ({b[max_node]:.4f})"
     )
 
 
@@ -344,6 +344,6 @@ def test_score_all_star_graph():
     clustering = compute_clustering(G)
     scores = score_all(G, betweenness, clustering)
 
-    assert (
-        max(scores, key=scores.get) == "center"
-    ), f"Center should have highest SPOF; got {sorted(scores.items(), key=lambda x: -x[1])[:3]}"
+    assert max(scores, key=scores.get) == "center", (
+        f"Center should have highest SPOF; got {sorted(scores.items(), key=lambda x: -x[1])[:3]}"
+    )

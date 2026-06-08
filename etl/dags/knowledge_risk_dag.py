@@ -121,7 +121,7 @@ def knowledge_ingest_dag():
         )
         if total == 0:
             logger.warning(
-                "No documents ingested.  Check connector credentials and " "ENABLE_CONFLUENCE / ENABLE_NOTION env vars."
+                "No documents ingested.  Check connector credentials and ENABLE_CONFLUENCE / ENABLE_NOTION env vars."
             )
 
     c_result = ingest_confluence()

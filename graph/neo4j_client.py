@@ -111,8 +111,8 @@ def ensure_indexes() -> None:
     """Create uniqueness constraint and indexes if they don't exist yet."""
     driver = get_driver()
     with driver.session() as session:
-        session.run("CREATE CONSTRAINT employee_id IF NOT EXISTS " "FOR (e:Employee) REQUIRE e.id IS UNIQUE")
-        session.run("CREATE INDEX employee_dept IF NOT EXISTS " "FOR (e:Employee) ON (e.department)")
+        session.run("CREATE CONSTRAINT employee_id IF NOT EXISTS FOR (e:Employee) REQUIRE e.id IS UNIQUE")
+        session.run("CREATE INDEX employee_dept IF NOT EXISTS FOR (e:Employee) ON (e.department)")
     logger.info("Neo4j indexes ensured.")
 
 

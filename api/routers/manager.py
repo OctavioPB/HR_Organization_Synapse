@@ -251,7 +251,7 @@ def get_suggestions(
     if emp.get("anomaly_tier") in ("high", "medium"):
         anomaly_signal = "Their interaction patterns show an anomalous trajectory."
 
-    context = f"Employee: {name}, Department: {dept}. " f"{entropy_signal} {anomaly_signal}".strip()
+    context = f"Employee: {name}, Department: {dept}. {entropy_signal} {anomaly_signal}".strip()
 
     prompt = (
         f"You are an HR support assistant. A manager is preparing for a 1:1 meeting with "

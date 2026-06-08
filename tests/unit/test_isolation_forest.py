@@ -135,9 +135,9 @@ def test_run_isolation_forest_outlier_gets_higher_score():
     outlier_score = next(r["anomaly_score"] for r in results if r["employee_id"] == "OUTLIER")
     avg_normal = sum(r["anomaly_score"] for r in results if r["employee_id"] != "OUTLIER") / 18
 
-    assert (
-        outlier_score > avg_normal
-    ), f"Outlier score {outlier_score:.3f} should exceed average normal {avg_normal:.3f}"
+    assert outlier_score > avg_normal, (
+        f"Outlier score {outlier_score:.3f} should exceed average normal {avg_normal:.3f}"
+    )
 
 
 def test_run_isolation_forest_outlier_is_flagged():
@@ -147,9 +147,9 @@ def test_run_isolation_forest_outlier_is_flagged():
     results = run_isolation_forest(normal + [outlier], contamination=0.1, random_state=42)
 
     outlier_result = next(r for r in results if r["employee_id"] == "OUTLIER")
-    assert (
-        outlier_result["is_anomaly"] is True
-    ), f"Outlier should be flagged; score={outlier_result['anomaly_score']:.3f}"
+    assert outlier_result["is_anomaly"] is True, (
+        f"Outlier should be flagged; score={outlier_result['anomaly_score']:.3f}"
+    )
 
 
 def test_run_isolation_forest_reproducible_with_same_seed():
@@ -170,6 +170,6 @@ def test_run_isolation_forest_all_identical_features():
     results = run_isolation_forest(features, contamination=0.1, random_state=42)
     scores = [r["anomaly_score"] for r in results]
     # All scores should be very close (uniform anomaly landscape)
-    assert (
-        max(scores) - min(scores) < 0.01
-    ), f"Expected uniform scores, got range [{min(scores):.3f}, {max(scores):.3f}]"
+    assert max(scores) - min(scores) < 0.01, (
+        f"Expected uniform scores, got range [{min(scores):.3f}, {max(scores):.3f}]"
+    )

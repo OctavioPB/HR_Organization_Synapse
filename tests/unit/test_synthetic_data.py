@@ -147,9 +147,9 @@ def test_connectors_have_more_edges_than_average():
     edge_counts = Counter(e.source_employee_id for e in edges)
     mean_count = sum(edge_counts.values()) / len(employees)
     for cid in connector_ids:
-        assert (
-            edge_counts[cid] > mean_count * 5
-        ), f"Connector {cid} has {edge_counts[cid]} edges, expected > {mean_count * 5:.1f}"
+        assert edge_counts[cid] > mean_count * 5, (
+            f"Connector {cid} has {edge_counts[cid]} edges, expected > {mean_count * 5:.1f}"
+        )
 
 
 def test_connectors_have_more_cross_dept_edges():

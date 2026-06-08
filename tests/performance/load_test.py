@@ -174,6 +174,5 @@ def check_sla(environment, **kwargs) -> None:
         environment.process_exit_code = 1
     else:
         print(
-            f"\nSLA PASSED: p95={p95_ms:.0f}ms (≤{_P95_SLA_MS:.0f}ms) "
-            f"errors={error_rate:.2%} (≤{_ERROR_RATE_SLA:.2%})"
+            f"\nSLA PASSED: p95={p95_ms:.0f}ms (≤{_P95_SLA_MS:.0f}ms) errors={error_rate:.2%} (≤{_ERROR_RATE_SLA:.2%})"
         )

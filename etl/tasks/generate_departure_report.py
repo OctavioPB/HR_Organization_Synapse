@@ -245,7 +245,7 @@ def _generate_narrative(impact: dict) -> str:
         delta = impact.get("graph_diameter_delta_pct", 0)
         silos = impact.get("new_silo_alerts", 0)
         recovery = impact.get("recovery_trajectory", "unknown")
-        spof_str = f"{round(spof*100)}%" if spof is not None else "unscored"
+        spof_str = f"{round(spof * 100)}%" if spof is not None else "unscored"
         return (
             f"{name} was predicted at {spof_str} SPOF risk. After their departure, "
             f"average network betweenness increased by {delta}% and {silos} new silo alert(s) fired. "

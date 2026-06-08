@@ -172,7 +172,7 @@ def test_connectors_have_highest_betweenness(pipeline):
     for cid in connector_ids:
         if cid in betweenness:
             assert cid in top_10pct, (
-                f"Connector {cid[:8]} not in top-10% betweenness. " f"Score: {betweenness.get(cid, 0):.4f}"
+                f"Connector {cid[:8]} not in top-10% betweenness. Score: {betweenness.get(cid, 0):.4f}"
             )
 
 
@@ -185,7 +185,7 @@ def test_connectors_have_highest_spof_scores(pipeline):
     top_5 = set(sorted_nodes[:5])
 
     assert connector_ids & top_5, (
-        f"No connector found in top-5 SPOF scores. " f"Top 5: {[(n[:8], scores[n]) for n in sorted_nodes[:5]]}"
+        f"No connector found in top-5 SPOF scores. Top 5: {[(n[:8], scores[n]) for n in sorted_nodes[:5]]}"
     )
 
 
@@ -200,9 +200,9 @@ def test_connectors_above_average_spof(pipeline):
     mean_score = sum(scores.values()) / len(scores)
     for cid in connector_ids:
         if cid in scores:
-            assert (
-                scores[cid] > mean_score
-            ), f"Connector {cid[:8]} score {scores[cid]:.4f} not above mean {mean_score:.4f}"
+            assert scores[cid] > mean_score, (
+                f"Connector {cid[:8]} score {scores[cid]:.4f} not above mean {mean_score:.4f}"
+            )
 
 
 # ─── Demo scenario: withdrawing employee ──────────────────────────────────────
@@ -235,7 +235,7 @@ def test_withdrawing_employee_entropy_lower_in_late_period(pipeline):
     late_entropy = compute_entropy(dict(late_partners)) if late_partners else 0.0
 
     assert late_entropy <= early_entropy, (
-        f"Withdrawing employee entropy did not decline: " f"early={early_entropy:.4f} late={late_entropy:.4f}"
+        f"Withdrawing employee entropy did not decline: early={early_entropy:.4f} late={late_entropy:.4f}"
     )
 
 

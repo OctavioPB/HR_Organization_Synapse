@@ -208,9 +208,9 @@ def build_ground_truth_org(seed: int = 42) -> GroundTruthOrg:
     for _ in range(14):
         employees.append(_emp("HR", "NORMAL"))
 
-    assert len(employees) == sum(
-        departments.values()
-    ), f"Employee count mismatch: {len(employees)} vs {sum(departments.values())}"
+    assert len(employees) == sum(departments.values()), (
+        f"Employee count mismatch: {len(employees)} vs {sum(departments.values())}"
+    )
 
     # Index for edge generation
     by_dept: dict[str, list[_Employee]] = {}
@@ -488,7 +488,7 @@ def print_report(org: GroundTruthOrg, scores: dict[str, dict], report: Validatio
     print("\n  SCORING SUMMARY (by archetype)")
     header = f"  {'Archetype':<14} {'Score':>7} {'Flag':<12} {'Rank':>5} {'Robust':>7}"
     print(header)
-    print(f"  {'-'*14} {'-'*7} {'-'*12} {'-'*5} {'-'*7}")
+    print(f"  {'-' * 14} {'-' * 7} {'-' * 12} {'-' * 5} {'-' * 7}")
 
     by_archetype: dict[str, list[dict]] = {}
     for row in report.per_employee:
