@@ -5,7 +5,7 @@ Privacy model:
   - NO page body, NO page content, NO comments, NO attachments.
   - Required Confluence permissions: read-only (space:read, page:read).
 
-  
+
 This connector fetches document metadata from Confluence Cloud REST API v2
 and writes it to the document_knowledge table.  It is a batch ETL connector
 (not a Kafka streaming producer) — designed to run from an Airflow task.

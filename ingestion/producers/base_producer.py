@@ -20,9 +20,10 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
-from kafka import KafkaProducer
-from kafka.errors import KafkaError
+if TYPE_CHECKING:
+    from kafka import KafkaProducer
 
 from ingestion.schemas.collaboration_event import CollaborationEvent
 
@@ -79,7 +80,8 @@ class BaseProducer(ABC):
 
     @staticmethod
     def _build_kafka_producer(bootstrap_servers: str) -> KafkaProducer:
-        return KafkaProducer(
+        from kafka import KafkaProducer as _KafkaProducer
+        return _KafkaProducer(
             bootstrap_servers=bootstrap_servers.split(","),
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             acks="all",
@@ -92,6 +94,7 @@ class BaseProducer(ABC):
         Logs and re-raises KafkaError so the caller can decide whether to
         continue streaming or abort.
         """
+        from kafka.errors import KafkaError
         try:
             kafka_producer.send(KAFKA_TOPIC, value=event.model_dump(mode="json"))
         except KafkaError as exc:
