@@ -1,0 +1,58 @@
+name: Ruff
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "**.py"
+      - "pyproject.toml"
+      - ".github/workflows/ruff.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "**.py"
+      - "pyproject.toml"
+      - ".github/workflows/ruff.yml"
+
+# Cancel in-flight runs for the same branch on new push.
+concurrency:
+  group: ruff-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: Ruff lint & format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install ruff
+        run: pip install ruff==0.9.10
+
+      # ── Lint ───────────────────────────────────────────────────────────────
+      # --output-format=github emits ::error file=…,line=…:: annotations that
+      # appear as inline comments on the PR diff.
+      - name: ruff check
+        run: |
+          ruff check graph/ ml/ ingestion/ api/ etl/ tests/ \
+            --output-format=github
+
+      # ── Format ─────────────────────────────────────────────────────────────
+      - name: ruff format --check
+        run: |
+          ruff format --check graph/ ml/ ingestion/ api/ etl/ tests/
+
+      # ── Diff hint on format failure ────────────────────────────────────────
+      # Shows exactly what ruff format would change so the author doesn't need
+      # to run it locally to find out.
+      - name: Show format diff (on failure)
+        if: failure()
+        run: |
+          ruff format graph/ ml/ ingestion/ api/ etl/ tests/ --diff

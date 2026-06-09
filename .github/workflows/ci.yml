@@ -12,27 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ─── Job 1: Lint ─────────────────────────────────────────────────────────────
-  lint:
-    name: Lint (ruff)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install ruff
-        run: pip install ruff==0.9.10
-
-      - name: ruff check
-        run: ruff check graph/ ml/ ingestion/ api/ etl/ tests/
-
-      - name: ruff format --check
-        run: ruff format --check graph/ ml/ ingestion/ api/ etl/ tests/
-
-  # ─── Job 2: Type-check ───────────────────────────────────────────────────────
+  # ─── Job 1: Type-check ───────────────────────────────────────────────────────
+  # Ruff lint + format is handled by the dedicated ruff.yml workflow.
   type-check:
     name: Type-check (mypy)
     runs-on: ubuntu-latest
