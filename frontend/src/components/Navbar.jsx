@@ -7,11 +7,12 @@ const NAV_LINKS = [
   { to: "/scenarios",  label: "Scenarios" },
   { to: "/equity",     label: "Equity" },
   { to: "/teams",      label: "Team Builder" },
+  { to: "/people",     label: "People" },
   { to: "/info",       label: "Platform" },
   { to: "/admin",      label: "Admin" },
 ];
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = "/api";
 
 export default function Navbar() {
   return (

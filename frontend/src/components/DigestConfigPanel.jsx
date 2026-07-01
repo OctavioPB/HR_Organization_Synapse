@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = "/api";
 
 async function fetchDigestConfig() {
   const res = await fetch(`${API_BASE}/admin/digest-config`, {

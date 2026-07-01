@@ -314,7 +314,7 @@ Write-Step "Opening FastAPI server window  (port 8001)"
 
 $apiCommand = '$env:PYTHONPATH = ''' + $RepoRoot + '''; ' +
               'Set-Location ''' + $RepoRoot + '''; ' +
-              '& ''' + $pythonExe + ''' -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8001'
+              '& ''' + $pythonExe + ''' -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8001'
 
 Start-EncodedWindow -Title "Org Synapse API :8001" -Command $apiCommand -WorkDir $RepoRoot
 
@@ -345,7 +345,7 @@ if (-not $nodeCmd) {
     Exit-Script "node not found on PATH. Install Node.js 20+ and retry."
 }
 
-$feCommand = 'Set-Location ''' + $FrontendDir + '''; npm run dev'
+$feCommand = 'Set-Location ''' + $FrontendDir + '''; npm run dev -- --host 0.0.0.0'
 
 Start-EncodedWindow -Title "Org Synapse Dashboard :5173" -Command $feCommand -WorkDir $FrontendDir
 

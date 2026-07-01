@@ -10,6 +10,7 @@ import OnboardingTracker from "./pages/OnboardingTracker.jsx";
 import ScenarioPlanner from "./pages/ScenarioPlanner.jsx";
 import EquityDashboard from "./pages/EquityDashboard.jsx";
 import TeamOptimizer from "./pages/TeamOptimizer.jsx";
+import EmployeeRoster from "./pages/EmployeeRoster.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/scenarios"     element={<ScenarioPlanner />} />
           <Route path="/equity"        element={<EquityDashboard />} />
           <Route path="/teams"         element={<TeamOptimizer />} />
+          <Route path="/people"        element={<EmployeeRoster />} />
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>

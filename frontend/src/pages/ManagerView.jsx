@@ -2,7 +2,13 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import TeamMemberCard from "../components/TeamMemberCard.jsx";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = "/api";
+
+async function fetchManagerList() {
+  const res = await fetch(`${API_BASE}/manager/list`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
 function KPIStat({ value, label }) {
   return (
@@ -30,6 +36,12 @@ export default function ManagerView() {
     () => localStorage.getItem("manager_employee_id") || ""
   );
   const [inputValue, setInputValue] = useState(managerEmployeeId);
+
+  const { data: managerList } = useQuery({
+    queryKey: ["managerList"],
+    queryFn: fetchManagerList,
+    staleTime: 600_000,
+  });
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["managerTeam", managerEmployeeId],
@@ -77,6 +89,43 @@ export default function ManagerView() {
       </div>
 
       <div style={{ padding: "40px 48px", maxWidth: "1100px", margin: "0 auto" }}>
+
+        {/* Manager picker */}
+        {managerList?.managers?.length > 0 && (
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontFamily: "var(--fb)", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--mid)", marginBottom: "8px" }}>
+              Select a manager
+            </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {managerList.managers.map(m => (
+                <button
+                  key={m.employee_id}
+                  onClick={() => {
+                    setInputValue(m.employee_id);
+                    localStorage.setItem("manager_employee_id", m.employee_id);
+                    setManagerEmployeeId(m.employee_id);
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: `1.5px solid ${managerEmployeeId === m.employee_id ? "var(--gold)" : "var(--primary-30, #ccd9e8)"}`,
+                    background: managerEmployeeId === m.employee_id ? "#FFF8E1" : "#fff",
+                    color: "var(--dark)",
+                    fontFamily: "var(--fb)",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 150ms",
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{m.name}</span>
+                  <span style={{ color: "var(--mid)", marginLeft: "6px" }}>· {m.department}</span>
+                  <span style={{ color: "var(--mid)", marginLeft: "6px", fontSize: "11px" }}>{m.report_count} reports</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Manager ID form */}
         <form onSubmit={handleSubmit} style={{ display: "flex", gap: "12px", marginBottom: "32px" }}>

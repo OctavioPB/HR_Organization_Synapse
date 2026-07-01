@@ -6,7 +6,7 @@ const STATUS_CONFIG = {
   red:    { color: "#E03448", bg: "#FDEAEA", label: "At Risk" },
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = "/api";
 
 export default function TeamMemberCard({ member, managerEmployeeId }) {
   const [open, setOpen]             = useState(false);

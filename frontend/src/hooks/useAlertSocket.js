@@ -16,10 +16,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000")
-  .replace(/^http/, "ws");            // http://... → ws://...
+function buildWsUrl() {
+  const env = import.meta.env.VITE_API_BASE_URL ?? "/api";
+  if (env.startsWith("http")) {
+    return env.replace(/^http/, "ws") + "/alerts/live";
+  }
+  // Relative path — derive host from current page so ngrok/any host works
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}${env}/alerts/live`;
+}
 
-const WS_URL = `${BASE_URL}/alerts/live`;
+const WS_URL = buildWsUrl();
 
 const INITIAL_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;

@@ -18,7 +18,7 @@ import DigestConfigPanel from "../components/DigestConfigPanel.jsx";
 
 const _adminQueryClient = new QueryClient();
 
-const API_BASE  = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE  = "/api";
 const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? "";
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────

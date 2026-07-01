@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = "/api";
 
 const PHASE_CONFIG = [
   { key: "weeks_1_4",  label: "Weeks 1–4",  subtitle: "Relationship Introductions",  color: "#003366" },

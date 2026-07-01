@@ -5,7 +5,7 @@ import {
   Tooltip, ReferenceLine, ResponsiveContainer, LineChart, Line,
 } from "recharts";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = "/api";
 
 function KPIStat({ value, label }) {
   return (

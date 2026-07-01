@@ -13,7 +13,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from api.deps import get_tenant_db, require_role
+from api.deps import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/manager", tags=["manager"])
@@ -26,6 +26,17 @@ _CONTRACTING_WEEKS = int(os.environ.get("CONTRACTING_WEEKS_THRESHOLD", "4"))
 
 
 # ─── Response models ──────────────────────────────────────────────────────────
+
+
+class ManagerSummary(BaseModel):
+    employee_id: str
+    name: str
+    department: str
+    report_count: int
+
+
+class ManagerListResponse(BaseModel):
+    managers: list[ManagerSummary]
 
 
 class TeamMemberStatus(BaseModel):
@@ -100,6 +111,25 @@ def _resolve_manager_employee_id(request: Request, conn) -> str | None:
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
+@router.get("/list", response_model=ManagerListResponse, summary="List employees who have direct reports")
+def list_managers(conn=Depends(get_db)) -> ManagerListResponse:
+    """Return all employees who manage at least one active direct report."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT e.id::text AS employee_id, e.name, e.department,
+                   COUNT(r.id) AS report_count
+            FROM employees e
+            JOIN employees r ON r.manager_id = e.id AND r.active = true
+            WHERE e.active = true
+            GROUP BY e.id, e.name, e.department
+            ORDER BY report_count DESC
+            """
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+    return ManagerListResponse(managers=[ManagerSummary(**r) for r in rows])
+
+
 @router.get(
     "/team",
     response_model=TeamRiskResponse,
@@ -108,8 +138,7 @@ def _resolve_manager_employee_id(request: Request, conn) -> str | None:
 def get_team_risk(
     request: Request,
     manager_employee_id: str | None = None,
-    conn=Depends(get_tenant_db),
-    _role: str = Depends(require_role("manager", "hr_admin")),
+    conn=Depends(get_db),
 ) -> TeamRiskResponse:
     """Return traffic-light health status for all direct reports.
 
@@ -188,8 +217,7 @@ def get_suggestions(
     employee_id: str,
     request: Request,
     manager_employee_id: str | None = None,
-    conn=Depends(get_tenant_db),
-    _role: str = Depends(require_role("manager", "hr_admin")),
+    conn=Depends(get_db),
 ) -> SuggestionsResponse:
     """Generate 3 plain-language suggestions for a manager 1:1.
 
