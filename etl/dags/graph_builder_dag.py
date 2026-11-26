@@ -60,7 +60,11 @@ def _on_failure_callback(context: dict) -> None:
 def graph_builder_dag():
     @task(on_failure_callback=_on_failure_callback)
     def sync_hris_data(**context) -> dict:
-        """Sync HRIS enrichment fields into employees table (skipped if not configured)."""
+        """Sync HRIS enrichment and departures into employees (skipped if not configured).
+
+        Matches on HRIS ID or work e-mail only (migration 020); terminations set
+        left_at / active = false and write churn_labels.
+        """
         import sys
         from pathlib import Path
 
@@ -75,10 +79,10 @@ def graph_builder_dag():
         from ingestion.db import get_conn
 
         with get_conn() as conn:
-            rows_updated = sync_all(conn)
+            report = sync_all(conn)
 
-        logger.info("HRIS sync complete: %d employees updated.", rows_updated)
-        return {"skipped": False, "rows_updated": rows_updated}
+        logger.info("HRIS sync complete: %s", report)
+        return {"skipped": bool(report.get("skipped")), **report}
 
     @task(on_failure_callback=_on_failure_callback)
     def check_raw_events(**context) -> int:

@@ -159,7 +159,7 @@ No slice-level evaluation (by department, tenure band, role level, or demographi
 
 The evaluation in Section 6 uses a synthetic dataset with planted churn labels constructed from known rules. The model has **never been evaluated against real organizational churn data with verified ground-truth labels.** The synthetic results establish that the model architecture is not degenerate, but they do not establish that the model generalizes to any specific real organization.
 
-Before deployment: collect ≥ 6 months of departure history with voluntary/involuntary labels, train on the organization's data, and evaluate on a held-out cohort with the methodology in `ml/gnn/trainer.py`.
+Before deployment: collect ≥ 6 months of departure history with voluntary/involuntary labels (the HRIS sync writes these from terminations; involuntary exits are censored), train on the organization's data, and evaluate on a held-out cohort with the methodology in `ml/churn/model.py`.
 
 ### 7.2 Graph model does not outperform baseline at N=300
 

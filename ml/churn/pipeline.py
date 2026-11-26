@@ -10,7 +10,8 @@ Weekly (churn_gnn_train DAG → train_churn_model):
     1. Anchors = logged feature dates spaced CHURN_ANCHOR_STEP_DAYS apart whose
        label window has fully elapsed (anchor + H ≤ as_of).
     2. Labels from departures: employees.left_at, else the earliest
-       churn_labels row with churned = true.
+       churn_labels row with churned = true.  Involuntary exits
+       (employees.departure_type, written by the HRIS sync) are censored.
     3. fit_churn_model → checkpoint (joblib) with its held-out metrics.
 
 Nothing here recomputes past features from raw_events: those are purged after
@@ -49,8 +50,19 @@ _TIE_LOOKBACK_DAYS = int(os.environ.get("PEER_TIE_LOOKBACK_DAYS", "90"))  # = ra
 # ─── Loaders ──────────────────────────────────────────────────────────────────
 
 
+def load_involuntary(cur) -> set[str]:
+    """Employees whose recorded exit was involuntary (migration 020).
+
+    The model predicts *voluntary* departure: an involuntary exit is censored,
+    not a positive label.  They still count as departed for at-risk sets and
+    peer exposure.
+    """
+    cur.execute("SELECT id::text FROM employees WHERE departure_type = 'involuntary'")
+    return {str(r[0]) for r in cur.fetchall()}
+
+
 def load_departures(cur) -> dict[str, date]:
-    """employee_id → departure date (left_at, else earliest churned label)."""
+    """employee_id → departure date (left_at, else earliest churned label), any exit type."""
     cur.execute(
         """
         SELECT e.id::text,
@@ -189,6 +201,7 @@ def load_training_examples(
             if not anchors:
                 return np.zeros((0, len(CHURN_FEATURE_NAMES))), np.zeros(0, dtype=int), np.zeros(0, dtype=int)
             departures = load_departures(cur)
+            involuntary = load_involuntary(cur)
             cur.execute(
                 """
                 SELECT employee_id::text, feature_date, features
@@ -204,8 +217,11 @@ def load_training_examples(
         left = departures.get(emp)
         if left is not None and left <= d:
             continue  # logged on/after their last day: not at risk
+        leaves_in_window = left is not None and left <= d + timedelta(days=horizon_days)
+        if leaves_in_window and emp in involuntary:
+            continue  # censored: an involuntary exit is neither a voluntary leave nor a stay
         X.append(feats)
-        y.append(int(left is not None and left <= d + timedelta(days=horizon_days)))
+        y.append(int(leaves_in_window))
         a.append(d.toordinal())
     return np.asarray(X, dtype=float), np.asarray(y, dtype=int), np.asarray(a, dtype=int)
 

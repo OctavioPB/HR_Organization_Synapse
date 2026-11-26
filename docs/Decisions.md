@@ -481,15 +481,29 @@ with default weights 0.40 / 0.25 / 0.35 (sum = 1.0).
 
 ## 17. HRIS Enrichment Integration
 
-### Decision: Employee Matching by Name/Email Prefix, Not External ID
+### Decision: Employee Matching by Unique Identifier Only (revised November 2026)
 
-**What was decided.** `ingestion/connectors/hris_connector.py` matches HR system records to internal employees using a case-insensitive `name` match or an email-prefix `LIKE` query. It does not attempt to map external HRIS identifiers (Workday worker IDs, BambooHR employee numbers) to internal UUIDs.
+**What was decided.** Employees carry two external identifiers, each enforced unique by the database (migration 020):
+- `work_email`, unique case-insensitively.
+- (`hris_source`, `hris_external_id`), the HRIS's own worker or employee ID.
 
-**Why.** The internal `employees` table is populated from synthetic data or from Kafka-ingested collaboration events — neither source carries the HRIS's own identifier. Adding a `hris_external_id` column and requiring it to be pre-populated before the sync can run creates a chicken-and-egg bootstrapping problem. Name matching is imprecise but acceptable because the update is a `SET tenure_months = %s, ...` with no privacy-sensitive consequences for a mismatch: a failed match simply leaves the HRIS fields as NULL, and the GNN falls back to its 0.0 defaults for those features.
+`ingestion/connectors/hris_connector.py` matches an HRIS record on the HRIS ID first, then on the work e-mail, linking the HRIS ID the first time. It matches on nothing else. A record that matches no one is counted and logged by HRIS ID, never guessed. If the e-mail belongs to an employee already linked to a *different* HRIS ID, the sync flags a conflict and skips the record. Existing employees are linked once with `scripts/import_employee_identities.py`. The script validates the whole file, checks for duplicates within it and against the database, and dry-runs by default.
 
-**Alternative considered.** Requiring a pre-mapped `hris_external_id` column. Rejected because it requires a separate configuration step that most demo and development deployments will skip, making the feature effectively non-functional for the majority of users.
+**Why the original decision was reversed.** The first version matched on `LOWER(name) = email`, or on *any* employee whose role contained the e-mail prefix (`LIMIT 1`). Its rationale was that "a mismatch has no privacy-sensitive consequences" because it only set tenure and PTO fields. That stopped being true for two reasons:
+- **The fields became training data.** They are churn-model features.
+- **The sync now writes departures.** A wrong match would mark the wrong person as having left. That removes them from the graph, labels them as a churn positive and makes their colleagues look exposed to a departure. A false match is far worse than no match.
 
-**Alternative considered.** Email-based matching using a `work_email` column on `employees`. Rejected because the existing `employees` schema does not store email — the schema only carries `name`, `department`, `role`. Adding email would require a migration and a seeding change, and the name-match approach is sufficient for the current use case.
+The bootstrapping cost of pre-populated identifiers, the reason the original version gave for avoiding them, is one import.
+
+### Decision: HRIS Terminations Are the Source of Departures
+
+**What was decided.** The sync reads terminated employees too: BambooHR via a custom report with `onlyCurrent=false`, Workday via `terminationDate` or the primary job's end date. A termination dated today or earlier is applied as follows:
+- **Employee record:** `active = false`, `left_at` = termination date, `departure_type` ∈ {voluntary, involuntary, unknown}.
+- **Churn label:** one `churn_labels` row, with `churned` = true unless the exit was involuntary.
+
+Future-dated terminations wait for their date. A new hire date after the recorded departure reactivates the employee.
+
+**Why.** Nothing previously wrote `left_at` or `churn_labels`, so the churn model had no labels and peer exposure never saw a departure. Involuntary exits are *censored* in training: they are neither positives nor stays, because the model predicts voluntary departure, as stated in MODEL_CARD_CHURN §7.3. They still count as departed for at-risk sets and peer exposure.
 
 ### Decision: COALESCE Strategy for GNN Feature Activation
 

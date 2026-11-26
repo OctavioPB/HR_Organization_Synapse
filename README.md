@@ -239,7 +239,7 @@ Collaboration tools (Slack, Teams, Jira, GitHub, Calendar, Confluence, Notion)
         │
         ▼
 [PostgreSQL] ── schema-per-tenant isolation
-   ├── employees              hire_date  manager_id  reporting_level  pto_days_ytd  hris_source
+   ├── employees              work_email (unique)  hris_source + hris_external_id (unique)  hire_date  left_at  departure_type  reporting_level  pto_days_ytd
    ├── raw_events             90-day retention
    ├── graph_snapshots        365-day retention
    ├── risk_scores            knowledge_risk_scores  succession_recommendations

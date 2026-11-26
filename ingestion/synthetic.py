@@ -119,6 +119,13 @@ _LAST_NAMES = [
 # ─── Data types ───────────────────────────────────────────────────────────────
 
 
+def synthetic_work_email(name: str, employee_id: str) -> str:
+    """Deterministic demo address, unique because it embeds the employee UUID."""
+    slug = "".join(c if c.isalnum() else "." for c in name.lower()).strip(".")
+    slug = ".".join(part for part in slug.split(".") if part) or "employee"
+    return f"{slug}.{employee_id.replace('-', '')}@example.com"
+
+
 class Employee(NamedTuple):
     employee_id: str
     name: str
@@ -437,6 +444,24 @@ def write_to_postgres(
                 page_size=500,
             )
             logger.info("Inserted %d employees", len(employees))
+
+            # Unique synthetic work e-mail per employee (migration 020), so the
+            # demo exercises identifier-based HRIS matching.  example.com is
+            # reserved (RFC 2606): these addresses can never reach a real inbox.
+            cur.execute(
+                """
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'employees' AND column_name = 'work_email'
+                  AND table_schema = current_schema()
+                """
+            )
+            if cur.fetchone():
+                psycopg2.extras.execute_batch(
+                    cur,
+                    "UPDATE employees SET work_email = %s WHERE id = %s AND work_email IS NULL",
+                    [(synthetic_work_email(e.name, e.employee_id), e.employee_id) for e in employees],
+                    page_size=500,
+                )
 
             psycopg2.extras.execute_batch(
                 cur,

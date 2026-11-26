@@ -1,32 +1,47 @@
-"""HRIS connector — syncs enrichment fields from Workday or BambooHR.
+"""HRIS connector — syncs enrichment fields and departures from Workday or BambooHR.
 
 Supported providers (HRIS_PROVIDER env var):
-    workday    — Workday REST API (Raas report or Workers endpoint)
-    bamboohr   — BambooHR REST API v1
+    workday    — Workday REST API (Workers endpoint)
+    bamboohr   — BambooHR REST API v1 (custom report, terminated employees included)
 
 Fields synced per employee (all nullable):
-    tenure_months        — months since hire date
-    days_since_promotion — days since last position change
-    is_comp_band_max     — at the top of their compensation band
-    pto_days_ytd         — PTO days used this calendar year
-    reporting_level      — numeric level 1 (IC1) … 7 (C-Suite)
+    hire_date, tenure_months, days_since_promotion, is_comp_band_max,
+    pto_days_ytd, reporting_level
+
+Identity (migration 020)
+────────────────────────
+An HRIS record is matched to an employee by, in order:
+
+    1. (hris_source, hris_external_id)   the HRIS's own worker ID — unique
+    2. LOWER(work_email)                 unique — and the HRIS ID is then linked
+
+Nothing else.  The previous version matched ``LOWER(name) = email`` or the
+first employee whose *role* contained the e-mail prefix, so it could update
+the wrong person.  Records that match no employee are counted and logged
+(by HRIS ID, never by name), not guessed.  Link existing employees once with
+scripts/import_employee_identities.py.
+
+Departures
+──────────
+A record with a termination date on or before today marks the employee as
+departed: ``active = false``, ``left_at`` = termination date,
+``departure_type`` ∈ {voluntary, involuntary, unknown}, and one
+``churn_labels`` row (``churned`` = true unless involuntary — the churn model
+predicts voluntary departure).  Future-dated terminations wait for their date.
+A rehire (new hire date after the recorded departure, no current termination)
+reactivates the employee.
 
 Usage:
-    from ingestion.connectors.hris_connector import HRISConnector
-    connector = HRISConnector()
-    connector.connect()
-    records = list(connector.stream_events())
-    connector.disconnect()
-
-Or call sync_all(conn) to connect + upsert in one call.
+    from ingestion.connectors.hris_connector import sync_all
+    report = sync_all(conn)      # {"matched", "linked", "unmatched", "departures", ...}
 """
 
 from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Generator, Iterable
 from datetime import date, datetime
-from collections.abc import Generator
 
 import httpx
 
@@ -40,9 +55,21 @@ _TENANT_ID = os.environ.get("HRIS_TENANT_ID", "")  # Workday tenant name
 _BAMBOOHR_SUBDOMAIN = os.environ.get("BAMBOOHR_SUBDOMAIN", "")
 _BAMBOOHR_API_KEY = os.environ.get("BAMBOOHR_API_KEY", "")
 
+_BAMBOOHR_REPORT_FIELDS = [
+    "id",
+    "workEmail",
+    "hireDate",
+    "jobTitle",
+    "status",
+    "employmentHistoryStatus",
+    "terminationDate",
+    "terminationTypeId",
+    "ptoBalance",
+]
+
 
 class HRISConnector:
-    """Connector that yields HRIS enrichment records for each employee."""
+    """Connector that yields normalised HRIS records (see _record)."""
 
     def __init__(self):
         self._client: httpx.Client | None = None
@@ -100,34 +127,10 @@ class HRISConnector:
             data = resp.json()
             workers = data.get("data", [])
             for worker in workers:
-                yield self._parse_workday_worker(worker)
+                yield parse_workday_worker(worker)
             if not data.get("total") or params["offset"] + len(workers) >= data["total"]:
                 break
             params["offset"] += len(workers)
-
-    def _parse_workday_worker(self, worker: dict) -> dict:
-        hire_date_str = worker.get("hireDate", "")
-        hire_date = _parse_date(hire_date_str)
-        tenure_months = _months_since(hire_date) if hire_date else None
-
-        # Last promotion / position change date
-        promo_str = worker.get("lastPositionChangeDate", "")
-        promo_date = _parse_date(promo_str)
-        days_since_promo = _days_since(promo_date) if promo_date else None
-
-        management_level = worker.get("managementLevel", {}).get("descriptor", "")
-        reporting_level = _workday_level_to_int(management_level)
-
-        return {
-            "external_id": worker.get("id", ""),
-            "email": _extract_email(worker),
-            "tenure_months": tenure_months,
-            "days_since_promotion": days_since_promo,
-            "is_comp_band_max": worker.get("isAtCompBandMax", False),
-            "pto_days_ytd": int(worker.get("ptoDaysUsedYTD", 0) or 0),
-            "reporting_level": reporting_level,
-            "hris_source": "workday",
-        }
 
     # ── BambooHR ──────────────────────────────────────────────────────────
 
@@ -140,101 +143,249 @@ class HRISConnector:
         logger.info("HRIS BambooHR: client configured.")
 
     def _stream_bamboohr(self) -> Generator[dict, None, None]:
-        """Fetch employees from BambooHR directory."""
+        """Fetch all employees, terminated ones included, via a custom report.
+
+        The /employees/directory endpoint lists current employees only, so
+        departures were invisible to the previous version.
+        """
         base = f"https://api.bamboohr.com/api/gateway.php/{_BAMBOOHR_SUBDOMAIN}/v1"
-        fields = "hireDate,jobTitle,employmentHistoryStatus,exempt,ptoBalance"
-        resp = self._client.get(
-            f"{base}/employees/directory",
-            params={"fields": fields},
+        resp = self._client.post(
+            f"{base}/reports/custom",
+            params={"format": "JSON", "onlyCurrent": "false"},
+            json={"fields": _BAMBOOHR_REPORT_FIELDS},
         )
         resp.raise_for_status()
-        employees = resp.json().get("employees", [])
-        for emp in employees:
-            yield self._parse_bamboohr_employee(emp, base)
+        for emp in resp.json().get("employees", []):
+            yield parse_bamboohr_employee(emp)
 
-    def _parse_bamboohr_employee(self, emp: dict, base: str) -> dict:
-        hire_date_str = emp.get("hireDate", "")
-        hire_date = _parse_date(hire_date_str)
-        tenure_months = _months_since(hire_date) if hire_date else None
 
-        pto_balance = float(emp.get("ptoBalance", 0) or 0)
+# ── Parsing (pure) ────────────────────────────────────────────────────────────
 
-        return {
-            "external_id": str(emp.get("id", "")),
-            "email": emp.get("workEmail", ""),
-            "tenure_months": tenure_months,
-            "days_since_promotion": None,
-            "is_comp_band_max": False,
-            "pto_days_ytd": int(pto_balance),
-            "reporting_level": _bamboohr_title_to_level(emp.get("jobTitle", "")),
-            "hris_source": "bamboohr",
-        }
 
-    # ── Upsert ────────────────────────────────────────────────────────────
+def _record(
+    source: str,
+    external_id: str,
+    email: str,
+    hire_date: date | None,
+    termination_date: date | None,
+    termination_type: str | None,
+    **enrichment,
+) -> dict:
+    end = termination_date if termination_date and termination_date <= date.today() else None
+    return {
+        "hris_source": source,
+        "external_id": str(external_id or "").strip(),
+        "email": (email or "").strip().lower(),
+        "hire_date": hire_date,
+        "tenure_months": _months_between(hire_date, end or date.today()) if hire_date else None,
+        "termination_date": termination_date,
+        "termination_type": termination_type,
+        "days_since_promotion": enrichment.get("days_since_promotion"),
+        "is_comp_band_max": bool(enrichment.get("is_comp_band_max", False)),
+        "pto_days_ytd": int(enrichment.get("pto_days_ytd") or 0),
+        "reporting_level": enrichment.get("reporting_level"),
+    }
 
-    def upsert_employees(self, records: list[dict], conn) -> int:
-        """Upsert HRIS records into employees table matching by email.
 
-        Matches employees by email because external HR system IDs differ
-        from internal UUIDs.
-        Returns number of rows updated.
-        """
-        if not records:
-            return 0
+def termination_kind(text: str | None) -> str:
+    """Map an HRIS termination type/reason label to voluntary | involuntary | unknown."""
+    t = (text or "").lower()
+    if "involuntary" in t or any(k in t for k in ("dismiss", "layoff", "laid off", "redundan", "fired")):
+        return "involuntary"
+    if "voluntary" in t or any(k in t for k in ("resign", "retire")):
+        return "voluntary"
+    return "unknown"
 
-        updated = 0
-        with conn.cursor() as cur:
-            for rec in records:
-                email = rec.get("email", "").strip().lower()
-                if not email:
-                    continue
+
+def parse_workday_worker(worker: dict) -> dict:
+    hire_date = _parse_date(worker.get("hireDate", ""))
+    promo_date = _parse_date(worker.get("lastPositionChangeDate", ""))
+    term_date = _parse_date(worker.get("terminationDate") or (worker.get("primaryJob") or {}).get("endDate") or "")
+    reason = (worker.get("terminationReason") or {}).get("descriptor") or (
+        worker.get("primaryTerminationCategory") or {}
+    ).get("descriptor")
+    return _record(
+        "workday",
+        worker.get("id", ""),
+        _extract_email(worker),
+        hire_date,
+        term_date,
+        termination_kind(reason) if term_date else None,
+        days_since_promotion=_days_since(promo_date) if promo_date else None,
+        is_comp_band_max=worker.get("isAtCompBandMax", False),
+        pto_days_ytd=worker.get("ptoDaysUsedYTD", 0),
+        reporting_level=_workday_level_to_int((worker.get("managementLevel") or {}).get("descriptor", "")),
+    )
+
+
+def parse_bamboohr_employee(emp: dict, base: str | None = None) -> dict:
+    hire_date = _parse_date(emp.get("hireDate", ""))
+    term_date = _parse_date(emp.get("terminationDate") or "")
+    try:
+        pto = float(emp.get("ptoBalance", 0) or 0)
+    except (TypeError, ValueError):
+        pto = 0.0
+    return _record(
+        "bamboohr",
+        emp.get("id", ""),
+        emp.get("workEmail", ""),
+        hire_date,
+        term_date,
+        termination_kind(emp.get("terminationTypeId")) if term_date else None,
+        days_since_promotion=None,
+        is_comp_band_max=False,
+        pto_days_ytd=int(pto),
+        reporting_level=_bamboohr_title_to_level(emp.get("jobTitle", "") or ""),
+    )
+
+
+# ── Sync ──────────────────────────────────────────────────────────────────────
+
+
+def _find_employee(cur, rec: dict):
+    """Return (employee_id, linked_hris_id, left_at) or None.  Identifier match only."""
+    if rec["external_id"]:
+        cur.execute(
+            """
+            SELECT id::text, hris_external_id, left_at FROM employees
+            WHERE hris_source = %s AND hris_external_id = %s
+            """,
+            (rec["hris_source"], rec["external_id"]),
+        )
+        row = cur.fetchone()
+        if row:
+            return row
+    if rec["email"]:
+        cur.execute(
+            """
+            SELECT id::text, hris_external_id, left_at, hris_source FROM employees
+            WHERE LOWER(work_email) = %s
+            """,
+            (rec["email"],),
+        )
+        row = cur.fetchone()
+        if row:
+            emp_id, linked, left_at, source = row
+            if linked and (source != rec["hris_source"] or linked != rec["external_id"]):
+                return ("conflict", linked, left_at)
+            return (emp_id, linked, left_at)
+    return None
+
+
+def sync_records(records: Iterable[dict], conn) -> dict:
+    """Apply normalised HRIS records.  Returns counts; never matches by name or role."""
+    report = {"matched": 0, "linked": 0, "unmatched": 0, "conflicts": 0, "departures": 0, "rehired": 0}
+    unmatched_ids: list[str] = []
+    today = date.today()
+
+    with conn.cursor() as cur:
+        for rec in records:
+            if not rec.get("external_id") and not rec.get("email"):
+                report["unmatched"] += 1
+                continue
+            found = _find_employee(cur, rec)
+            if found is None:
+                report["unmatched"] += 1
+                unmatched_ids.append(rec["external_id"] or "<no id>")
+                continue
+            emp_id, linked, left_at = found[0], found[1], found[2]
+            if emp_id == "conflict":
+                report["conflicts"] += 1
+                logger.warning(
+                    "HRIS %s record %s: e-mail belongs to an employee already linked to %s — skipped",
+                    rec["hris_source"],
+                    rec["external_id"],
+                    linked,
+                )
+                continue
+            report["matched"] += 1
+            if not linked and rec["external_id"]:
+                report["linked"] += 1
+
+            cur.execute(
+                """
+                UPDATE employees SET
+                    hire_date            = COALESCE(%s, hire_date),
+                    tenure_months        = %s,
+                    days_since_promotion = %s,
+                    is_comp_band_max     = %s,
+                    pto_days_ytd         = %s,
+                    reporting_level      = %s,
+                    hris_source          = %s,
+                    hris_external_id     = COALESCE(hris_external_id, NULLIF(%s, '')),
+                    work_email           = COALESCE(work_email, NULLIF(%s, '')),
+                    hris_synced_at       = NOW()
+                WHERE id = %s::uuid
+                """,
+                (
+                    rec["hire_date"],
+                    rec["tenure_months"],
+                    rec["days_since_promotion"],
+                    rec["is_comp_band_max"],
+                    rec["pto_days_ytd"],
+                    rec["reporting_level"],
+                    rec["hris_source"],
+                    rec["external_id"],
+                    rec["email"],
+                    emp_id,
+                ),
+            )
+
+            term = rec.get("termination_date")
+            hire = rec.get("hire_date")
+            if term and term <= today and not (hire and hire > term):
+                kind = rec.get("termination_type") or "unknown"
                 cur.execute(
                     """
-                    UPDATE employees SET
-                        tenure_months        = %s,
-                        days_since_promotion = %s,
-                        is_comp_band_max     = %s,
-                        pto_days_ytd         = %s,
-                        reporting_level      = %s,
-                        hris_source          = %s,
-                        hris_synced_at       = NOW()
-                    WHERE LOWER(name) = LOWER(%s)
-                       OR id::text IN (
-                         SELECT id::text FROM employees
-                         WHERE LOWER(role) LIKE %s
-                         LIMIT 1
-                       )
+                    UPDATE employees
+                    SET active = false, left_at = %s, departure_type = %s
+                    WHERE id = %s::uuid
+                      AND (left_at IS NULL OR left_at::date <> %s OR departure_type IS DISTINCT FROM %s)
                     """,
-                    (
-                        rec["tenure_months"],
-                        rec["days_since_promotion"],
-                        rec["is_comp_band_max"],
-                        rec["pto_days_ytd"],
-                        rec["reporting_level"],
-                        rec["hris_source"],
-                        email,
-                        f"%{email.split('@')[0]}%",
-                    ),
+                    (term, kind, emp_id, term, kind),
                 )
-                updated += cur.rowcount
-        conn.commit()
-        logger.info("HRIS upsert: %d employees updated.", updated)
-        return updated
+                changed = cur.rowcount
+                cur.execute(
+                    """
+                    INSERT INTO churn_labels (employee_id, label_date, churned, notes)
+                    VALUES (%s::uuid, %s, %s, %s)
+                    ON CONFLICT (employee_id, label_date) DO UPDATE
+                        SET churned = EXCLUDED.churned, notes = EXCLUDED.notes
+                    """,
+                    (emp_id, term, kind != "involuntary", f"hris:{rec['hris_source']}:{kind}"),
+                )
+                report["departures"] += int(changed > 0)
+            elif _is_rehire(hire, left_at):
+                cur.execute(
+                    """
+                    UPDATE employees SET active = true, left_at = NULL, departure_type = NULL
+                    WHERE id = %s::uuid
+                    """,
+                    (emp_id,),
+                )
+                report["rehired"] += 1
+
+    conn.commit()
+    if unmatched_ids:
+        logger.warning(
+            "HRIS sync: %d record(s) match no employee by HRIS ID or work e-mail (first: %s). "
+            "Link them with scripts/import_employee_identities.py.",
+            len(unmatched_ids),
+            ", ".join(unmatched_ids[:5]),
+        )
+    logger.info("HRIS sync: %s", report)
+    return report
 
 
-# ── Convenience function ──────────────────────────────────────────────────────
-
-
-def sync_all(conn) -> int:
-    """Connect, fetch, upsert, disconnect. Returns rows updated."""
+def sync_all(conn) -> dict:
+    """Connect, fetch, sync, disconnect.  Returns the sync report."""
     if not _BASE_URL and not _BAMBOOHR_SUBDOMAIN:
         logger.warning("HRIS not configured (no HRIS_BASE_URL or BAMBOOHR_SUBDOMAIN). Skipping.")
-        return 0
+        return {"skipped": True}
     connector = HRISConnector()
     connector.connect()
     try:
-        records = list(connector.stream_events())
-        return connector.upsert_employees(records, conn)
+        return sync_records(list(connector.stream_events()), conn)
     finally:
         connector.disconnect()
 
@@ -243,17 +394,29 @@ def sync_all(conn) -> int:
 
 
 def _parse_date(s: str) -> date | None:
-    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y"):
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%m/%d/%Y"):
         try:
             return datetime.strptime(s, fmt).date()
         except (ValueError, TypeError):
             continue
+    if isinstance(s, str) and len(s) >= 10:
+        try:
+            return date.fromisoformat(s[:10])
+        except ValueError:
+            pass
     return None
 
 
-def _months_since(d: date) -> int:
-    today = date.today()
-    return (today.year - d.year) * 12 + (today.month - d.month)
+def _is_rehire(hire: date | None, left_at) -> bool:
+    """A hire date after the recorded departure means the person came back."""
+    if hire is None or left_at is None:
+        return False
+    left = left_at.date() if isinstance(left_at, datetime) else left_at
+    return hire > left
+
+
+def _months_between(start: date, end: date) -> int:
+    return max(0, (end.year - start.year) * 12 + (end.month - start.month))
 
 
 def _days_since(d: date) -> int:
@@ -279,9 +442,10 @@ def _workday_level_to_int(descriptor: str) -> int:
         "executive": 7,
     }
     d = descriptor.lower()
-    for key, val in mapping.items():
+    # Longest key first: "senior manager" must win over "manager".
+    for key in sorted(mapping, key=len, reverse=True):
         if key in d:
-            return val
+            return mapping[key]
     return 2
 
 
