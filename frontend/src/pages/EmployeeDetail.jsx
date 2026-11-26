@@ -261,10 +261,10 @@ export default function EmployeeDetail() {
   const neighbors = egoData?.neighbors ?? [];
   const egoEdges = egoData?.edges ?? [];
 
-  // Build mini ego-graph nodes/edges for Sigma
-  const egoNodes = employee
-    ? [employee, ...neighbors].map((n) => ({ ...n, spof_score: n.betweenness ?? 0 }))
-    : [];
+  // Mini ego-graph for Sigma. Color = real SPOF score from the API (null when the
+  // person has no score on record → OrgGraph renders "no score", not "low").
+  // Node size still encodes betweenness, as the panel copy says.
+  const egoNodes = employee ? [employee, ...neighbors] : [];
 
   const chartData = (historyData?.history ?? []).map((p) => ({
     date: format(new Date(p.scored_at), "MMM d"),

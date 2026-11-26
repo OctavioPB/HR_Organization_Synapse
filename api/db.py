@@ -170,13 +170,26 @@ def fetch_ego_network(
                     gs.degree_in,
                     gs.degree_out,
                     gs.clustering,
-                    gs.community_id
+                    gs.community_id,
+                    rs.spof_score,
+                    rs.flag,
+                    rs.scored_at::date AS risk_scored_at
                 FROM graph_snapshots gs
                 JOIN employees e ON gs.employee_id = e.id
+                -- Same lookup as the centre node, so every node in the ego
+                -- chart is colored from the same scoring run (NULLs if unscored).
+                LEFT JOIN LATERAL (
+                    SELECT r.spof_score, r.flag, r.scored_at
+                    FROM risk_scores r
+                    WHERE r.employee_id = gs.employee_id
+                      AND r.scored_at::date <= %s
+                    ORDER BY r.scored_at DESC
+                    LIMIT 1
+                ) rs ON TRUE
                 WHERE gs.snapshot_date = %s
                   AND gs.employee_id = ANY(%s::uuid[])
                 """,
-                (snapshot_date, neighbor_ids),
+                (snapshot_date, snapshot_date, neighbor_ids),
             )
             neighbors = [dict(r) for r in cur.fetchall()]
     else:

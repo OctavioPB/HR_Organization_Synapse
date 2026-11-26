@@ -109,7 +109,7 @@ Observed while capturing the screenshots in these docs (seeded demo, 120 employe
 ### 3.1 The riskiest person displayed as "normal" ✅
 **What happened:** On the employee profile, the badge reads `employee.spof_flag ?? employee.flag ?? "normal"`. `/graph/employee/{id}` returns neither field, so **every profile shows "normal"**. That includes Carl Jackson, the #1 SPOF in the org at 0.90, shown as critical in the roster (see [employee-detail.png](screenshots/employee-detail.png)). The badge component also has no style for `critical_uncertain` or `elevated`.
 **Lesson:** Never default a risk label to the safe value. Show "unknown" when the data is missing.
-**Changed:** the endpoint returns the latest `spof_score`, `flag` and `risk_scored_at` for the centre node, and a shared [`spofFlag.js`](../frontend/src/lib/spofFlag.js) styles all six flags, with "unknown" when none is on record. *Still open:* the ego-network chart colors nodes by betweenness while its legend says "SPOF risk".
+**Changed:** the endpoint returns the latest `spof_score`, `flag` and `risk_scored_at` for the centre node, and a shared [`spofFlag.js`](../frontend/src/lib/spofFlag.js) styles all six flags, with "unknown" when none is on record. The same problem showed up in the ego-network chart, which colored nodes by *betweenness* under a "SPOF risk" legend, so nearly everyone looked green. Neighbours now carry their own latest SPOF score from the same scoring run, and `OrgGraph` draws unscored people in neutral grey with a "No score" legend entry instead of green "Low".
 
 ### 3.2 Two "engagement" signals that disagree 🟡
 **What happened:** The roster shows many direct reports with **High** leave risk (derived from entropy trend). The manager view for the same team shows all 34 as **Engaged** ([manager-view.png](screenshots/manager-view.png)).
@@ -153,7 +153,7 @@ Observed while capturing the screenshots in these docs (seeded demo, 120 employe
 
 ## 5. Open items, ranked
 
-Resolved in November 2026: dependency pins and boot smoke test (2.1), tenants provisioned from migrations (2.2), profile risk badge (3.1), equity small-group suppression (3.5).
+Resolved in November 2026: dependency pins and boot smoke test (2.1), tenants provisioned from migrations (2.2), profile risk badge and ego-network chart coloring (3.1), equity small-group suppression (3.5).
 
 | # | Item | Lesson | Effort |
 |---|---|---|---|
@@ -162,9 +162,8 @@ Resolved in November 2026: dependency pins and boot smoke test (2.1), tenants pr
 | 3 | Fix and re-enable `test_tenant.py`, `test_compliance.py` | 2.8 | S |
 | 4 | Isolate cache unit tests from a live local Redis (two tests fail when one is running on :6379) | 2.8 | S |
 | 5 | Unify the dashboard silo KPI with department-level alerts | 3.3 | S |
-| 6 | Color the ego-network chart by real SPOF, not betweenness | 3.1 | S |
-| 7 | Make `seed_dev.py` idempotent; seed recent hires and score history | 2.5, 3.4 | M |
-| 8 | Reconcile the remaining MATH_MODEL §12 differences | 4.1 | M |
+| 6 | Make `seed_dev.py` idempotent; seed recent hires and score history | 2.5, 3.4 | M |
+| 7 | Reconcile the remaining MATH_MODEL §12 differences | 4.1 | M |
 
 ---
 

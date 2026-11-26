@@ -125,7 +125,7 @@ def get_employee_ego_network(
         employee_id=employee_id,
         snapshot_date=snapshot_date,
         node=EgoNode(**ego["node"]),
-        neighbors=[NodeMetrics(**n) for n in ego["neighbors"]],
+        neighbors=[EgoNode(**n) for n in ego["neighbors"]],
         edges=[GraphEdge(**e) for e in ego["edges"]],
     )
 

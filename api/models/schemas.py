@@ -56,7 +56,7 @@ class CommunitiesResponse(BaseModel):
 
 
 class EgoNode(NodeMetrics):
-    """Centre node of an ego network, enriched with its latest SPOF risk.
+    """Ego-network node (centre or neighbour), enriched with its latest SPOF risk.
 
     ``flag`` / ``spof_score`` are None when the employee has no risk score on or
     before the snapshot date — clients must render that as *unknown*, never as
@@ -72,7 +72,7 @@ class EgoNetwork(BaseModel):
     employee_id: str
     snapshot_date: date
     node: EgoNode
-    neighbors: list[NodeMetrics]
+    neighbors: list[EgoNode]
     edges: list[GraphEdge]
 
 
