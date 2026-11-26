@@ -237,7 +237,7 @@ class TestWriteScoresFlagTiers:
         conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
         return conn
 
-    def _run(self, scores, entropy_trends=None, bands=None):
+    def _run(self, scores, entropy_trends=None, bands=None, withdrawing=None):
         conn = self._mock_conn()
         written_rows = []
 
@@ -251,6 +251,7 @@ class TestWriteScoresFlagTiers:
                     entropy_trends=entropy_trends or {},
                     snapshot_date=date(2025, 1, 1),
                     bands=bands,
+                    withdrawing=withdrawing,
                 )
         # row layout: (id, date, emp_id, score, entropy, flag, lo, hi, robust)
         return {r[2]: r[5] for r in written_rows}
@@ -280,12 +281,26 @@ class TestWriteScoresFlagTiers:
         assert flags["E1"] == "elevated"
 
     def test_flag_withdrawing(self):
-        """score < 0.4 AND negative entropy_trend → 'withdrawing'."""
+        """score < 0.4 AND trend below ENTROPY_SLOPE_THRESHOLD (fallback rule) → 'withdrawing'."""
         flags = self._run(
             scores={"E1": 0.20},
-            entropy_trends={"E1": -0.05},
+            entropy_trends={"E1": -0.20},
         )
         assert flags["E1"] == "withdrawing"
+
+    def test_mild_negative_trend_is_not_withdrawing(self):
+        """Regression: 'any negative slope' flagged ~half the org on raw slopes."""
+        flags = self._run(scores={"E1": 0.20}, entropy_trends={"E1": -0.01})
+        assert flags["E1"] == "normal"
+
+    def test_explicit_confident_set_overrides_slope_rule(self):
+        """The pipeline passes EntropySignal.withdrawing; the slope alone no longer decides."""
+        flags = self._run(
+            scores={"E1": 0.20, "E2": 0.20},
+            entropy_trends={"E1": -0.50, "E2": -0.01},
+            withdrawing={"E2"},
+        )
+        assert flags == {"E1": "normal", "E2": "withdrawing"}
 
     def test_flag_normal(self):
         """score < 0.4, entropy >= 0 → 'normal'."""

@@ -259,15 +259,21 @@ def write_scores(
     entropy_trends: dict[str, float],
     snapshot_date: date,
     bands: dict[str, dict] | None = None,
+    withdrawing: set[str] | None = None,
 ) -> None:
     """Persist SPOF scores (and weight-sensitivity bands) to risk_scores.
+
+    ``withdrawing`` is the set of employees whose entropy trend is confidently
+    below the withdrawal threshold (EntropySignal.withdrawing).  When omitted,
+    the fallback is ``trend < ENTROPY_SLOPE_THRESHOLD`` — previously any
+    negative slope counted, which on raw slopes flagged about half the org.
 
     Flag tiers (MODEL.md §5.5):
         ≥ 0.7 and robust under weight perturbation → critical
         ≥ 0.7 but weight-sensitive                  → critical_uncertain
         0.5 – 0.7                                   → warning
         0.4 – 0.5                                   → elevated
-        < 0.4 and trend < 0                         → withdrawing
+        < 0.4 and confidently withdrawing           → withdrawing
         otherwise                                   → normal
 
     ``critical_uncertain`` employees crossed the threshold only under the
@@ -285,6 +291,10 @@ def write_scores(
         bands: Optional per-employee detail from :func:`score_all_with_bands`.
     """
     bands = bands or {}
+    if withdrawing is None:
+        from ml.features.feature_extractor import ENTROPY_SLOPE_THRESHOLD
+
+        withdrawing = {e for e, t in entropy_trends.items() if t < ENTROPY_SLOPE_THRESHOLD}
 
     def _flag(emp_id: str, score: float) -> str:
         if score >= 0.7:
@@ -296,7 +306,7 @@ def write_scores(
             return "warning"
         if score >= 0.4:
             return "elevated"
-        if entropy_trends.get(emp_id, 0.0) < 0:
+        if emp_id in withdrawing:
             return "withdrawing"
         return "normal"
 

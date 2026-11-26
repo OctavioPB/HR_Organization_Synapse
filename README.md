@@ -69,6 +69,7 @@ Daily and weekly ML pipelines derive:
 | **SPOF score** | Betweenness centrality + cross-department bridging + clustering coefficient + entropy trend (formula below) |
 | **Knowledge risk** | Sole-expert fraction × document volume × domain breadth, fused with SPOF score |
 | **Churn probability** | Graph Attention Network (11-feature node matrix, 90-day horizon) enriched with HRIS tenure, promotion, and PTO signals — see [MODEL_CARD_CHURN.md](docs/MODEL_CARD_CHURN.md) |
+| **Withdrawal** | Entropy trend: Theil-Sen slope shrunk by its noise, flagged only when P(slope < −0.05) ≥ 0.9; plus a Poisson change-point alert for sudden drops in daily activity |
 | **Silo detection** | Per-department Coleman homophily index: internal share of collaboration vs. what random mixing gives a department of that size |
 | **Org health** | Composite 0–100 weekly score (brokerage concentration, silo exposure, withdrawal share, fragmentation) with AI executive briefing |
 
@@ -78,7 +79,7 @@ Outputs are prescriptive: succession cross-training plans, 90-day knowledge tran
 
 ## Validation & Results
 
-Each model is evaluated against a controlled synthetic dataset with planted ground truth. All numbers below are the **direct output of the test suite** (`tests/validation/`) — not targets or predictions. The suite runs without a database or Kafka: 30 tests, ~12 seconds.
+Each model is evaluated against a controlled synthetic dataset with planted ground truth. All numbers below are the **direct output of the test suite** (`tests/validation/`) — not targets or predictions. The suite runs without a database or Kafka: 38 tests, ~15 seconds. The withdrawal-detection results (entropy trend and sudden-withdrawal change-point) are in [MATH_MODEL.md §4](docs/MATH_MODEL.md#4-interaction-entropy-and-trend).
 
 ---
 
@@ -311,7 +312,8 @@ org-synapse/
 │   ├── anomaly/
 │   │   └── isolation_forest.py
 │   └── features/
-│       └── feature_extractor.py
+│       ├── changepoint.py      # Sudden-withdrawal detection (Poisson change-point)
+│       └── feature_extractor.py # Robust, shrunk entropy trend + graph features
 │
 ├── api/
 │   ├── main.py                 # FastAPI app + all router registrations

@@ -393,7 +393,7 @@ def fetch_entropy_alerts(conn) -> list[dict]:
             details,
             resolved
         FROM alerts
-        WHERE type IN ('withdrawing', 'connectivity_anomaly', 'spof_critical')
+        WHERE type IN ('withdrawing', 'sudden_withdrawal', 'connectivity_anomaly', 'spof_critical')
           AND resolved = false
         ORDER BY fired_at DESC
         LIMIT 200

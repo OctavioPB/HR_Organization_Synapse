@@ -212,6 +212,11 @@ def compute_and_persist(snapshot_date: date, conn) -> dict[str, Any]:
     spof_scores = [float(r["spof_score"]) for r in rows if r["spof_score"] is not None]
     entropy_trends = [float(r["entropy_trend"]) for r in rows if r["entropy_trend"] is not None]
 
+    # Confident-withdrawal flags (shrunk Theil-Sen trend, MATH_MODEL.md §4).
+    from ml.features.feature_extractor import compute_entropy_signals
+
+    signals = compute_entropy_signals(snapshot_date, int(os.environ.get("GRAPH_WINDOW_DAYS", "30")))
+
     # 2. Collaboration graph for the same window the scorers used
     import networkx as nx
 
@@ -223,6 +228,7 @@ def compute_and_persist(snapshot_date: date, conn) -> dict[str, Any]:
         G,
         entropy_trends=entropy_trends,
         avg_spof_score=(sum(spof_scores) / len(spof_scores)) if spof_scores else 0.0,
+        withdrawing=[s.withdrawing for s in signals.values()] if signals else None,
     )
     health["computed_at"] = snapshot_date
 
@@ -247,11 +253,17 @@ def org_health_from_graph(
     G,
     entropy_trends: Iterable[float | None] = (),
     avg_spof_score: float = 0.0,
+    withdrawing: Iterable[bool] | None = None,
 ) -> dict[str, Any]:
     """Derive every health component from the collaboration graph.  Pure, no I/O.
 
     Uses the same betweenness and silo detector as the rest of the pipeline, so
     the health score cannot disagree with the dashboard alerts.
+
+    Args:
+        withdrawing: Per-employee confident-withdrawal flags (EntropySignal.withdrawing).
+            When given, entropy_risk is their share; otherwise it falls back to the
+            share of *entropy_trends* below ENTROPY_SLOPE_THRESHOLD.
     """
     import networkx as nx
 
@@ -259,11 +271,16 @@ def org_health_from_graph(
     from graph.silo_detector import department_homophily, detect_silos
 
     trends = list(entropy_trends)
+    flags = list(withdrawing) if withdrawing is not None else None
+    if flags is not None:
+        entropy_risk = sum(flags) / len(flags) if flags else 0.0
+    else:
+        entropy_risk = withdrawal_share(trends)
     if G.number_of_nodes() == 0:
         return compute_org_health(
             spof_risk=0.0,
             silo_risk=0.0,
-            entropy_risk=withdrawal_share(trends),
+            entropy_risk=entropy_risk,
             wcc_count=1,
             node_count=0,
             avg_spof_score=avg_spof_score,
@@ -274,7 +291,7 @@ def org_health_from_graph(
     result = compute_org_health(
         spof_risk=brokerage_concentration(compute_betweenness(G).values()),
         silo_risk=silo_exposure((len(s["members"]), s["homophily"]) for s in dept_stats.values()),
-        entropy_risk=withdrawal_share(trends),
+        entropy_risk=entropy_risk,
         wcc_count=nx.number_weakly_connected_components(G),
         node_count=G.number_of_nodes(),
         silo_count=len(detect_silos(G)),

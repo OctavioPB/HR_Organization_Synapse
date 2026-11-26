@@ -95,17 +95,65 @@ The 28 days ending on the snapshot date are split into 4 equal 7-day weeks, k = 
 p_k(v, u) = count_k(v → u) / Σ_x count_k(v → x)
 
 H_k(v) = − Σ_u p_k(v,u) · log₂ p_k(v,u)        (bits; 0 if no activity)
-
-entropy_trend(v) = slope of least-squares fit of H_0 … H_3 against k = 0…3
 ```
 
-H measures how *spread* someone's collaboration is. A falling slope means the person is interacting with fewer distinct people, which is the **withdrawal** signal. It is the earliest-moving input in the system and also the noisiest one, which is why it carries the smallest weight in SPOF.
+H measures how *spread* someone's collaboration is. A falling trend means the person is interacting with fewer distinct people, which is the **withdrawal** signal. It is the earliest-moving input in the system and also the noisiest one, which is why it carries the smallest weight in SPOF.
+
+### 4.1 Robust, shrunk trend
+
+A straight-line fit through 4 noisy points has two failure modes: one odd week (holiday, offsite) swings it, and people with only a few events a week dominate both tails. The trend is therefore estimated in three steps:
+
+```
+1. raw slope      s_v  = median over pairs i<j of (H_j − H_i)/(j − i)              Theil-Sen, 6 pairs
+2. its noise      v_v  = Σ_k w_k² · Var(H_k) / (Σ_k w_k²)²,   w_k = k − 1.5
+                  Var(H_k) = max( (Σ p·log₂²p − H²)/n_k , 1/n_k )                  delta method, floored; empty week = 1
+3. shrinkage      τ²   = DerSimonian–Laird between-employee variance of s given v
+                  B_v  = τ² / (τ² + v_v)
+                  entropy_trend(v) = m + B_v (s_v − m),   m = median_v s_v
+                  sd_v = √(B_v · v_v)
+
+withdrawing(v)  ⇔  P(true slope < −0.05) = Φ((−0.05 − entropy_trend) / sd) ≥ 0.90
+```
+
+- **Theil-Sen** fully ignores an outlier in a middle week. An outlier in the *latest* week moves it about halfway, because with 4 points a collapse in the newest week looks the same as the start of real withdrawal. Change-point detection on daily activity (§4.2) adjudicates that case.
+- **Shrinkage** pulls an employee toward the population center in proportion to how noisy their estimate is. On the validation org, a low-activity employee keeps a median 23 % of their raw slope and a well-measured one keeps 64 %.
+- **DerSimonian–Laird** is the standard random-effects estimator for units with heterogeneous known variances. The simpler method of moments, Var(s) − mean(v), was tried first and failed: variances differ by orders of magnitude, so a few near-silent employees inflate mean(v), and τ² collapsed to ≈0, shrinking everyone onto the median.
+- **The variance formula** over-states true sampling variance by about 1.5–3× in isolation. It was nevertheless the best of four variants inside the full pipeline: looser floors raised false positives to 7–10 %, and the second-order Basharin term breaks on single-partner weeks.
+- **The withdrawing flag is probabilistic.** It no longer means "noisy estimate below −0.05", and the threshold (`ENTROPY_SLOPE_THRESHOLD`) and confidence (`ENTROPY_WITHDRAW_CONFIDENCE`) are configurable.
+
+Measured on planted ground truth ([`tests/validation/entropy_trend_evaluator.py`](../tests/validation/entropy_trend_evaluator.py): 2,000 employees, 2–60 events/week, 10 % withdrawers, 25 % with a holiday week):
+
+| | Before (OLS) | After |
+|---|---|---|
+| Slope RMSE, all | 0.300 | **0.140** (−53 %) |
+| Slope RMSE, < 8 events/week | 0.370 | **0.167** (−55 %) |
+| Stable employees flagged `withdrawing` | **50.8 %** (old rule: any negative slope) | **2.5 %** |
+| Planted withdrawers flagged | 76 %, at 39 % false positives (OLS < −0.05) | 37 % overall, **84 %** at ≥ 20 events/week |
+
+Recall is limited by data, not by the method: a person with a few events a week cannot support a confident call. On the demo database the old rule flagged 53 of 118 people; the new flag flags 0–1 per week.
+
+### 4.2 Sudden withdrawal: change-point on daily activity
+
+**Code:** [`ml/features/changepoint.py`](../ml/features/changepoint.py), alert type `sudden_withdrawal` (migration 018)
+
+The shrunk trend reacts slowly to an abrupt stop, so sudden drops get their own test. For each employee's daily *initiated* interactions c_1 … c_28 (inbound messages keep arriving after someone withdraws), a single Poisson change-point is fitted:
+
+```
+2·LLR(τ) = 2 [ A ln(λ₁/λ₀) + B ln(λ₂/λ₀) ]     A = Σ_{t<τ} c_t, B = Σ_{t≥τ} c_t, λ₁ = A/τ, λ₂ = B/(28−τ), λ₀ = (A+B)/28
+
+sudden withdrawal  ⇔  max_τ 2·LLR ≥ 13.8   and   λ₂/λ₁ ≤ 0.5   and   λ₁ ≥ 1/day      (segments ≥ 5 days)
+```
+
+- **Calibration.** The maximum over split points is not χ²-distributed, so the threshold was set by simulation. The 99.5th percentile of max 2·LLR on stable Poisson series is ≈11 at every rate from 1 to 8 per day. 13.8 gives **0.05 %** false alarms per employee-run.
+- **Power.** For a 70 % drop, power is 94 % at 5 interactions/day and 100 % at ≥ 8/day, with the median change-day exactly right. It falls to 61 % at 3/day and 9 % at 1/day, which is why a minimum pre-drop rate is required.
+- **Alerting.** `graph_builder_dag` → `detect_sudden_withdrawal` alerts only on drops that began in the last 14 days, once per employee, at severity `high` for drops of 80 % or more and `medium` otherwise.
+- **Demo data.** It flags one employee (1.71 → 0.29 interactions/day for 21 days) whose shrunk entropy trend alone reached only p = 0.67. The two detectors are complementary.
 
 > **Fixed November 2026: the trend had never been computed on real data.** The bucketing SQL used `EXTRACT(EPOCH FROM (date − date))`. In Postgres `date − date` is an integer, so the query failed, and every stored `entropy_trend` was 0. That left the SPOF δ term, the anomaly detector's entropy features, and health `entropy_risk` without their signal.
 >
 > The old buckets were also unequal: a 30-day window gave the last "week" about 10 days, which inflates its entropy and biased slopes upward (median +0.08 on the demo data; −0.02 after the fix).
 >
-> **Known limitation (track C):** a 4-point OLS slope is noisy. On the demo data the 10th–90th percentile range is −0.48 to +0.36 bits/week, so the −0.05 withdrawal threshold sits well inside the noise. The fix is robust slopes (Theil-Sen) and shrinkage toward the mean for low-activity employees.
+> A raw 4-point slope is noisy: on the demo data its 10th–90th percentile range is −0.46 to +0.38 bits/week, wide enough that a fixed −0.05 cut sits inside the noise. §4.1 is the fix.
 
 ---
 
@@ -365,7 +413,7 @@ Every component is an **absolute** property of the network, so it is comparable 
 ```
 spof_risk    = (S_k − k/N) / (1 − k/N),   S_k = Σ top-k BC / Σ BC,   k = max(1, ⌈0.05 · N⌉)
 silo_risk    = Σ_D n_D · max(H_D, 0)  /  Σ_D n_D                        (H_D from §7)
-entropy_risk = |{v : entropy_trend(v) < −0.05}| / N                     (ENTROPY_SLOPE_THRESHOLD)
+entropy_risk = |{v : withdrawing(v)}| / N                               (confident flag, §4.1)
 frag_risk    = 1 − exp(−1.5 · (WCC − 1))
 
 composite = 0.20 · silo + 0.35 · spof + 0.20 · entropy + 0.25 · frag
@@ -396,7 +444,6 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 | Betweenness graph | Undirected ([Decisions.md §6](Decisions.md)) | Directed | Switching alone cuts validation Precision@critical 100 % → 50 % (§3 note). Needs a tail-aware BC normalization first (track B/D) |
 | Onboarding alert | DCP < 0.25 and tenure ≥ 60 | degree ≤ cohort p25 and tenure ≥ 60 | Code is the better rule (cohort-relative). MODEL.md §9 should be updated to match |
 | GNN edge weights | Graph uses ω-weighted edges | ChurnGAT / temporal GNN use `log1p(count)` | Changing inputs invalidates trained checkpoints; adopt ω at next retrain |
-| Entropy threshold | −0.05 bits/week flags withdrawal | As specified | The threshold sits inside the 4-point-slope noise (§4); fix the estimator (track C), then recalibrate |
 
 **Resolved in November 2026**
 
@@ -410,12 +457,14 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 | Org health `entropy_risk` | −mean(slope)/0.05 | Share of employees below the withdrawal threshold, as specified |
 | Silo detection | Size-biased isolation ratio; thresholds 2.5 (detector), 4.0 (scenarios, Airflow env) | Coleman homophily on interaction volume, one detector everywhere (§7) |
 | Entropy trend | SQL failed on Postgres, so every trend was 0; unequal buckets; no consent filter | Integer-day equal weeks, consent-filtered (§4) |
+| Entropy estimator | 4-point OLS slope; "withdrawing" = any negative slope (≈51 % of stable people) | Theil-Sen + DerSimonian–Laird shrinkage; probabilistic flag, 2.5 % false positives (§4.1) |
+| Sudden withdrawal | Not detected | Poisson change-point on daily activity, `sudden_withdrawal` alerts (§4.2) |
 
 ---
 
 ## 13. How the models are validated
 
-`tests/validation/` builds synthetic organizations with **planted ground truth** (bridges, withdrawing employees, sole experts, silos) and checks that each model recovers them. There are 30 tests, they need no DB or Kafka, and they run in about 12 seconds. All 30 pass after the November 2026 corrections. [`tests/unit/test_math_model_corrections.py`](../tests/unit/test_math_model_corrections.py) pins each resolved ledger row, including size-bias and ranking-inversion regressions for the silo index.
+`tests/validation/` builds synthetic organizations with **planted ground truth** (bridges, withdrawing employees, sole experts, silos) and checks that each model recovers them. There are 38 tests, they need no DB or Kafka, and they run in about 15 seconds. All 38 pass after the November 2026 corrections, including the 8 entropy-trend and change-point tests in `entropy_trend_evaluator.py` (§4.1–4.2). [`tests/unit/test_math_model_corrections.py`](../tests/unit/test_math_model_corrections.py) pins each resolved ledger row, including size-bias and ranking-inversion regressions for the silo index.
 
 | Model | Key result | Gate |
 |---|---|---|
@@ -423,6 +472,8 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 | SPOF vs. removal damage | ρ 0.90 (archetype medians), Precision@5 60 % | ≥ 0.80, ≥ 40 % |
 | Churn | LogReg (3 feats) AUROC 0.722 vs GraphMLP 0.616 at N = 300 | both > 0.5; **baseline wins** |
 | Isolation Forest | Severe recall 100 % (oracle), 75 % at production contamination | 100 %, ≥ 50 % |
+| Entropy trend | Slope RMSE −53 %; withdrawal false positives 2.5 % (was 50.8 %) | ≥ 35 %, ≤ 6 % |
+| Sudden withdrawal | False alarms 0.05 %; power 94–100 % at ≥ 5/day | ≤ 0.5 %, ≥ 95 % (rates 5–12) |
 
 The full tables are in the [README](../README.md#validation--results). What these results mean for decisions is in [LESSONS_LEARNED.md](LESSONS_LEARNED.md).
 

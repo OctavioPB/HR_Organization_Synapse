@@ -69,9 +69,15 @@ Status: **✅ applied** · **🟡 partially applied** · **🔴 open**
 **Lesson:** Before thresholding a proportion, ask what it would be by chance. Use a null-model-corrected index (here Coleman homophily) so one threshold means the same thing for every group.
 **Changed:** department silos use H = (p − q)/(1 − q). A follow-on finding: p has to be measured on interaction *volume*, because unique edges saturate inside small departments and break the random baseline.
 
-### 1.14 Fix the estimator before the threshold 🟡
-**What happened:** Fixing the entropy SQL produced real slopes for the first time. A 4-point OLS slope is noisy: the 10th–90th percentile range is −0.48 to +0.36 bits/week, so the spec's −0.05 withdrawal threshold flags almost half the org.
-**Lesson:** A threshold is only as meaningful as the estimate it cuts. Next: robust slopes and shrinkage (track C), then recalibrate.
+### 1.14 Fix the estimator before the threshold ✅
+**What happened:** Fixing the entropy SQL produced real slopes for the first time. A 4-point OLS slope is noisy: the 10th–90th percentile range is −0.48 to +0.36 bits/week. The old "any negative slope" rule flagged 51 % of *stable* simulated employees as withdrawing, and 53 of 118 on the demo data.
+**Lesson:** A threshold is only as meaningful as the estimate it cuts. Make the flag a statement of confidence ("P(slope < −0.05) ≥ 0.9"), not a cut on a noisy number.
+**Changed:** Theil-Sen slope + empirical-Bayes shrinkage + probabilistic flag (MATH_MODEL §4.1). Slope RMSE fell 53 % and false positives went from 51 % to 2.5 %. Sudden drops get a separate change-point alert (§4.2).
+
+### 1.16 Validate the pieces of an estimator on the data you'll run it on ✅
+**What happened:** The first shrinkage version passed its own simulation, then collapsed on the demo database: every slope was shrunk onto the median and nobody could ever be flagged. Two causes. The per-week variance formula over-predicts true noise by 1.5–14× in isolation (the prototype used the same formula, so the simulation couldn't see it). And the method-of-moments τ² estimate breaks when noise varies by orders of magnitude between employees.
+**Lesson:** Check calibration of each component (predicted vs. empirical variance) separately, and run on real data before trusting a simulation that shares the model's assumptions. For heterogeneous known variances, use the meta-analysis estimator built for it (DerSimonian–Laird).
+**Changed:** DL τ², plus a 4-variant bake-off across 3 seeds to pick the variance formula. A regression test covers the collapse.
 
 ### 1.15 A "fix" that matches the spec can still be wrong 🟡
 **What happened:** Decisions.md says betweenness should be undirected, and the code was directed. Making it undirected halved validation Precision@critical (100 % → 50 %). Undirected betweenness is tiny but nonzero for nearly everyone, and the rank-percentile step stretches those negligible differences into the full 0–1 range.
@@ -176,14 +182,14 @@ Resolved in November 2026: dependency pins and boot smoke test (2.1), tenants pr
 
 | # | Item | Lesson | Effort |
 |---|---|---|---|
-Also resolved in November 2026: channel weights applied (4.1), org-health components made absolute (1.12), size-corrected silo detection (1.13), entropy trend computed for the first time.
+Also resolved in November 2026: channel weights applied (4.1), org-health components made absolute (1.12), size-corrected silo detection (1.13), entropy trend computed for the first time and made robust (1.14), sudden-withdrawal detection added.
 
 | # | Item | Lesson | Effort |
 |---|---|---|---|
 | 1 | Run `scripts/migrate_tenants.py` against any environment with tenants provisioned before the 2.2 fix | 2.2 | S |
 | 2 | **Privacy:** add the consent/active filter to the dashboard edge queries (`fetch_graph_edges`, ego-network edges in `api/db.py`) | 3.5 | S |
 | 3 | Re-run the graph, risk and health DAGs (or re-seed) so stored scores reflect the corrected math | 1.12–1.14 | S |
-| 4 | Robust entropy slope + shrinkage, then recalibrate `ENTROPY_SLOPE_THRESHOLD` (track C) | 1.14 | M |
+| 4 | Apply migration 018 (`sudden_withdrawal` alert type) to existing databases; run `scripts/migrate_tenants.py` for tenant schemas | 1.14 | S |
 | 5 | Tail-aware normalization of the BC term, then adopt undirected betweenness (tracks B/D) | 1.15 | M |
 | 6 | Fix and re-enable `test_tenant.py`, `test_compliance.py` | 2.8 | S |
 | 7 | Isolate cache unit tests from a live local Redis (two tests fail when one is running on :6379) | 2.8 | S |

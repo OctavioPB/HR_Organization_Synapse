@@ -10,6 +10,7 @@ Task chain:
                 → detect_silos
                     → score_risks
                         → flag_spof_critical
+                        → detect_sudden_withdrawal   (daily-activity change-point)
 """
 
 import logging
@@ -128,6 +129,13 @@ def graph_builder_dag():
 
         return _flag(context["ds"])
 
+    @task(on_failure_callback=_on_failure_callback)
+    def detect_sudden_withdrawal(**context) -> dict:
+        """Poisson change-point on daily activity → sudden_withdrawal alerts."""
+        from etl.tasks.detect_entropy import task_detect_sudden_withdrawal as _sudden
+
+        return _sudden(context["ds"])
+
     trigger_neo4j = TriggerDagRunOperator(
         task_id="trigger_neo4j_import",
         trigger_dag_id="neo4j_import_dag",
@@ -208,6 +216,7 @@ def graph_builder_dag():
     silo_stats = detect_silos()
     risk_stats = score_risks()
     spof_stats = flag_spof_critical()
+    sudden_stats = detect_sudden_withdrawal()
     ws_result = broadcast_alerts()
 
     (
@@ -221,6 +230,7 @@ def graph_builder_dag():
         >> spof_stats
         >> trigger_neo4j
     )
+    risk_stats >> sudden_stats >> ws_result
     spof_stats >> ws_result
 
 

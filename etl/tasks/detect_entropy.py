@@ -4,7 +4,7 @@ Plain Python functions, no Airflow dependency, fully unit-testable.
 """
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
     from graph.builder import build_graph, load_raw_edges
     from graph.metrics import compute_betweenness, compute_clustering
     from graph.risk_scorer import score_all_with_bands, write_scores
-    from ml.features.feature_extractor import compute_entropy_trends
+    from ml.features.feature_extractor import compute_entropy_signals
 
     d = date.fromisoformat(snapshot_date_str)
     raw_edges = load_raw_edges(d, window_days)
@@ -76,10 +76,13 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
 
     betweenness = compute_betweenness(G)
     clustering = compute_clustering(G)
-    entropy_trends = compute_entropy_trends(d, window_days)
+    # Robust, shrunk entropy trend + confident-withdrawal flag (MATH_MODEL.md §4).
+    signals = compute_entropy_signals(d, window_days)
+    entropy_trends = {e: s.slope for e, s in signals.items()}
+    withdrawing = {e for e, s in signals.items() if s.withdrawing}
     bands = score_all_with_bands(G, betweenness, clustering, entropy_trends=entropy_trends)
     scores = {node: detail["score"] for node, detail in bands.items()}
-    write_scores(scores, entropy_trends, d, bands=bands)
+    write_scores(scores, entropy_trends, d, bands=bands, withdrawing=withdrawing)
 
     # Robust criticals fire automatic alerts; weight-sensitive ones are held for
     # qualitative review (MODEL.md §5.3, §5.5).
@@ -92,8 +95,92 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
         "critical_count": critical,
         "critical_uncertain_count": critical_uncertain,
         "warning_count": warning,
+        "withdrawing_count": len(withdrawing),
     }
     logger.info("task_score_risks: %s", stats)
+    return stats
+
+
+def task_detect_sudden_withdrawal(snapshot_date_str: str, recent_days: int = 14) -> dict:
+    """Fire ``sudden_withdrawal`` alerts for abrupt drops in daily activity rate.
+
+    Uses the Poisson change-point test in ml/features/changepoint.py.  Only drops
+    that started within the last *recent_days* alert (older ones were already
+    seen), and an employee with an unresolved sudden_withdrawal alert in that
+    window is not alerted again — so one drop produces one alert.
+
+    Returns:
+        JSON-serialisable dict with detected and alerts_written counts.
+    """
+    import json
+    import uuid
+
+    import psycopg2.extras
+
+    from ingestion.db import get_conn
+    from ml.features.changepoint import compute_sudden_withdrawals
+
+    d = date.fromisoformat(snapshot_date_str)
+    drops = compute_sudden_withdrawals(d)
+    recent = {e: r for e, r in drops.items() if r.days_since_change <= recent_days}
+
+    if not recent:
+        logger.info("task_detect_sudden_withdrawal: none on %s (detected=%d)", snapshot_date_str, len(drops))
+        return {"snapshot_date": snapshot_date_str, "detected": len(drops), "alerts_written": 0}
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT affected_entities->>'employee_id'
+                FROM alerts
+                WHERE type = 'sudden_withdrawal' AND resolved = false
+                  AND fired_at >= %s::date - %s * INTERVAL '1 day'
+                """,
+                (d, recent_days),
+            )
+            already = {r[0] for r in cur.fetchall()}
+
+        rows = []
+        for emp_id, r in recent.items():
+            if emp_id in already:
+                continue
+            change_date = d - timedelta(days=r.days_since_change - 1)
+            rows.append(
+                (
+                    str(uuid.uuid4()),
+                    "sudden_withdrawal",
+                    "high" if r.drop >= 0.8 else "medium",
+                    json.dumps(
+                        {
+                            "employee_id": emp_id,
+                            "change_date": change_date.isoformat(),
+                            "rate_before": r.rate_before,
+                            "rate_after": r.rate_after,
+                            "drop": r.drop,
+                            "statistic": r.statistic,
+                            "snapshot_date": snapshot_date_str,
+                        }
+                    ),
+                    (
+                        f"Employee {emp_id[:8]}… activity fell {r.drop:.0%} from {r.rate_before:.1f} to "
+                        f"{r.rate_after:.1f} interactions/day around {change_date.isoformat()}"
+                    ),
+                )
+            )
+        if rows:
+            with conn.cursor() as cur:
+                psycopg2.extras.execute_batch(
+                    cur,
+                    """
+                    INSERT INTO alerts (id, type, severity, affected_entities, details)
+                    VALUES (%s, %s, %s, %s::jsonb, %s)
+                    """,
+                    rows,
+                )
+
+    stats = {"snapshot_date": snapshot_date_str, "detected": len(drops), "alerts_written": len(rows)}
+    logger.info("task_detect_sudden_withdrawal: %s", stats)
     return stats
 
 

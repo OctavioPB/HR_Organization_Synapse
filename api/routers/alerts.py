@@ -29,7 +29,7 @@ def get_silo_alerts(conn=Depends(get_db)) -> AlertsResponse:
 def get_entropy_alerts(conn=Depends(get_db)) -> AlertsResponse:
     """Active alerts for withdrawing employees and connectivity anomalies.
 
-    Includes alerts of type: withdrawing, connectivity_anomaly, spof_critical.
+    Includes alerts of type: withdrawing, sudden_withdrawal, connectivity_anomaly, spof_critical.
     Returns up to 200 most recent unresolved alerts.
     """
     rows = queries.fetch_entropy_alerts(conn)
