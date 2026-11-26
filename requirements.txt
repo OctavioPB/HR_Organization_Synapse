@@ -32,6 +32,7 @@ torch-geometric-temporal>=0.54.0
 fastapi>=0.110.0,<0.166
 uvicorn[standard]>=0.29.0
 httpx>=0.27.0
+mcp>=2.3,<3            # MCP server (mcp_server/): API + app tools for LLM clients
 
 # ─── Utils ────────────────────────────────────────────────────────────────────
 tenacity>=8.0.0

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "org-synapse": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "mcp_server"],
+      "env": {
+        "SYNAPSE_API_URL": "${SYNAPSE_API_URL:-http://localhost:8001}",
+        "SYNAPSE_APP_URL": "${SYNAPSE_APP_URL:-http://localhost:5173}",
+        "SYNAPSE_TENANT_ID": "${SYNAPSE_TENANT_ID:-}",
+        "SYNAPSE_API_KEY": "${SYNAPSE_API_KEY:-}"
+      }
+    }
+  }
+}

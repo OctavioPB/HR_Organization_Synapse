@@ -64,6 +64,7 @@ flowchart LR
 | Graph engine | Build the weighted digraph, compute centrality, communities, silos, SPOF | [`graph/`](../graph) |
 | ML | Isolation Forest anomalies, ChurnGAT, temporal GConvGRU | [`ml/`](../ml), [`graph/temporal/`](../graph/temporal) |
 | API | Tenant-scoped, role-gated REST + WebSocket | [`api/`](../api) |
+| MCP server | LLM access to the API and app: 34 tools (1 write), docs resources, prompts; HTTP client of the API, never the DB | [`mcp_server/`](../mcp_server) · [MCP.md](MCP.md) |
 | Dashboard | 11 pages: ONA graph, roster, manager view, scenarios, equity, and more | [`frontend/src/`](../frontend/src) |
 | Observability | Prometheus scrape of `/metrics`, Grafana dashboards | [`monitoring/`](../monitoring) |
 

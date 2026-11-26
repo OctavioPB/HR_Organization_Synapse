@@ -7,6 +7,7 @@
 | [MATH_MODEL.md](MATH_MODEL.md) | see every formula exactly as implemented, plus where the spec and code differ |
 | [BUSINESS_VALUE.md](BUSINESS_VALUE.md) | estimate and prove the value: levers, worked example, 90-day pilot, KPIs |
 | [LESSONS_LEARNED.md](LESSONS_LEARNED.md) | learn what went wrong, what changed, and what's still open |
+| [MCP.md](MCP.md) | connect an LLM client (Claude Code / Desktop, agents) to the API and the app |
 | [MODEL.md](MODEL.md) | read the research foundation: theory, literature and the v2/v3 corrections |
 | [Decisions.md](Decisions.md) | look up why each technology and design choice was made (ADR-style) |
 | [Business.md](Business.md) | read the market, ICP, pricing, GTM and competitive landscape |
