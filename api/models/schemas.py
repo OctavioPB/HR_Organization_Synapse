@@ -598,6 +598,11 @@ class SiloMember(BaseModel):
 class SiloMembersResponse(BaseModel):
     alert_id: str
     department: str
-    isolation_ratio: float
+    isolation_ratio: float  # legacy, informational: internal/outgoing edge counts
+    # Size-corrected silo measure (Coleman homophily).  None for alerts written
+    # before the homophily detector existed.
+    homophily: float | None = None
+    internal_share: float | None = None
+    expected_internal_share: float | None = None
     member_count: int
     members: list[SiloMember]

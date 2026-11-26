@@ -47,7 +47,7 @@ DAG files in `etl/dags/` contain scheduling, sensors, and `PythonOperator` wirin
 
 All formula weights, thresholds and windows are read with `os.environ.get(NAME, default)` at import time (`SPOF_ALPHA`, `HEALTH_W_FRAG`, `FRAGMENTATION_LAMBDA`, `IF_CONTAMINATION`, …). Tuning never needs a deploy. The full list is in [MODEL.md §14](MODEL.md#14-parameter-reference-updated-v2).
 
-> **Caveat:** an env var only works if the code actually reads it. [MATH_MODEL.md §12](MATH_MODEL.md#12-spec-vs-implementation) lists documented variables that are currently ignored (`CHANNEL_WEIGHT_*`, `KNOWLEDGE_LAMBDA`).
+> **Caveat:** an env var only works if the code actually reads it. `CHANNEL_WEIGHT_*` and `KNOWLEDGE_LAMBDA` were documented but unread until November 2026. [MATH_MODEL.md §12](MATH_MODEL.md#12-spec-vs-implementation) is the ledger of remaining spec/code differences, and `.env.example` marks retired variables (`SILO_THRESHOLD`, `SILO_THRESHOLD_RATIO`, `SPOF_PERTURB_RANGE`, `HEALTH_ENTROPY_SCALE`).
 
 ### 2.4 Idempotent writes
 

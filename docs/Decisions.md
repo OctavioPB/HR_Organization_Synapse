@@ -188,6 +188,8 @@ Replayability is particularly important here: if the graph schema changes (e.g.,
 
 **Why convert to undirected for centrality.** Betweenness centrality in a directed graph measures how often a node lies on the shortest directed path from A to B. But organizational information flows do not require a directed path: if Alice communicates with Bob and Bob communicates with Carol, knowledge can still flow Alice → Carol through Bob, regardless of whether Alice has ever initiated contact with Carol. The undirected interpretation is more relevant for SPOF analysis.
 
+**Status (Nov 2026): intent unchanged, implementation still directed.** Clustering uses the undirected projection as described, but betweenness has always been computed on the directed graph. Switching it to undirected (tie strength w(u,v) + w(v,u)) was implemented and tested, and it dropped validation Precision@critical from 100 % to 50 %. The cause is the rank-percentile step in the SPOF formula: undirected betweenness is tiny but nonzero for almost everyone, and ranking spreads those negligible differences across the full 0–1 scale. Undirected betweenness will be adopted together with a tail-aware normalization of the BC term. See MATH_MODEL.md §3.
+
 ### Decision: Exact vs. Approximate Betweenness Centrality
 
 **What was decided.** For graphs with fewer than `BETWEENNESS_EXACT_THRESHOLD` nodes (default 500), the exact Brandes algorithm is used: `O(n × m)` time where n is nodes and m is edges. For graphs above the threshold, the k-pivot approximation is used with `BETWEENNESS_K_PIVOTS = 200`: `O(k × m)` time with bounded error.

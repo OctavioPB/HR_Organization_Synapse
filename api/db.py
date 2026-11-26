@@ -8,6 +8,8 @@ mock these functions instead of mocking psycopg2 internals.
 from datetime import date, timedelta
 from typing import Any
 
+from graph.edge_weights import weighted_edge_sql
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,14 +78,14 @@ def fetch_graph_edges(snapshot_date: date, window_days: int, conn) -> list[dict]
     start_ts = (snapshot_date - timedelta(days=window_days)).isoformat()
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                source_id::text AS source,
-                target_id::text AS target,
-                SUM(weight)     AS weight
-            FROM raw_events
-            WHERE ts BETWEEN %s::timestamptz AND %s::timestamptz
-            GROUP BY source_id, target_id
+                re.source_id::text AS source,
+                re.target_id::text AS target,
+                SUM({weighted_edge_sql("re")}) AS weight
+            FROM raw_events re
+            WHERE re.ts BETWEEN %s::timestamptz AND %s::timestamptz
+            GROUP BY re.source_id, re.target_id
             ORDER BY weight DESC
             """,
             (start_ts, end_ts),
@@ -199,16 +201,16 @@ def fetch_ego_network(
     all_ids = [employee_id] + neighbor_ids
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                source_id::text AS source,
-                target_id::text AS target,
-                SUM(weight)     AS weight
-            FROM raw_events
-            WHERE ts BETWEEN %s::timestamptz AND %s::timestamptz
-              AND source_id = ANY(%s::uuid[])
-              AND target_id = ANY(%s::uuid[])
-            GROUP BY source_id, target_id
+                re.source_id::text AS source,
+                re.target_id::text AS target,
+                SUM({weighted_edge_sql("re")}) AS weight
+            FROM raw_events re
+            WHERE re.ts BETWEEN %s::timestamptz AND %s::timestamptz
+              AND re.source_id = ANY(%s::uuid[])
+              AND re.target_id = ANY(%s::uuid[])
+            GROUP BY re.source_id, re.target_id
             """,
             (start_ts, end_ts, all_ids, all_ids),
         )

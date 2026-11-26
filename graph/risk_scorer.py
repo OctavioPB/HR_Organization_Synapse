@@ -25,7 +25,7 @@ crosses only under the central weights is `weight_sensitive` and must get
 qualitative review before any personnel action.
 
 Weights are configurable via environment variables (SPOF_ALPHA, _BETA, _GAMMA,
-_DELTA); the perturbation magnitude via SPOF_PERTURB_RANGE.
+_DELTA); the lo/hi corners are fixed offsets from them (see _PERTURB_OFFSETS).
 
 Public functions:
     compute_spof_score(betweenness, cross_dept, clustering, entropy_trend, α, β, γ, δ) → float
@@ -71,27 +71,32 @@ _DEFAULT_WEIGHTS = {
 # Score at/above which an employee is flagged critical (MODEL.md §5.5).
 _CRITICAL_THRESHOLD = 0.7
 
-# Weight perturbation for the robustness bracket (MODEL.md §5.3).  The two
-# corner weight-sets bracket a ±SPOF_PERTURB_RANGE move in weight space while
-# preserving the ordering constraint α > β > γ > δ.  They are derived from the
-# central weights so they continue to track SPOF_ALPHA..SPOF_DELTA overrides.
-_PERTURB_RANGE = float(os.environ.get("SPOF_PERTURB_RANGE", "0.15"))
+# Weight perturbation for the robustness bracket (MODEL.md §5.3).  At the
+# default weights (0.4, 0.3, 0.2, 0.1) the two corners are:
+#     lo = (0.35, 0.26, 0.24, 0.15)   — spreads weight to clustering + entropy
+#     hi = (0.50, 0.30, 0.15, 0.05)   — leans on betweenness, the primary signal
+# hi is the spec value.  The spec's lo, (0.35, 0.25, 0.25, 0.15), ties β and γ and
+# so breaks the strict α > β > γ > δ ordering the same section requires; lo keeps
+# its α/δ endpoints and moves β/γ by 0.04 instead of 0.05.  Offsets (not absolute
+# values) so the corners track SPOF_ALPHA..SPOF_DELTA overrides.  The previous
+# ±15 % proportional bracket was narrower than documented and under-reported
+# weight sensitivity.
+_PERTURB_OFFSETS: dict[int, tuple[float, float, float, float]] = {
+    -1: (-0.05, -0.04, +0.04, +0.05),  # lo
+    +1: (+0.10, 0.00, -0.05, -0.05),  # hi
+}
 
 
 def _perturbed_weights(direction: int) -> dict[str, float]:
-    """Return a perturbed weight set (direction +1 = 'hi', -1 = 'lo').
+    """Return the 'hi' (direction +1) or 'lo' (direction -1) corner weight set.
 
-    'hi' leans harder on the structural primary signal (betweenness), 'lo'
-    spreads weight toward the cross-dept / clustering terms and up-weights the
-    noisy entropy term.  Both are renormalised to sum to 1.0 so the score stays
-    in the same range as the central formula.
+    Offsets are applied to the central weights, floored at 0 and renormalised
+    to sum to 1.0 so the score stays on the same scale as the central formula.
     """
-    a = _DEFAULT_WEIGHTS["alpha"] + direction * _PERTURB_RANGE * _DEFAULT_WEIGHTS["alpha"]
-    b = _DEFAULT_WEIGHTS["beta"]
-    g = _DEFAULT_WEIGHTS["gamma"] - direction * _PERTURB_RANGE * _DEFAULT_WEIGHTS["gamma"]
-    d = _DEFAULT_WEIGHTS["delta"] - direction * _PERTURB_RANGE * _DEFAULT_WEIGHTS["delta"]
-    total = a + b + g + d
-    return {"alpha": a / total, "beta": b / total, "gamma": g / total, "delta": d / total}
+    keys = ("alpha", "beta", "gamma", "delta")
+    raw = [max(0.0, _DEFAULT_WEIGHTS[k] + off) for k, off in zip(keys, _PERTURB_OFFSETS[direction], strict=True)]
+    total = sum(raw) or 1.0
+    return {k: v / total for k, v in zip(keys, raw, strict=True)}
 
 
 _WEIGHTS_LO = _perturbed_weights(-1)

@@ -69,8 +69,8 @@ Daily and weekly ML pipelines derive:
 | **SPOF score** | Betweenness centrality + cross-department bridging + clustering coefficient + entropy trend (formula below) |
 | **Knowledge risk** | Sole-expert fraction × document volume × domain breadth, fused with SPOF score |
 | **Churn probability** | Graph Attention Network (11-feature node matrix, 90-day horizon) enriched with HRIS tenure, promotion, and PTO signals — see [MODEL_CARD_CHURN.md](docs/MODEL_CARD_CHURN.md) |
-| **Silo detection** | Louvain community detection; internal/external edge ratio vs. configurable threshold |
-| **Org health** | Composite 0–100 weekly score with AI executive briefing |
+| **Silo detection** | Per-department Coleman homophily index: internal share of collaboration vs. what random mixing gives a department of that size |
+| **Org health** | Composite 0–100 weekly score (brokerage concentration, silo exposure, withdrawal share, fragmentation) with AI executive briefing |
 
 Outputs are prescriptive: succession cross-training plans, 90-day knowledge transfer schedules, reorg what-if simulations, onboarding cohort alerts, departure impact forecasts.
 
@@ -88,7 +88,7 @@ Each model is evaluated against a controlled synthetic dataset with planted grou
 
 | Archetype | n | SPOF score | Rank | Flag | Robust critical |
 |---|---|---|---|---|---|
-| BRIDGE | 2 | 0.84 / 0.80 | 2 / 3 | critical | yes |
+| BRIDGE | 2 | 0.84 / 0.80 | 2 / 3 | critical / critical_uncertain | yes / no (0.699 under `lo` weights) |
 | WITHDRAWING | 1 | 0.89 | 1 | critical | yes |
 | SOLE_EXPERT | 2 | 0.63 / 0.46 | 9 / 37 | warning / elevated | no |
 | SILO (max) | 10 | 0.49 | 26 | elevated | no |
@@ -101,6 +101,8 @@ Each model is evaluated against a controlled synthetic dataset with planted grou
 | SOLE_EXPERT max score | 0.63 | < 0.70 |
 | SILO max score | 0.49 | < 0.50 |
 | Spearman ρ (5 archetype medians) | 0.800 | ≥ 0.60 |
+
+The second BRIDGE is `critical_uncertain`: it clears 0.70 under the central weights but scores 0.699 under the `lo` corner of the weight-sensitivity bracket (MODEL.md §5.3), so it is held for human review rather than auto-alerted. This is the bracket working as designed. The previous bracket was narrower than specified and hid that sensitivity.
 
 The SOLE_EXPERT boundary (max score 0.63, below the 0.70 critical threshold) is a deliberate design property: knowledge depth without cross-department bridging is a different risk signal — scored separately in `graph/knowledge_risk.py`.
 
@@ -292,8 +294,9 @@ org-synapse/
 │
 ├── graph/
 │   ├── builder.py              # NetworkX DiGraph from edge list
+│   ├── edge_weights.py         # Channel × direction semantic weights ω (shared by every edge loader)
 │   ├── metrics.py              # Betweenness (exact + k-pivot), degree, clustering
-│   ├── silo_detector.py        # Louvain community detection + silo alerting
+│   ├── silo_detector.py        # Department silos via size-corrected homophily index
 │   ├── risk_scorer.py          # SPOF formula (α β γ δ env-configurable)
 │   ├── succession.py           # Structural compatibility scoring
 │   ├── scenario_simulator.py   # Multi-operation reorg What-If engine
@@ -483,15 +486,15 @@ Weights are configurable (`SPOF_ALPHA`, `SPOF_BETA`, `SPOF_GAMMA`, `SPOF_DELTA`)
 ## Org health score
 
 ```
-composite_risk = 0.20 × silo_risk
-              + 0.35 × spof_risk
-              + 0.20 × entropy_risk
-              + 0.25 × fragmentation_risk
+composite_risk = 0.20 × silo_risk           size-weighted mean positive homophily across departments
+              + 0.35 × spof_risk           share of all brokerage held by the top 5 % (rescaled: even spread = 0)
+              + 0.20 × entropy_risk        share of employees whose interaction diversity is falling
+              + 0.25 × fragmentation_risk  1 − exp(−1.5 · (components − 1))
 
 health_score = (1 − composite_risk) × 100   [0–100]
 ```
 
-Tiers: `healthy` ≥ 80 · `caution` 60–79 · `at_risk` 40–59 · `critical` < 40.
+Tiers: `healthy` ≥ 80 · `caution` 60–79 · `at_risk` 40–59 · `critical` < 40. Every component is an absolute property of the network, so scores are comparable week to week and across organizations. Derivations are in [MATH_MODEL.md §11](docs/MATH_MODEL.md#11-org-health-score).
 
 A Monday morning digest delivers the score, top risk signals, and one Claude-authored recommendation via email and Slack. Configure recipients in Admin → Digest Config.
 

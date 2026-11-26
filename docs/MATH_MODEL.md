@@ -39,20 +39,29 @@ A single reference for every quantity the platform computes, **written from the 
 
 ## 2. Graph construction
 
-**Code:** [`graph/builder.py`](../graph/builder.py)
+**Code:** [`graph/builder.py`](../graph/builder.py), [`graph/edge_weights.py`](../graph/edge_weights.py)
 
 ```
 Events e = (s, t, channel, direction, ts, weight)   with ts ∈ [T − W, T]
           and consent(s) ∧ consent(t) ∧ active(s) ∧ active(t)
 
-w(s, t) = Σ_e weight(e)
+w(s, t) = Σ_e weight(e) · ω_c(channel(e)) · ω_d(direction(e))
 ```
 
-- The graph is **directed**. A→B and B→A are separate edges, which keeps asymmetry (who initiates and who receives).
-- The event `weight` defaults to 1.0 at ingestion, so in practice w(s,t) is an **interaction count**.
-- The consent and active filters run **in SQL**, so excluded employees never become nodes.
+| Channel | ω_c | | Direction | ω_d |
+|---|---|---|---|---|
+| github | 3.0 | | reviewed | 1.5 |
+| calendar | 2.5 | | assigned | 1.2 |
+| jira | 1.5 | | invited | 1.0 |
+| email / slack / teams | 1.0 | | mentioned | 0.8 |
+| | | | sent | 0.7 |
 
-> The channel × direction semantic multiplier ω(c, d) described in MODEL.md §2 (GitHub 3.0, Calendar 2.5, … `reviewed` 1.5 …) is **not applied** in the ingestion or graph path today. See §12.
+A GitHub review is therefore worth 4.5 Slack-message-equivalents per event, and a Slack message 0.7. The rationale is in MODEL.md §2.2 (media richness, tacit-knowledge depth). For remote-heavy orgs, consider lowering `CHANNEL_WEIGHT_CALENDAR` to 1.8–2.0 (§2.2.7).
+
+- The graph is **directed**. A→B and B→A are separate edges, which keeps asymmetry (who initiates and who receives).
+- Every loader that turns `raw_events` into edges (graph build, scenarios, succession, NL tools, the dashboard edge endpoints) uses the same `weighted_edge_sql()`, so all metrics see one graph. `CHANNEL_WEIGHTING=off` reverts to raw counts for A/B comparison.
+- The consent and active filters run **in SQL**, so excluded employees never become nodes.
+- **Exception:** the ChurnGAT and temporal GNN use `log1p(event count)` edge weights. Their trained checkpoints depend on that, so they are unchanged until the next retrain.
 
 ---
 
@@ -62,11 +71,17 @@ w(s, t) = Σ_e weight(e)
 
 | Metric | Definition | Implementation detail |
 |---|---|---|
-| **Betweenness** BC(v) | Σ_{s≠v≠t} σ(s,t\|v) / σ(s,t), normalized | Computed on the directed graph with path cost `1 / max(w, 1e-9)`, so frequent collaborators are "closer". Exact for n ≤ 500; above that, Brandes k-pivot sampling with k = 200 and `seed = 42` (error ≈ O(1/√k)) |
+| **Betweenness** BC(v) | Σ_{s≠v≠t} σ(s,t\|v) / σ(s,t), normalized | Computed on the **directed** graph with path cost `1 / max(w, 1e-9)`, so frequent collaborators are "closer". Exact for n ≤ 500; above that, Brandes k-pivot sampling with k = 200 and `seed = 42` (error ≈ O(1/√k)). Undirected is the documented intent, but it is not yet adopted; see the note below |
 | **Degree** d_in, d_out | in/out degree ÷ (n − 1) | NetworkX degree centrality |
 | **Clustering** CC(v) | Triangles through v ÷ possible triangles | On the **undirected** projection |
 | **Community** | Louvain, max modularity | `random_state = 42`; for n > 500, up to 8 parallel trials and the best modularity wins |
 | **Cross-department ratio** CDR(v) | `|{(v,u) ∈ E_out : dept(u) ≠ dept(v)}| / |E_out(v)|` | Counts out-edges (not weights); 0 if v has no out-edges |
+
+> **Why betweenness is still directed.** [Decisions.md §6](Decisions.md) argues for undirected betweenness: knowledge flows A→B→C through B whoever initiated each tie. Switching to undirected (with tie strength w(u,v) + w(v,u)) was implemented and tested. It cut validation **Precision@critical from 100 % to 50 %**, because three NORMAL employees crossed 0.70.
+>
+> The cause is the rank-percentile step in §5. Directed betweenness is exactly 0 for most people, so they tie at percentile 0. Undirected betweenness is tiny but nonzero for almost everyone, and ranking stretches those negligible differences across the full 0–1 range, so low-activity people with one cross-department tie rank as top brokers.
+>
+> Undirected betweenness should be revisited together with a tail-aware normalization of the BC term (track B/D), not on its own.
 
 ---
 
@@ -74,7 +89,7 @@ w(s, t) = Σ_e weight(e)
 
 **Code:** [`ml/features/feature_extractor.py`](../ml/features/feature_extractor.py)
 
-The window is split into 4 weekly buckets k = 0…3 (oldest first). For each employee and week:
+The 28 days ending on the snapshot date are split into 4 equal 7-day weeks, k = 0…3 (oldest first), counted back from the snapshot. Only events between consenting, active employees count. For each employee and week:
 
 ```
 p_k(v, u) = count_k(v → u) / Σ_x count_k(v → x)
@@ -85,6 +100,12 @@ entropy_trend(v) = slope of least-squares fit of H_0 … H_3 against k = 0…3
 ```
 
 H measures how *spread* someone's collaboration is. A falling slope means the person is interacting with fewer distinct people, which is the **withdrawal** signal. It is the earliest-moving input in the system and also the noisiest one, which is why it carries the smallest weight in SPOF.
+
+> **Fixed November 2026: the trend had never been computed on real data.** The bucketing SQL used `EXTRACT(EPOCH FROM (date − date))`. In Postgres `date − date` is an integer, so the query failed, and every stored `entropy_trend` was 0. That left the SPOF δ term, the anomaly detector's entropy features, and health `entropy_risk` without their signal.
+>
+> The old buckets were also unequal: a 30-day window gave the last "week" about 10 days, which inflates its entropy and biased slopes upward (median +0.08 on the demo data; −0.02 after the fix).
+>
+> **Known limitation (track C):** a 4-point OLS slope is noisy. On the demo data the 10th–90th percentile range is −0.48 to +0.36 bits/week, so the −0.05 withdrawal threshold sits well inside the noise. The fix is robust slopes (Theil-Sen) and shrinkage toward the mean for low-activity employees.
 
 ---
 
@@ -109,12 +130,14 @@ The entropy term subtracts: the most-withdrawing employee has percentile 0 and l
 
 ### 5.2 Robustness bands
 
-The weight *ordering* is well-founded, but the magnitudes are not empirically calibrated. Every employee is therefore also scored under two perturbed weight sets. With ρ = `SPOF_PERTURB_RANGE` = 0.15:
+The weight *ordering* is well-founded, but the magnitudes are not empirically calibrated. Every employee is therefore also scored under two corner weight sets, defined as fixed offsets from the central weights (floored at 0, renormalized to sum 1):
 
 ```
-hi:  α(1+ρ), β, γ(1−ρ), δ(1−ρ)   → renormalized to sum 1
-lo:  α(1−ρ), β, γ(1+ρ), δ(1+ρ)   → renormalized to sum 1
+hi = (α + 0.10, β,        γ − 0.05, δ − 0.05)   → (0.50, 0.30, 0.15, 0.05) at defaults
+lo = (α − 0.05, β − 0.04, γ + 0.04, δ + 0.05)   → (0.35, 0.26, 0.24, 0.15) at defaults
 ```
+
+`hi` is MODEL.md §5.3's corner. The spec's `lo`, (0.35, 0.25, 0.25, 0.15), ties β and γ, which breaks the strict α > β > γ > δ ordering the same section requires. `lo` keeps its α and δ endpoints and moves β and γ by 0.04 instead. This bracket is wider than the previous ±15 % proportional one, which was narrower than documented. On the validation org it reclassifies one planted BRIDGE (0.797 central, 0.699 under `lo`) from `critical` to `critical_uncertain`, which is the sensitivity the band exists to surface.
 
 | Flag | Rule | Action |
 |---|---|---|
@@ -141,7 +164,7 @@ K(v) = min(1,  0.5 · |sole domains of v| / |domains of v|
              + 0.3 · docs(v) / max_u docs(u)
              + 0.2 · |domains of v| / |all domains| )
 
-SPOF⁺(v) = (1 − δ_k) · SPOF(v) + δ_k · K(v),        δ_k = KNOWLEDGE_DELTA = 0.3
+SPOF⁺(v) = (1 − δ_k) · SPOF(v) + δ_k · K(v),        δ_k = KNOWLEDGE_DELTA = 0.3  (KNOWLEDGE_LAMBDA accepted as alias)
 ```
 
 Per-domain expertise is `c(v,d) / max_u c(u,d)`, multiplied by 1.2 for a sole expert and capped at 1.
@@ -156,17 +179,20 @@ Per-domain expertise is `c(v,d) / max_u c(u,d)`, multiplied by 1.2 for a sole ex
 
 Silos are evaluated per **department**, not per Louvain community. Department is the unit HR can act on, and Louvain can merge a siloed department into a hub's community.
 
+The measure is **Coleman's homophily index**, which compares a department with what random mixing would give a department of its size:
+
 ```
-internal(D)  = |{(u,v) ∈ E : u ∈ D, v ∈ D}|
-outgoing(D)  = |{(u,v) ∈ E : u ∈ D, v ∉ D}|
+p_D = Σ w(u,v) over u ∈ D, v ∈ D  /  Σ w(u,v) over u ∈ D        observed internal share of D's outgoing volume
+q_D = (n_D − 1) / (N − 1)                                       share expected if each interaction picked a random colleague
+H_D = (p_D − q_D) / (1 − q_D)                                   0 = random, 1 = fully closed, < 0 = outward-looking
 
-isolation(D) = internal(D) / max(outgoing(D), 1)
-
-silo      if isolation(D) > θ           θ = SILO_THRESHOLD = 2.5
-critical  if isolation(D) > 2θ          else high
+silo      if H_D ≥ 0.50     (SILO_HOMOPHILY_THRESHOLD)
+critical  if H_D ≥ 0.75     (SILO_HOMOPHILY_CRITICAL)           departments with < 3 people never flagged
 ```
 
-Only *outgoing* edges count, so a department isn't excused just because others reach into it.
+- **Why not the old ratio.** It was `internal edges / outgoing edges`, with a threshold of 2.5. That ratio grows with department size even under pure random mixing, where its expected value is (n−1)/(N−n). In the 120-person demo org that is ≈1.0 for Engineering (60 people) and ≈0.24 for HR (24 people). One threshold therefore over-flagged large departments and **inverted the ranking**: Engineering scored most siloed (ratio 5.95) while HR, the most inward relative to its size (12.4× its random baseline), scored least (3.0).
+- **Why volume, not unique edges.** The random baseline q assumes each *interaction* picks a target. Unique edges saturate inside small departments (19 colleagues are at most 19 edges, 40 outsiders 40), which understates p exactly where it matters.
+- Only D's *outgoing* activity counts, so a department isn't excused because others reach into it. The legacy `isolation_ratio` is still stored on alerts for continuity but no longer drives detection. The scenario planner now counts silos with this same detector; it previously used its own threshold of 4.0.
 
 ---
 
@@ -334,10 +360,12 @@ Groups smaller than k are suppressed twice: they are never persisted (`HAVING CO
 
 **Code:** [`graph/org_health.py`](../graph/org_health.py) · [MODEL.md §12](MODEL.md#12-org-health-score)
 
+Every component is an **absolute** property of the network, so it is comparable across weeks and across organizations:
+
 ```
-silo_risk    = min(active_silos / max(⌊departments / 3⌋, 2), 1)
-spof_risk    = clip(mean_v SPOF(v), 0, 1)
-entropy_risk = clip(− mean_v entropy_trend(v) / 0.05, 0, 1)
+spof_risk    = (S_k − k/N) / (1 − k/N),   S_k = Σ top-k BC / Σ BC,   k = max(1, ⌈0.05 · N⌉)
+silo_risk    = Σ_D n_D · max(H_D, 0)  /  Σ_D n_D                        (H_D from §7)
+entropy_risk = |{v : entropy_trend(v) < −0.05}| / N                     (ENTROPY_SLOPE_THRESHOLD)
 frag_risk    = 1 − exp(−1.5 · (WCC − 1))
 
 composite = 0.20 · silo + 0.35 · spof + 0.20 · entropy + 0.25 · frag
@@ -346,30 +374,48 @@ health    = 100 · (1 − composite)
 
 The tiers are: healthy ≥ 80 · caution 60–79 · at_risk 40–59 · critical < 40.
 
-The fragmentation term is convex on purpose. The first split (WCC 1 → 2) costs ≈ 0.78 of its weight right away, because a disconnected component cannot be bridged without intervention.
+- **spof_risk is brokerage concentration.** It answers "what share of all brokerage sits with the top 5 % of people", rescaled so an even spread scores 0 and total concentration scores 1 (`HEALTH_SPOF_TOP_FRACTION`).
+  - It replaced mean SPOF. SPOF is built from rank percentiles, and the mean percentile of any population is ≈0.5, so mean SPOF ≈ 0.5·(α+β+γ−δ) ≈ 0.4 *for every organization*. On the demo data it moved 0.427–0.433 across eight weekly runs while carrying 35 % of the score.
+  - After the change, the same eight weeks span 0.32–0.42 and track real changes in how concentrated brokerage is.
+- **silo_risk is continuous.** It used to be `active silos / max(⌊departments/3⌋, 2)`, which pinned at 1.0 as soon as two departments were flagged. Outward-looking departments (H < 0) count as 0, so they can't cancel out a closed one elsewhere.
+- **entropy_risk is the share of people withdrawing.** Averaging slopes let one strong withdrawer be cancelled by many mild engagers.
+- **frag_risk is convex on purpose.** The first split (WCC 1 → 2) costs ≈ 0.78 of its weight right away, because a disconnected component cannot be bridged without intervention.
+
+On the demo data the redesigned score spans 63.8–75.7 over eight weeks. The old score sat at 64.9 ± 0.1, because three of its four components were constant or saturated.
 
 ---
 
 ## 12. Spec vs. implementation
 
-Places where [MODEL.md](MODEL.md) and the running code currently differ. Each is a backlog item, not a hidden assumption.
+This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each open row is a backlog item, not a hidden assumption.
 
-| Area | MODEL.md says | Code does | Impact |
+**Open**
+
+| Area | Spec says | Code does | Why it stays open |
 |---|---|---|---|
-| Channel semantics | w += weight × ω(channel, direction), with `CHANNEL_WEIGHT_*` / `DIRECTION_WEIGHT_*` env vars | ω not applied; those env vars are read nowhere (only the synthetic generator uses channel *frequencies*) | A code review counts the same as a Slack @mention. SPOF still ranks archetypes correctly in validation, but tacit-knowledge links are under-weighted |
-| Betweenness graph | Converted to undirected | Computed on the directed graph | Directed BC is stricter; bridges that only *receive* score lower |
-| SPOF perturbation | lo = (0.35, 0.25, 0.25, 0.15), hi = (0.50, 0.30, 0.15, 0.05) | ±15 % on α, γ, δ around the central weights, β fixed, renormalized | Narrower bracket than documented, so fewer `critical_uncertain` flags |
-| Knowledge blend env var | `KNOWLEDGE_LAMBDA` | `KNOWLEDGE_DELTA` | Setting the documented name has no effect |
-| Org health `spof_risk` | mean SPOF over employees with SPOF > 0.3 | mean over **all** employees | Lower spof_risk, so a higher health score in orgs with a long tail of low-SPOF staff |
-| Org health `entropy_risk` | fraction of employees with trend < −0.05 | −mean(trend) / 0.05, clipped | A few strongly withdrawing people can be averaged away |
-| Onboarding alert | DCP < 0.25 and tenure ≥ 60 | degree ≤ cohort p25 and tenure ≥ 60 | Equivalent intent; cohort-relative rather than absolute |
-| Silo threshold | `SILO_THRESHOLD` removed in v2 | Still read: 2.5 in `silo_detector`, 4.0 default in `scenario_simulator` | Scenario "silos before → after" uses a different threshold than the dashboard |
+| Betweenness graph | Undirected ([Decisions.md §6](Decisions.md)) | Directed | Switching alone cuts validation Precision@critical 100 % → 50 % (§3 note). Needs a tail-aware BC normalization first (track B/D) |
+| Onboarding alert | DCP < 0.25 and tenure ≥ 60 | degree ≤ cohort p25 and tenure ≥ 60 | Code is the better rule (cohort-relative). MODEL.md §9 should be updated to match |
+| GNN edge weights | Graph uses ω-weighted edges | ChurnGAT / temporal GNN use `log1p(count)` | Changing inputs invalidates trained checkpoints; adopt ω at next retrain |
+| Entropy threshold | −0.05 bits/week flags withdrawal | As specified | The threshold sits inside the 4-point-slope noise (§4); fix the estimator (track C), then recalibrate |
+
+**Resolved in November 2026**
+
+| Area | Was | Now |
+|---|---|---|
+| Channel semantics | ω documented, `CHANNEL_WEIGHT_*` read nowhere; every event counted 1.0 | `graph/edge_weights.py` applied in every edge loader (§2) |
+| SPOF perturbation | ±15 % proportional, narrower than documented | Spec corners as offsets; `lo` adjusted to keep strict ordering (§5.2) |
+| Knowledge blend env var | Documented `KNOWLEDGE_LAMBDA` ignored | Accepted as alias of `KNOWLEDGE_DELTA` |
+| Org health `spof_risk` | Mean of rank-based SPOF ≈ 0.4 for every org | Brokerage concentration (§11) |
+| Org health `silo_risk` | Alert count / department-count floor; saturated at 1.0 | Size-weighted positive homophily (§11) |
+| Org health `entropy_risk` | −mean(slope)/0.05 | Share of employees below the withdrawal threshold, as specified |
+| Silo detection | Size-biased isolation ratio; thresholds 2.5 (detector), 4.0 (scenarios, Airflow env) | Coleman homophily on interaction volume, one detector everywhere (§7) |
+| Entropy trend | SQL failed on Postgres, so every trend was 0; unequal buckets; no consent filter | Integer-day equal weeks, consent-filtered (§4) |
 
 ---
 
 ## 13. How the models are validated
 
-`tests/validation/` builds synthetic organizations with **planted ground truth** (bridges, withdrawing employees, sole experts, silos) and checks that each model recovers them. There are 30 tests, they need no DB or Kafka, and they run in about 12 seconds. All 30 passed when these docs were written.
+`tests/validation/` builds synthetic organizations with **planted ground truth** (bridges, withdrawing employees, sole experts, silos) and checks that each model recovers them. There are 30 tests, they need no DB or Kafka, and they run in about 12 seconds. All 30 pass after the November 2026 corrections. [`tests/unit/test_math_model_corrections.py`](../tests/unit/test_math_model_corrections.py) pins each resolved ledger row, including size-bias and ranking-inversion regressions for the silo index.
 
 | Model | Key result | Gate |
 |---|---|---|

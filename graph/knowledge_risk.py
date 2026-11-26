@@ -51,7 +51,9 @@ logger = logging.getLogger(__name__)
 _ALPHA_SOLE = float(os.environ.get("KNOWLEDGE_ALPHA_SOLE", "0.5"))
 _ALPHA_VOL = float(os.environ.get("KNOWLEDGE_ALPHA_VOL", "0.3"))
 _ALPHA_BRD = float(os.environ.get("KNOWLEDGE_ALPHA_BRD", "0.2"))
-_DELTA_K = float(os.environ.get("KNOWLEDGE_DELTA", "0.3"))
+# KNOWLEDGE_DELTA is canonical.  KNOWLEDGE_LAMBDA is the name MODEL.md §14 used to
+# document; it is honoured as a deprecated alias so existing configs keep working.
+_DELTA_K = float(os.environ.get("KNOWLEDGE_DELTA", os.environ.get("KNOWLEDGE_LAMBDA", "0.3")))
 
 
 # ─── Pure computation ─────────────────────────────────────────────────────────

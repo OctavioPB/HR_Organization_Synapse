@@ -127,24 +127,32 @@ def _load_weekly_interactions(
         {employee_id: {week_idx: {partner_id: count}}}
         where week_idx ∈ [0, _N_WEEKS-1] (0 = oldest, _N_WEEKS-1 = newest).
     """
+    # Buckets are _N_WEEKS equal 7-day weeks counted BACK from snapshot_date
+    # (days 0–6 before it = newest week).  Equal-length buckets matter: a longer
+    # final bucket holds more distinct partners and so more entropy, which biased
+    # every slope upward.  date − date is an INTEGER day count in Postgres, so
+    # integer division gives the week.  (The previous EXTRACT(EPOCH FROM <integer>)
+    # raised "function pg_catalog.extract(unknown, integer) does not exist": entropy
+    # trends were never computed on real data and silently stayed 0.)
+    # Consent/active filters mirror graph.builder.load_raw_edges: an employee who
+    # has not consented must not contribute to anyone's entropy either.
     cur.execute(
         """
         SELECT
-            source_id::text,
-            LEAST(
-                FLOOR(
-                    EXTRACT(EPOCH FROM (ts::date - %s::date)) / 604800
-                )::int,
-                %s
-            ) AS week_idx,
-            target_id::text,
+            re.source_id::text,
+            %s - ((%s::date - re.ts::date) / 7) AS week_idx,
+            re.target_id::text,
             COUNT(*) AS cnt
-        FROM raw_events
-        WHERE ts >= %s::date
-          AND ts < (%s::date + INTERVAL '1 day')
+        FROM raw_events re
+        JOIN employees es ON es.id = re.source_id
+        JOIN employees et ON et.id = re.target_id
+        WHERE re.ts >= %s::date
+          AND (%s::date - re.ts::date) BETWEEN 0 AND %s
+          AND es.consent = true AND et.consent = true
+          AND es.active  = true AND et.active  = true
         GROUP BY 1, 2, 3
         """,
-        (window_start, _N_WEEKS - 1, window_start, snapshot_date),
+        (_N_WEEKS - 1, snapshot_date, window_start, snapshot_date, _N_WEEKS * 7 - 1),
     )
     weekly: dict[str, dict[int, dict[str, int]]] = {}
     for emp_id, week_idx, partner_id, cnt in cur.fetchall():

@@ -21,7 +21,6 @@ import networkx as nx
 logger = logging.getLogger(__name__)
 
 _WINDOW_DAYS = int(os.environ.get("GRAPH_WINDOW_DAYS", "30"))
-_SILO_THRESHOLD = float(os.environ.get("SILO_THRESHOLD", "4.0"))
 
 
 # ─── Graph loading ────────────────────────────────────────────────────────────
@@ -30,6 +29,7 @@ _SILO_THRESHOLD = float(os.environ.get("SILO_THRESHOLD", "4.0"))
 def load_current_graph(conn, window_days: int = _WINDOW_DAYS) -> nx.DiGraph:
     """Build a NetworkX DiGraph from raw_events for the most recent window."""
     from graph.builder import build_graph
+    from graph.edge_weights import weighted_edge_sql
 
     with conn.cursor() as cur:
         cur.execute("SELECT MAX(snapshot_date) AS d FROM graph_snapshots")
@@ -41,8 +41,8 @@ def load_current_graph(conn, window_days: int = _WINDOW_DAYS) -> nx.DiGraph:
 
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT re.source_id::text, re.target_id::text, re.weight,
+            f"""
+            SELECT re.source_id::text, re.target_id::text, {weighted_edge_sql("re")} AS weight,
                    es.department AS dept_source, et.department AS dept_target
             FROM raw_events re
             JOIN employees es ON re.source_id = es.id
@@ -131,21 +131,15 @@ def _graph_metrics(G: nx.DiGraph) -> dict:
 
 
 def _count_silos(G: nx.DiGraph) -> int:
-    """Count department silos in the graph (isolation_ratio > SILO_THRESHOLD)."""
-    dept_nodes: dict[str, list] = {}
-    for n, attrs in G.nodes(data=True):
-        d = attrs.get("department", "unknown")
-        dept_nodes.setdefault(d, []).append(n)
+    """Count department silos using the same detector as the dashboard alerts.
 
-    silo_count = 0
-    for _dept, nodes in dept_nodes.items():
-        subgraph = G.subgraph(nodes)
-        internal = subgraph.number_of_edges()
-        external = sum(1 for n in nodes for nb in G.neighbors(n) if nb not in nodes)
-        ratio = internal / max(external, 1)
-        if ratio > _SILO_THRESHOLD:
-            silo_count += 1
-    return silo_count
+    Previously this re-implemented the isolation ratio with its own threshold
+    (SILO_THRESHOLD, default 4.0 here vs 2.5 in the detector), so a scenario's
+    "silos before → after" disagreed with the alert registry.
+    """
+    from graph.silo_detector import detect_silos
+
+    return len(detect_silos(G))
 
 
 # ─── Impact report ────────────────────────────────────────────────────────────

@@ -1,18 +1,30 @@
 """Org Health Score computation (F9).
 
-Synthesizes all graph metrics into a single 0–100 executive-facing score.
+Synthesizes structural graph signals into a single 0–100 executive score.
+Every component is an ABSOLUTE property of the network, comparable across weeks
+and across organisations (MATH_MODEL.md §11):
 
-Formula (each component normalised to [0, 1]):
-    composite_risk = (
-        w_silo    × silo_risk        # active silos vs reference baseline
-        + w_spof  × spof_risk        # mean SPOF score across employees
-        + w_entropy × entropy_risk   # negative entropy trend (withdrawal signal)
-        + w_frag  × frag_risk        # isolated components / total nodes
-    )
-    health_score = 100 × (1 − composite_risk)
+    spof_risk    brokerage concentration — share of all betweenness held by the
+                 top ⌈HEALTH_SPOF_TOP_FRACTION·N⌉ employees, rescaled so an even
+                 spread → 0 and total concentration in that group → 1
+    silo_risk    size-weighted mean of max(H_D, 0) over departments, where H_D is
+                 Coleman's homophily index (graph/silo_detector.py): 0 = people
+                 mix at random across departments, 1 = every department closed
+    entropy_risk share of employees whose interaction-entropy slope is below
+                 ENTROPY_SLOPE_THRESHOLD (withdrawing)
+    frag_risk    1 − exp(−λ · (WCC − 1)), convex so the first split is severe
 
-Weights and calibration constants are configurable via environment variables
-so ops teams can tune sensitivity without a code deploy.
+    composite_risk = w_silo·silo + w_spof·spof + w_entropy·entropy + w_frag·frag
+    health_score   = 100 · (1 − composite_risk)
+
+History (why this changed): spof_risk used to be the mean SPOF score.  SPOF is
+built from population rank-percentiles, whose mean is ≈0.5 for every
+organisation by construction, so mean SPOF ≈ (α+β+γ−δ)/2 ≈ 0.4 always — on the
+demo data it moved 0.427–0.433 over eight weeks while carrying 35 % of the
+score.  silo_risk counted alerts against a department-count denominator and sat
+at 1.0; entropy_risk averaged slopes so a few strong withdrawers averaged away.
+
+Weights and calibration constants are environment-configurable.
 """
 
 from __future__ import annotations
@@ -20,6 +32,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+from collections.abc import Iterable
 from datetime import date
 from typing import Any
 
@@ -32,29 +45,12 @@ _W_SPOF = float(os.environ.get("HEALTH_W_SPOF", "0.35"))
 _W_ENTROPY = float(os.environ.get("HEALTH_W_ENTROPY", "0.20"))
 _W_FRAG = float(os.environ.get("HEALTH_W_FRAG", "0.25"))
 
-# Silo risk denominator scales with organisation structure (MODEL.md §12.1):
-# maximum tolerable silo count ≈ one silo per SILO_THRESHOLD_RATIO departments,
-# with a floor of 2.  This replaces the deprecated fixed HEALTH_SILO_REF=10,
-# which was organisation-size invariant in the wrong direction.
-_SILO_THRESHOLD_RATIO = float(os.environ.get("SILO_THRESHOLD_RATIO", "3.0"))
-# Convex fragmentation penalty steepness (MODEL.md §12.2): higher λ punishes the
-# first disconnection (WCC 1→2) harder.  λ=1.5 ⇒ WCC=2 maps to risk ≈ 0.78.
+# Convex fragmentation penalty steepness (MODEL.md §12.2): λ=1.5 ⇒ WCC=2 → ≈0.78.
 _FRAG_LAMBDA = float(os.environ.get("FRAGMENTATION_LAMBDA", "1.5"))
-# Entropy slope magnitude that maps to maximum entropy risk
-_ENTROPY_SCALE = float(os.environ.get("HEALTH_ENTROPY_SCALE", "0.05"))
-
-
-def silo_threshold(dept_count: int | None) -> int:
-    """Maximum tolerable active-silo count for an org with *dept_count* departments.
-
-    silo_threshold(d) = max(floor(d / SILO_THRESHOLD_RATIO), 2)  (MODEL.md §12.1)
-
-    The floor of 2 keeps the denominator sane for very small organisations.
-    When the department count is unknown, falls back to the floor of 2.
-    """
-    if not dept_count or dept_count <= 0:
-        return 2
-    return max(int(math.floor(dept_count / _SILO_THRESHOLD_RATIO)), 2)
+# Fraction of the org treated as "the top" when measuring brokerage concentration.
+_SPOF_TOP_FRACTION = float(os.environ.get("HEALTH_SPOF_TOP_FRACTION", "0.05"))
+# Weekly entropy slope below which an employee counts as withdrawing (MODEL.md §14).
+_ENTROPY_SLOPE_THRESHOLD = float(os.environ.get("ENTROPY_SLOPE_THRESHOLD", "-0.05"))
 
 
 # ─── Tier thresholds (score, tier) — evaluated top-down ───────────────────────
@@ -75,57 +71,112 @@ def score_tier(score: float) -> str:
     return "critical"
 
 
+# ─── Pure component functions ─────────────────────────────────────────────────
+
+
+def _clip01(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+def brokerage_concentration(betweenness: Iterable[float], top_fraction: float = _SPOF_TOP_FRACTION) -> float:
+    """How much of the org's brokerage sits with its top few people, in [0, 1].
+
+        k   = max(1, ⌈top_fraction · N⌉)
+        S_k = Σ top-k betweenness / Σ betweenness
+        C   = (S_k − k/N) / (1 − k/N)
+
+    C = 0 when brokerage is spread evenly (the top k hold exactly their k/N
+    share); C = 1 when the top k carry all of it.  Unlike mean SPOF this is not
+    rank-based, so it moves when dependence on a few people grows or shrinks.
+    Returns 0.0 when there is no brokerage at all (empty or edgeless graph).
+    """
+    values = sorted((max(0.0, float(b)) for b in betweenness), reverse=True)
+    n = len(values)
+    total = sum(values)
+    if n < 2 or total <= 0.0:
+        return 0.0
+    k = max(1, math.ceil(top_fraction * n))
+    if k >= n:
+        return 0.0
+    share = sum(values[:k]) / total
+    baseline = k / n
+    return _clip01((share - baseline) / (1.0 - baseline))
+
+
+def silo_exposure(departments: Iterable[tuple[int, float | None]]) -> float:
+    """Size-weighted mean positive homophily across departments, in [0, 1].
+
+    Args:
+        departments: (member_count, homophily_index) per department; a None
+            index (undefined) is skipped.  Negative indices (outward-looking
+            departments) count as 0 — they are not a silo risk, and letting them
+            cancel out a closed department elsewhere would hide it.
+    """
+    num = 0.0
+    den = 0
+    for n, h in departments:
+        if h is None or n <= 0:
+            continue
+        num += n * _clip01(h)
+        den += n
+    return num / den if den else 0.0
+
+
+def withdrawal_share(entropy_trends: Iterable[float | None], threshold: float = _ENTROPY_SLOPE_THRESHOLD) -> float:
+    """Fraction of employees with an entropy slope below *threshold* (MODEL.md §12)."""
+    trends = [t for t in entropy_trends if t is not None]
+    if not trends:
+        return 0.0
+    return sum(1 for t in trends if t < threshold) / len(trends)
+
+
+def fragmentation_risk(wcc_count: int, lam: float = _FRAG_LAMBDA) -> float:
+    """Convex fragmentation penalty 1 − exp(−λ·(WCC − 1)) (MODEL.md §12.2)."""
+    return 1.0 - math.exp(-lam * max(0, wcc_count - 1))
+
+
 # ─── Pure scoring function ────────────────────────────────────────────────────
 
 
 def compute_org_health(
-    silo_count: int,
-    avg_spof_score: float,
-    avg_entropy_trend: float | None,
+    *,
+    spof_risk: float,
+    silo_risk: float,
+    entropy_risk: float,
     wcc_count: int,
     node_count: int,
-    dept_count: int | None = None,
+    silo_count: int = 0,
+    avg_spof_score: float = 0.0,
+    avg_entropy_trend: float | None = None,
 ) -> dict[str, Any]:
-    """Return health score dict from pre-aggregated inputs.
-
-    Pure function — no I/O.  All inputs come from the DB layer so this
-    function is fully unit-testable without a database.
+    """Combine pre-computed components into the health score.  Pure, no I/O.
 
     Args:
-        silo_count: Number of active (unresolved) silo alerts.
-        avg_spof_score: Mean SPOF score across all employees in [0, 1].
-        avg_entropy_trend: Mean entropy slope (negative = withdrawal). None if unavailable.
-        wcc_count: Weakly-connected components in the collaboration graph.
-        node_count: Total employees (graph nodes) in the snapshot.
-        dept_count: Distinct departments — scales the silo-risk denominator
-            (MODEL.md §12.1).  When None the denominator falls back to its floor.
+        spof_risk: brokerage_concentration(...) ∈ [0, 1].
+        silo_risk: silo_exposure(...) ∈ [0, 1].
+        entropy_risk: withdrawal_share(...) ∈ [0, 1].
+        wcc_count: Weakly-connected components (fragmentation input).
+        node_count: Employees in the snapshot (reported).
+        silo_count: Departments currently flagged as silos (reported).
+        avg_spof_score: Mean SPOF score (reported for continuity; no longer scored).
+        avg_entropy_trend: Mean entropy slope (reported; no longer scored).
 
     Returns:
-        Dict with keys: score, tier, component_scores, silo_count,
-        avg_spof_score, avg_entropy_trend, wcc_count, node_count.
+        Dict with score, tier, component_scores (the four risks) and reporting fields.
     """
-    # Silo risk: denominator scales with org structure rather than a fixed 10
-    # (MODEL.md §12.1) — 10 silos in a 50-person org is catastrophic but
-    # negligible in a 5,000-person org.
-    silo_risk = min(silo_count / silo_threshold(dept_count), 1.0)
-    spof_risk = max(0.0, min(1.0, avg_spof_score))
-
-    if avg_entropy_trend is not None:
-        # Negative slope means employees are interacting less → risk
-        entropy_risk = max(0.0, min(1.0, -avg_entropy_trend / _ENTROPY_SCALE))
-    else:
-        entropy_risk = 0.0  # no data → neutral assumption
-
-    # Convex (exponential) fragmentation penalty (MODEL.md §12.2): the first
-    # disconnection (WCC 1→2) severs the org graph and deserves near-maximum
-    # risk immediately, rather than the negligible ~1/n the old linear form gave.
-    extra_components = max(0, wcc_count - 1)
-    frag_risk = 1.0 - math.exp(-_FRAG_LAMBDA * extra_components)
-
-    composite_risk = _W_SILO * silo_risk + _W_SPOF * spof_risk + _W_ENTROPY * entropy_risk + _W_FRAG * frag_risk
-
-    score = round(max(0.0, min(100.0, (1.0 - composite_risk) * 100)), 1)
-
+    components = {
+        "silo": _clip01(silo_risk),
+        "spof": _clip01(spof_risk),
+        "entropy": _clip01(entropy_risk),
+        "frag": _clip01(fragmentation_risk(wcc_count)),
+    }
+    composite = (
+        _W_SILO * components["silo"]
+        + _W_SPOF * components["spof"]
+        + _W_ENTROPY * components["entropy"]
+        + _W_FRAG * components["frag"]
+    )
+    score = round(max(0.0, min(100.0, (1.0 - composite) * 100)), 1)
     return {
         "score": score,
         "tier": score_tier(score),
@@ -134,12 +185,7 @@ def compute_org_health(
         "avg_entropy_trend": (round(avg_entropy_trend, 6) if avg_entropy_trend is not None else None),
         "wcc_count": wcc_count,
         "node_count": node_count,
-        "component_scores": {
-            "silo": round(silo_risk, 4),
-            "spof": round(spof_risk, 4),
-            "entropy": round(entropy_risk, 4),
-            "frag": round(frag_risk, 4),
-        },
+        "component_scores": {k: round(v, 4) for k, v in components.items()},
     }
 
 
@@ -153,76 +199,92 @@ def compute_and_persist(snapshot_date: date, conn) -> dict[str, Any]:
     edges via load_raw_edges (same pattern as graph_builder_dag).
     Idempotent — ON CONFLICT (computed_at) DO UPDATE.
     """
-    import networkx as nx
-
     from api import db as queries
     from graph.builder import build_graph, load_raw_edges
 
-    # 1. Active silo count
-    silos = queries.fetch_silo_alerts(conn)
-    silo_count = len(silos)
-
-    # 2. Avg SPOF + entropy from risk_scores on snapshot_date
+    # 1. Per-employee SPOF + entropy slope from the day's risk scores
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT
-                COUNT(*)::int                   AS n,
-                COALESCE(AVG(spof_score), 0.0)  AS avg_spof,
-                AVG(entropy_trend)              AS avg_entropy
-            FROM risk_scores
-            WHERE scored_at::date = %s
-            """,
+            "SELECT spof_score, entropy_trend FROM risk_scores WHERE scored_at::date = %s",
             (snapshot_date,),
         )
-        row = cur.fetchone()
+        rows = cur.fetchall()
+    spof_scores = [float(r["spof_score"]) for r in rows if r["spof_score"] is not None]
+    entropy_trends = [float(r["entropy_trend"]) for r in rows if r["entropy_trend"] is not None]
 
-    node_count = int(row["n"] or 0) if row else 0
-    avg_spof = float(row["avg_spof"] or 0.0) if row else 0.0
-    avg_entropy: float | None = float(row["avg_entropy"]) if row and row["avg_entropy"] is not None else None
+    # 2. Collaboration graph for the same window the scorers used
+    import networkx as nx
 
-    # 3. Distinct departments among active employees — scales silo-risk denominator
-    with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(DISTINCT department)::int AS d FROM employees WHERE active = true")
-        drow = cur.fetchone()
-    dept_count = int(drow["d"] or 0) if drow else 0
+    raw_edges = load_raw_edges(snapshot_date, window_days=int(os.environ.get("GRAPH_WINDOW_DAYS", "30")))
+    G = build_graph(raw_edges) if raw_edges else nx.DiGraph()
 
-    # 4. WCC count from the collaboration graph for this snapshot window
-    raw_edges = load_raw_edges(snapshot_date, window_days=30)
-    if raw_edges:
-        G = build_graph(raw_edges)
-        wcc_count = nx.number_weakly_connected_components(G)
-        if node_count == 0:
-            node_count = G.number_of_nodes()
-    else:
-        wcc_count = 1
-
-    # 5. Score
-    health = compute_org_health(
-        silo_count=silo_count,
-        avg_spof_score=avg_spof,
-        avg_entropy_trend=avg_entropy,
-        wcc_count=wcc_count,
-        node_count=node_count,
-        dept_count=dept_count,
+    # 3. Score
+    health = org_health_from_graph(
+        G,
+        entropy_trends=entropy_trends,
+        avg_spof_score=(sum(spof_scores) / len(spof_scores)) if spof_scores else 0.0,
     )
     health["computed_at"] = snapshot_date
 
-    # 6. Persist
+    # 4. Persist
     queries.persist_org_health(health, conn)
     conn.commit()
 
     logger.info(
-        "Org health for %s: %.1f (%s)  silo=%d spof=%.3f wcc=%d n=%d",
+        "Org health for %s: %.1f (%s)  components=%s silos=%d wcc=%d n=%d",
         snapshot_date,
         health["score"],
         health["tier"],
-        silo_count,
-        avg_spof,
-        wcc_count,
-        node_count,
+        health["component_scores"],
+        health["silo_count"],
+        health["wcc_count"],
+        health["node_count"],
     )
     return health
+
+
+def org_health_from_graph(
+    G,
+    entropy_trends: Iterable[float | None] = (),
+    avg_spof_score: float = 0.0,
+) -> dict[str, Any]:
+    """Derive every health component from the collaboration graph.  Pure, no I/O.
+
+    Uses the same betweenness and silo detector as the rest of the pipeline, so
+    the health score cannot disagree with the dashboard alerts.
+    """
+    import networkx as nx
+
+    from graph.metrics import compute_betweenness
+    from graph.silo_detector import department_homophily, detect_silos
+
+    trends = list(entropy_trends)
+    if G.number_of_nodes() == 0:
+        return compute_org_health(
+            spof_risk=0.0,
+            silo_risk=0.0,
+            entropy_risk=withdrawal_share(trends),
+            wcc_count=1,
+            node_count=0,
+            avg_spof_score=avg_spof_score,
+            avg_entropy_trend=(sum(trends) / len(trends)) if trends else None,
+        )
+
+    dept_stats = department_homophily(G)
+    result = compute_org_health(
+        spof_risk=brokerage_concentration(compute_betweenness(G).values()),
+        silo_risk=silo_exposure((len(s["members"]), s["homophily"]) for s in dept_stats.values()),
+        entropy_risk=withdrawal_share(trends),
+        wcc_count=nx.number_weakly_connected_components(G),
+        node_count=G.number_of_nodes(),
+        silo_count=len(detect_silos(G)),
+        avg_spof_score=avg_spof_score,
+        avg_entropy_trend=(sum(trends) / len(trends)) if trends else None,
+    )
+    result["department_homophily"] = {
+        d: (round(s["homophily"], 4) if s["homophily"] is not None else None) for d, s in dept_stats.items()
+    }
+    return result
 
 
 # ─── Briefing generation ──────────────────────────────────────────────────────

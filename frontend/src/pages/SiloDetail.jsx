@@ -175,7 +175,7 @@ export default function SiloDetail() {
                       marginBottom: "2px",
                     }}
                   >
-                    Isolation ratio
+                    {data.homophily != null ? "Silo index" : "Isolation ratio"}
                   </div>
                   <div
                     style={{
@@ -185,7 +185,9 @@ export default function SiloDetail() {
                       color: "#E03448",
                     }}
                   >
-                    {data.isolation_ratio.toFixed(2)}×
+                    {data.homophily != null
+                      ? data.homophily.toFixed(2)
+                      : `${data.isolation_ratio.toFixed(2)}×`}
                   </div>
                 </div>
                 <div>
@@ -223,9 +225,22 @@ export default function SiloDetail() {
                   lineHeight: 1.5,
                 }}
               >
-                This department sends {data.isolation_ratio.toFixed(1)}× more messages internally
-                than externally. Low cross-department communication increases knowledge silos
-                and amplifies the impact when key connectors leave.
+                {data.homophily != null ? (
+                  <>
+                    {Math.round(data.internal_share * 100)}% of this department's collaboration stays
+                    inside it, versus {Math.round(data.expected_internal_share * 100)}% if its people
+                    worked with colleagues at random. The silo index measures that gap on a 0–1 scale
+                    (0 = mixes like chance, 1 = fully closed), so departments of different sizes are
+                    compared fairly.
+                  </>
+                ) : (
+                  <>
+                    This department sends {data.isolation_ratio.toFixed(1)}× more messages internally
+                    than externally.
+                  </>
+                )}{" "}
+                Low cross-department communication increases knowledge silos and amplifies the
+                impact when key connectors leave.
               </p>
             </>
           )}

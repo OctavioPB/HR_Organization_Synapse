@@ -21,6 +21,14 @@ This document records every quantitative decision in the platform: why each form
 - §13: Limitations — three new: hybrid-work channel drift, turnover contagion blind spot, discrete-snapshot GNN
 - §15: References — five new peer-reviewed citations
 
+**CHANGELOG v3.1 (Nov 2026 — spec/implementation reconciliation; details in MATH_MODEL.md §12):**
+- §2.2: Channel × direction weights ω are now applied in every edge loader (they were documented but unread)
+- §4: Entropy trend — weekly bucketing fixed (the SQL never ran on Postgres, so every trend was 0); equal 7-day weeks; consent filter
+- §5.3: `lo` corner corrected to (0.35, 0.26, 0.24, 0.15) so it respects the strict ordering it requires
+- §12: spof_risk replaced by brokerage concentration (mean rank-based SPOF is ≈0.4 for every org); silo detection and silo_risk replaced by Coleman homophily (the isolation ratio was size-biased)
+- §14: parameter table updated (new, renamed and retired variables)
+- Betweenness remains **directed** in code despite the undirected intent (Decisions.md §6): switching alone halved validation precision (MATH_MODEL.md §3)
+
 ---
 
 ## 1. Notation
@@ -155,11 +163,13 @@ The specific weight values (0.4, 0.3, 0.2, 0.1) are theoretically motivated but 
 Before using SPOF scores for personnel decisions, the implementation MUST compute and expose:
 
 ```
-SPOF_lo(v) = SPOF(v) evaluated with α=0.35, β=0.25, γ=0.25, δ=0.15
+SPOF_lo(v) = SPOF(v) evaluated with α=0.35, β=0.26, γ=0.24, δ=0.15
 SPOF_hi(v) = SPOF(v) evaluated with α=0.50, β=0.30, γ=0.15, δ=0.05
 ```
 
 These bracket a ±20% perturbation in weight space while preserving the ordering constraint.
+
+**CORRECTION (v3.1, Nov 2026):** v2 specified `lo` as (0.35, 0.25, **0.25**, 0.15), which ties β and γ and so violates the strict ordering this section requires. `lo` now keeps its α and δ endpoints and moves β and γ by 0.04. The implementation expresses both corners as offsets from the central weights, so they follow `SPOF_ALPHA..SPOF_DELTA` overrides.
 
 **Robustness condition:** An employee is flagged as `robust_critical` only if their SPOF score exceeds the critical threshold under ALL weight combinations in the perturbation set. An employee who crosses the threshold only under the central weights but not under perturbations is flagged as `weight_sensitive` — the classification depends on the specific weight choice and should not be acted upon without additional qualitative investigation.
 
@@ -379,12 +389,22 @@ health_score = (1 − composite_risk) × 100    ∈ [0, 100]
 
 | Component | Weight | Formula |
 |---|---|---|
-| silo_risk | 0.20 | See §12.1 (corrected) |
-| spof_risk | 0.35 | mean(SPOF(v)) over all v with SPOF > 0.3 |
+| silo_risk | 0.20 | Size-weighted mean of max(H_D, 0), Coleman homophily per department (§12.1, v3.1) |
+| spof_risk | 0.35 | Brokerage concentration: (S_k − k/N)/(1 − k/N), S_k = share of total betweenness held by the top k = ⌈0.05·N⌉ (v3.1) |
 | entropy_risk | 0.20 | fraction of employees with entropy_trend < −0.05 |
 | fragmentation_risk | 0.25 | See §12.2 (corrected) |
 
-### 12.1 Silo Risk — CORRECTED
+**CORRECTION (v3.1, Nov 2026): spof_risk.** v1–v3 defined spof_risk as mean SPOF (over employees with SPOF > 0.3; the code averaged over all). Since v2, SPOF is a weighted sum of rank percentiles (§5.1), and the mean percentile of any population is ≈0.5. Mean SPOF is therefore ≈0.5·(α+β+γ−δ) ≈ 0.4 for *every* organization, so the component carrying 35 % of the score could not distinguish a fragile org from a robust one. On the demo data it moved 0.427–0.433 across eight weeks. Brokerage concentration is an absolute, graph-level measure: it is 0 when brokerage is spread evenly and 1 when the top 5 % hold all of it.
+
+### 12.1 Silo Risk — CORRECTED (v2), REPLACED (v3.1)
+
+> **v3.1 (Nov 2026):** both the v2 count-based formula below and the isolation ratio it counted are superseded.
+>
+> The isolation ratio `internal/outgoing` is biased by department size. Under pure random mixing its expected value is (n−1)/(N−n): ≈1.0 for a department holding half the org, ≈0.2 for a small one. On the demo data that **inverted the ranking**: the largest department scored most siloed and the most inward one, relative to its size, scored least.
+>
+> Detection now uses Coleman's homophily index H_D = (p_D − q_D)/(1 − q_D), with p_D the internal share of the department's interaction volume and q_D = (n_D−1)/(N−1). A department is a silo at H_D ≥ 0.50 and critical at H_D ≥ 0.75.
+>
+> `silo_risk` is the size-weighted mean of max(H_D, 0). The count-based form below saturated at 1.0 as soon as two departments were flagged. `SILO_THRESHOLD` and `SILO_THRESHOLD_RATIO` are no longer read. See MATH_MODEL.md §7 and §11.
 
 **CORRECTION from v1:** The original formula:
 
@@ -499,8 +519,8 @@ All parameters are configurable via environment variables. Weights sum to 1.0 wi
 | `SPOF_BETA` | 0.3 | Cross-dept ratio weight in SPOF | No |
 | `SPOF_GAMMA` | 0.2 | (1 − clustering) weight in SPOF | No |
 | `SPOF_DELTA` | 0.1 | Entropy trend weight in SPOF | No |
-| `SPOF_PERTURB_RANGE` | 0.15 | Weight perturbation range for sensitivity bands | **NEW** |
-| `KNOWLEDGE_LAMBDA` | 0.3 | Knowledge risk blend weight in Enhanced SPOF | No |
+| ~~`SPOF_PERTURB_RANGE`~~ | REMOVED (v3.1) | Corners are now fixed offsets from the central weights (§5.3) | **REMOVED** |
+| `KNOWLEDGE_DELTA` | 0.3 | Knowledge risk blend weight in Enhanced SPOF (`KNOWLEDGE_LAMBDA` accepted as alias) | **RENAMED** (v3.1) |
 | `SUCCESSION_W_STRUCT` | 0.40 | Structural overlap weight in compatibility score | No |
 | `SUCCESSION_W_CLUST` | 0.25 | Clustering weight in compatibility score | No |
 | `SUCCESSION_W_DOMAIN` | 0.35 | Domain overlap weight in compatibility score | No |
@@ -508,8 +528,13 @@ All parameters are configurable via environment variables. Weights sum to 1.0 wi
 | `HEALTH_W_SPOF` | 0.35 | SPOF component weight in Org Health | No |
 | `HEALTH_W_ENTROPY` | 0.20 | Entropy component weight in Org Health | No |
 | `HEALTH_W_FRAG` | 0.25 | Fragmentation component weight in Org Health | No |
-| `SILO_THRESHOLD` | ~~4.0~~ REMOVED | Fixed threshold — deprecated | **REMOVED** |
-| `SILO_THRESHOLD_RATIO` | 3.0 | Departments per silo threshold | **NEW** |
+| `SILO_THRESHOLD` | ~~4.0~~ REMOVED | Fixed isolation-ratio threshold — no longer read (v3.1) | **REMOVED** |
+| ~~`SILO_THRESHOLD_RATIO`~~ | REMOVED (v3.1) | Count-based silo_risk denominator, replaced by homophily | **REMOVED** |
+| `SILO_HOMOPHILY_THRESHOLD` | 0.50 | Coleman homophily index at which a department is a silo | **NEW** (v3.1) |
+| `SILO_HOMOPHILY_CRITICAL` | 0.75 | Homophily index for critical severity | **NEW** (v3.1) |
+| `SILO_MIN_DEPT_SIZE` | 3 | Smaller departments are never flagged | **NEW** (v3.1) |
+| `HEALTH_SPOF_TOP_FRACTION` | 0.05 | "Top" share of employees for brokerage concentration | **NEW** (v3.1) |
+| `CHANNEL_WEIGHTING` | on | `off` reverts edges to raw event weights | **NEW** (v3.1) |
 | `FRAGMENTATION_LAMBDA` | 1.5 | Exponential decay parameter for fragmentation risk | **NEW** |
 | `BETWEENNESS_EXACT_THRESHOLD` | 500 | Node count below which exact betweenness is computed | No |
 | `BETWEENNESS_K_PIVOTS` | 200 | k-pivot count for approximate betweenness | No |

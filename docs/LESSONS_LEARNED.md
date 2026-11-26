@@ -59,6 +59,24 @@ Status: **✅ applied** · **🟡 partially applied** · **🔴 open**
 **What happened:** The equity module cited the EEOC 4/5ths rule for its 0.8 cutoff on centrality.
 **Lesson:** Centrality isn't a selection rate. Call the cutoff an investigation trigger in code, docs, and UI so nobody reads it as a legal finding.
 
+### 1.12 Don't average a rank ✅
+**What happened:** Org health's largest component (35 %) was mean SPOF. SPOF is a weighted sum of rank percentiles, and the mean percentile of any population is ≈0.5, so mean SPOF ≈ 0.4 for every organization. On the demo data it moved 0.427–0.433 across eight weeks, and with the other components saturated, the health score sat at 64.9 ± 0.1.
+**Lesson:** Rank transforms are good for combining individual signals and useless for comparing populations. Organization-level metrics need absolute, graph-level quantities.
+**Changed:** spof_risk is now brokerage concentration, the share of all betweenness held by the top 5 %. The score now spans 63.8–75.7 over the same weeks.
+
+### 1.13 Every "share" needs a baseline ✅
+**What happened:** Silo detection used internal ÷ outgoing edges with one threshold. Under random mixing that ratio is (n−1)/(N−n), about 1.0 for a department holding half the org and 0.2 for a small one. On the demo data the largest department ranked most siloed and the most inward one, relative to its size, ranked least.
+**Lesson:** Before thresholding a proportion, ask what it would be by chance. Use a null-model-corrected index (here Coleman homophily) so one threshold means the same thing for every group.
+**Changed:** department silos use H = (p − q)/(1 − q). A follow-on finding: p has to be measured on interaction *volume*, because unique edges saturate inside small departments and break the random baseline.
+
+### 1.14 Fix the estimator before the threshold 🟡
+**What happened:** Fixing the entropy SQL produced real slopes for the first time. A 4-point OLS slope is noisy: the 10th–90th percentile range is −0.48 to +0.36 bits/week, so the spec's −0.05 withdrawal threshold flags almost half the org.
+**Lesson:** A threshold is only as meaningful as the estimate it cuts. Next: robust slopes and shrinkage (track C), then recalibrate.
+
+### 1.15 A "fix" that matches the spec can still be wrong 🟡
+**What happened:** Decisions.md says betweenness should be undirected, and the code was directed. Making it undirected halved validation Precision@critical (100 % → 50 %). Undirected betweenness is tiny but nonzero for nearly everyone, and the rank-percentile step stretches those negligible differences into the full 0–1 range.
+**Lesson:** Run the validation suite on every spec reconciliation, and expect two documented choices to interact. Directed betweenness stays until the BC term gets a tail-aware normalization.
+
 ---
 
 ## 2. Engineering
@@ -132,9 +150,10 @@ Observed while capturing the screenshots in these docs (seeded demo, 120 employe
 
 ## 4. Documentation and process
 
-### 4.1 Docs drifted from code 🔴
+### 4.1 Docs drifted from code 🟡
 **What happened:** A code-level review for [MATH_MODEL.md](MATH_MODEL.md) found eight places where MODEL.md and the implementation differ. The largest: the channel × direction weights (GitHub 3.0, Calendar 2.5, …) and their `CHANNEL_WEIGHT_*` env vars are **documented but never applied**. [PITCH.md](PITCH.md) also says the GNN "captures network contagion", when contagion is a separate rule layer.
 **Lesson:** Formulas should live next to the code that implements them, or be checked by a test that imports the documented defaults. MATH_MODEL §12 is now the drift ledger.
+**Changed (Nov 2026):** eight ledger rows resolved, including channel weights, now applied in every edge loader. Four remain open, each with a stated reason. Every resolved row is pinned by a test in `test_math_model_corrections.py`.
 
 ### 4.2 "Unchanged from original" loses the original 🔴
 **What happened:** MODEL.md v2/v3 kept only changed sections and replaced the rest with "[unchanged — see original]". The v1 file isn't in the repo, so the channel-weight thesis, centrality and entropy definitions, knowledge risk and the GAT spec became unreadable.
@@ -157,13 +176,19 @@ Resolved in November 2026: dependency pins and boot smoke test (2.1), tenants pr
 
 | # | Item | Lesson | Effort |
 |---|---|---|---|
+Also resolved in November 2026: channel weights applied (4.1), org-health components made absolute (1.12), size-corrected silo detection (1.13), entropy trend computed for the first time.
+
+| # | Item | Lesson | Effort |
+|---|---|---|---|
 | 1 | Run `scripts/migrate_tenants.py` against any environment with tenants provisioned before the 2.2 fix | 2.2 | S |
-| 2 | Implement ω(channel, direction) or remove it from MODEL.md | 4.1 | M |
-| 3 | Fix and re-enable `test_tenant.py`, `test_compliance.py` | 2.8 | S |
-| 4 | Isolate cache unit tests from a live local Redis (two tests fail when one is running on :6379) | 2.8 | S |
-| 5 | Unify the dashboard silo KPI with department-level alerts | 3.3 | S |
-| 6 | Make `seed_dev.py` idempotent; seed recent hires and score history | 2.5, 3.4 | M |
-| 7 | Reconcile the remaining MATH_MODEL §12 differences | 4.1 | M |
+| 2 | **Privacy:** add the consent/active filter to the dashboard edge queries (`fetch_graph_edges`, ego-network edges in `api/db.py`) | 3.5 | S |
+| 3 | Re-run the graph, risk and health DAGs (or re-seed) so stored scores reflect the corrected math | 1.12–1.14 | S |
+| 4 | Robust entropy slope + shrinkage, then recalibrate `ENTROPY_SLOPE_THRESHOLD` (track C) | 1.14 | M |
+| 5 | Tail-aware normalization of the BC term, then adopt undirected betweenness (tracks B/D) | 1.15 | M |
+| 6 | Fix and re-enable `test_tenant.py`, `test_compliance.py` | 2.8 | S |
+| 7 | Isolate cache unit tests from a live local Redis (two tests fail when one is running on :6379) | 2.8 | S |
+| 8 | Unify the dashboard silo KPI with department-level alerts | 3.3 | S |
+| 9 | Make `seed_dev.py` idempotent; seed recent hires and score history | 2.5, 3.4 | M |
 
 ---
 

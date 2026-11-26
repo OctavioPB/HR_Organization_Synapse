@@ -55,6 +55,8 @@ import networkx as nx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from graph.edge_weights import weighted_edge_sql
+
 logger = logging.getLogger(__name__)
 
 # ─── Configurable weights & scope ────────────────────────────────────────────
@@ -344,11 +346,11 @@ def _load_raw_edges_from_conn(
     start_ts = end_ts - timedelta(days=window_days)
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 re.source_id::text   AS source_id,
                 re.target_id::text   AS target_id,
-                re.weight            AS weight,
+                {weighted_edge_sql("re")} AS weight,
                 es.department        AS dept_source,
                 et.department        AS dept_target
             FROM raw_events re
