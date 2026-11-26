@@ -102,6 +102,20 @@ Status: **✅ applied** · **🟡 partially applied** · **🔴 open**
 
 ---
 
+### 1.19 Four detectors that could not be right, whatever their thresholds 🔴
+**What happened:** A pass over the remaining models (November 2026) found that churn, peer contagion, equity and anomaly detection each failed for structural reasons that no threshold could fix:
+- **Churn:** the trainer stamped every label with the same date, so the temporal split put every example in the test fold and training aborted. Features came from *active* employees only, so leavers were never in the data. raw_events are purged after 90 days, so the features behind a 90-day label are gone by the time it arrives.
+- **Peer contagion:** it counted departed neighbours in a graph built from active employees, so it could never fire.
+- **Equity:** it compared each group with the median of group medians, and betweenness medians are 0, so it never fired on betweenness. With no noise model it raised 1.35 chance flags per run on a 120-person org.
+- **Anomaly detection:** `contamination = 0.05` flagged 5 % of any org every run.
+
+**Fix:**
+- **Churn:** a point-in-time feature log (the scorer logs what it scored; training reads it) and a purged temporal split.
+- **Contagion, equity and anomalies:** each now compares against a null from the same data (permuted departures, permuted labels, the org's own recent history), with Benjamini–Hochberg across the run.
+
+**What real data said:** On the real e-mail network, peer exposure does not predict departure, and the churn model's calibration broke when the base rate drifted (ECE 0.046). Both findings are now in the docs and the alert text.
+**Lesson:** For every alert, ask "how many does it raise when nothing is happening?" before tuning how many it catches. Three of these four could not answer that, and one could not fire at all. A model is only as point-in-time as its feature store: if the data behind a label is purged before the label exists, log the features at scoring time.
+
 ## 2. Engineering
 
 ### 2.1 Unbounded dependency ranges break silently ✅
@@ -199,7 +213,7 @@ Resolved in November 2026: dependency pins and boot smoke test (2.1), tenants pr
 
 | # | Item | Lesson | Effort |
 |---|---|---|---|
-Also resolved in November 2026: channel weights applied (4.1), org-health components made absolute (1.12), size-corrected silo detection (1.13), entropy trend computed for the first time and made robust (1.14), sudden-withdrawal detection added.
+Also resolved in November 2026: churn trains on point-in-time features and is calibrated; peer-departure, equity and anomaly alerts are tested against nulls with FDR control (1.19); channel weights applied (4.1), org-health components made absolute (1.12), size-corrected silo detection (1.13), entropy trend computed for the first time and made robust (1.14), sudden-withdrawal detection added.
 
 | # | Item | Lesson | Effort |
 |---|---|---|---|
@@ -210,6 +224,10 @@ Also resolved in November 2026: channel weights applied (4.1), org-health compon
 | 5 | Backtest SPOF weights on real departures (impact reports) and refit per tenant once there are enough labels: today's weights are fitted to one real network + one synthetic org | 1.18 | L |
 | 5a | Rank tiers flag a roughly fixed share (≈12 %) of any org as critical; find a structure-adaptive rule that works (log-BC MAD outliers did not) | 1.18 | M |
 | 5b | Suppress `sudden_withdrawal` alerts during HRIS-recorded leave (vacations look identical) | 1.17 | S |
+| 5c | Apply migration 019 and let `churn_gnn_score` run daily: the churn model cannot train until the feature log holds ≥ 90 days plus enough leavers (≥ 20 in the training fold) | 1.19 | S |
+| 5d | **Nothing writes departures:** no pipeline sets `employees.left_at` or `churn_labels`, so churn has no labels and peer exposure sees no leavers. Add HRIS termination sync | 1.19 | M |
+| 5e | **HRIS upsert can update the wrong person:** `upsert_employees` matches `LOWER(name) = email` or *any* employee whose role contains the e-mail prefix (`LIMIT 1`). Match on a stored e-mail or external ID | 1.19 | S |
+| 5f | Monitor churn calibration in production (held-out ECE is logged; consider refitting the intercept to the most recent elapsed base rate) | 1.19 | M |
 | 6 | Fix and re-enable `test_tenant.py`, `test_compliance.py` | 2.8 | S |
 | 7 | Isolate cache unit tests from a live local Redis (two tests fail when one is running on :6379) | 2.8 | S |
 | 8 | Unify the dashboard silo KPI with department-level alerts | 3.3 | S |

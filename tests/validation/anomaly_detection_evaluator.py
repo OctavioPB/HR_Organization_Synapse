@@ -657,6 +657,65 @@ def test_hardest_archetype_documented():
     assert True, f"Hardest archetype: {report.hardest_archetype}"
 
 
+# ─── Production path: conformal p-values against history ─────────────────────
+#
+# detect_anomalies (MATH_MODEL.md §8) scores today's employees against 8 weeks
+# of this org's own past feature vectors.  The legacy contamination rule flags
+# 5 % of any population; the conformal rule should flag ~nothing on a quiet
+# week and still catch the severe archetypes.
+
+
+def _history(weeks: int, seed: int) -> np.ndarray:
+    from ml.anomaly.isolation_forest import feature_matrix
+
+    rows: list[dict] = []
+    for w in range(weeks):
+        rows += _make_normal_population(N_NORMAL, seed=1000 * seed + w)
+    return feature_matrix(rows)
+
+
+def conformal_null(seeds=range(20)) -> tuple[float, float]:
+    """(mean conformal alerts per quiet run, mean legacy alerts per quiet run)."""
+    from ml.anomaly.isolation_forest import detect_anomalies
+
+    new, old = [], []
+    for s in seeds:
+        today = _make_normal_population(N_NORMAL, seed=1000 * s + 999)
+        new.append(sum(r["is_anomaly"] for r in detect_anomalies(today, _history(8, s), seed=s)))
+        old.append(sum(r["is_anomaly"] for r in run_isolation_forest(today, contamination=_PRODUCTION_CONTAMINATION)))
+    return float(np.mean(new)), float(np.mean(old))
+
+
+def conformal_power(seed: int = SEED) -> tuple[float, float, int]:
+    """(severe recall, moderate recall, false alerts among normals) on an anomalous day."""
+    from ml.anomaly.isolation_forest import detect_anomalies
+
+    today = _make_normal_population(N_NORMAL, seed=seed + 7) + [
+        _fv(emp_id, **kw) for emp_id, _, _, kw in INJECTED_ANOMALIES
+    ]
+    res = {r["employee_id"]: r for r in detect_anomalies(today, _history(8, seed), seed=seed)}
+    severe = [e for e, _, rank, _ in INJECTED_ANOMALIES if rank == 2]
+    moderate = [e for e, _, rank, _ in INJECTED_ANOMALIES if rank == 1]
+    false_alerts = sum(r["is_anomaly"] for e, r in res.items() if e.startswith("NORMAL_"))
+    return (
+        float(np.mean([res[e]["is_anomaly"] for e in severe])),
+        float(np.mean([res[e]["is_anomaly"] for e in moderate])),
+        false_alerts,
+    )
+
+
+def test_conformal_quiet_week_raises_almost_no_alerts():
+    new, old = conformal_null()
+    assert new <= 0.3
+    assert old >= 5  # legacy contamination flags 5 % of any population
+
+
+def test_conformal_catches_severe_archetypes_without_false_alerts():
+    severe, _, false_alerts = conformal_power()
+    assert severe == 1.0
+    assert false_alerts <= 1
+
+
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
 
@@ -665,6 +724,12 @@ def main() -> None:
     print(f"\n  Generating dataset ({N_NORMAL} normal + {len(INJECTED_ANOMALIES)} anomalies) ...")
     report = run_evaluation(seed=SEED)
     print_report(report)
+    new, old = conformal_null()
+    severe, moderate, fa = conformal_power()
+    print("  PRODUCTION PATH (conformal vs 8 weeks of history, BH 10 %)")
+    print(f"    quiet week: {new:.2f} alerts/run (legacy contamination rule: {old:.2f})")
+    print(f"    anomalous day: severe recall {severe:.0%}, moderate {moderate:.0%}, false alerts {fa}")
+    print()
     failed = [label for label, passed, _ in _assertion_checks(report) if not passed]
     if failed:
         print(f"  {len(failed)} check(s) FAILED:")

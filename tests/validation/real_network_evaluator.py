@@ -16,6 +16,9 @@ INJECTED into real histories:
     entropy flag    each person's 4 weeks shuffled            → no real trend
     sudden drop     each person's 12 weeks shuffled           → no real drop
     power           withdrawal injected into real histories
+    peer exposure   random people "depart"                   → no real contagion
+    equity          random demographic labels                 → no real gap
+    churn           people who stop appearing = departures    → real (noisy) labels
 
 Skipped when the data is absent:  python scripts/fetch_external_data.py
 Measured values at the time of writing are in brackets next to each gate.
@@ -292,3 +295,134 @@ def test_population_alerts_still_catch_injected_stops(events):
             caught += len(injected & set(hits))
             total += len(injected)
     assert total > 0 and caught / total >= 0.25, f"caught {caught}/{total}"
+
+
+# ─── churn and peer exposure on real departure-like events ────────────────────
+#
+# The temporal network has no HR records, but 331 people stop appearing for
+# good (last e-mail ≥ 60 days before the end, active ≥ 90 days before that).
+# Treating that as a departure gives real, noisy labels.
+
+
+def _departures(events):
+    from datetime import date, timedelta
+
+    end = int(events[:, 2].max())
+    last: dict[int, int] = {}
+    first: dict[int, int] = {}
+    for s_, t_, d in events:
+        for p_ in (int(s_), int(t_)):
+            last[p_] = max(last.get(p_, -1), int(d))
+            first[p_] = min(first.get(p_, 10**9), int(d))
+    base = date(2020, 1, 1)
+    deps = {
+        str(p_): base + timedelta(days=last[p_]) for p_ in last if last[p_] < end - 60 and last[p_] - first[p_] > 90
+    }
+    return deps, base, end
+
+
+@pytest.fixture(scope="module")
+def churn_examples(events):
+    import collections
+    from datetime import timedelta
+
+    from ml.churn.contagion import peer_exposure
+
+    deps, base, end = _departures(events)
+    X, y, anchors = [], [], []
+    for A in range(120, end - 150, 14):
+        w = events[(events[:, 2] > A - 90) & (events[:, 2] <= A)]
+        sent = collections.Counter(map(str, w[:, 0]))
+        recent = collections.Counter(map(str, w[w[:, 2] > A - 30][:, 0]))
+        contacts = collections.defaultdict(set)
+        for s_, t_, _ in w:
+            contacts[str(s_)].add(int(t_))
+        as_of = base + timedelta(days=A)
+        expo = peer_exposure([(str(a), str(b), 1.0) for a, b, _ in w], deps, as_of)
+        for e in sent:
+            left = deps.get(e)
+            if left is not None and left <= as_of:
+                continue
+            X.append([np.log1p(sent[e]), np.log1p(recent[e]), np.log1p(len(contacts[e])), expo.get(e, 0.0)])
+            y.append(int(left is not None and left <= as_of + timedelta(days=90)))
+            anchors.append(as_of.toordinal())
+    return np.array(X), np.array(y), np.array(anchors)
+
+
+def test_churn_model_out_of_time_on_real_departures(churn_examples):
+    """Point-in-time features → purged out-of-time test.  Honest result: weak ranking
+    [AUROC 0.57], no worse than the base rate [Brier skill +0.004], and under-called
+    probabilities because the departure rate drifted from 1.1 % (train) to 5.9 %
+    (test) [ECE 0.046].  This is why the trainer reports held-out ECE and the DAG
+    warns above 0.05: calibration is only as good as the base rate is stable."""
+    from ml.churn.model import fit_churn_model
+
+    X, y, a = churn_examples
+    m = fit_churn_model(X, y, a, horizon_days=90)
+    test = m.metrics["test"]
+    assert test["auroc"] >= 0.53
+    assert test["brier_skill"] >= 0.0
+    assert test["ece"] <= 0.06
+
+
+def test_peer_exposure_adds_nothing_on_real_departures(churn_examples):
+    """Finding, not a design target: on this network losing collaborators does not
+    predict leaving [AUROC with exposure 0.566 vs 0.560 without; Brier identical].
+    The peer-departure alert is therefore worded as a handover/workload check-in,
+    not as a churn prediction."""
+    from ml.churn.model import fit_churn_model
+
+    X, y, a = churn_examples
+    with_e = fit_churn_model(X, y, a, horizon_days=90).metrics["test"]
+    without = fit_churn_model(X[:, :3], y, a, horizon_days=90).metrics["test"]
+    assert abs(with_e["auroc"] - without["auroc"]) < 0.03
+
+
+def test_peer_exposure_null_on_real_email(events):
+    """20 random people 'depart' in the last 90 days of real e-mail.  New test: false
+    alerts per run [0.2]; old unweighted 30 %-of-neighbours rule [23.3]."""
+    import collections
+    from datetime import timedelta
+
+    from ml.churn.contagion import select_peer_exposure
+
+    deps_, base, end = _departures(events)
+    w = events[events[:, 2] > end - 90]
+    edges = [(str(a), str(b), 1.0) for a, b, _ in w]
+    people = sorted({e for a, b, _ in edges for e in (a, b)})
+    nbrs = collections.defaultdict(set)
+    for a, b, _ in edges:
+        nbrs[a].add(b)
+        nbrs[b].add(a)
+    as_of = base + timedelta(days=end)
+    new, old = [], []
+    for seed in range(10):
+        rng = np.random.default_rng(seed)
+        gone = set(rng.choice(people, 20, replace=False))
+        deps = {g: as_of - timedelta(days=int(rng.integers(0, 90))) for g in gone}
+        new.append(sum(r.flagged for r in select_peer_exposure(edges, deps, as_of, seed=seed).values()))
+        old.append(sum(1 for e, ns in nbrs.items() if e not in gone and len(ns & gone) / len(ns) > 0.3))
+    assert np.mean(new) <= 0.5, new
+    assert np.mean(old) >= 10 * max(np.mean(new), 0.1), old
+
+
+def test_equity_null_on_real_network(static_graph):
+    """Random demographic labels on the real network's betweenness and degree.
+    New test: flags per run [0.2]; old median-of-medians rule [2.5]."""
+    from graph.metrics import compute_betweenness
+    from tests.validation import equity_evaluator as eq
+
+    nodes = list(static_graph)
+    bc = compute_betweenness(static_graph)
+    metrics = {
+        "betweenness": np.array([bc[n] for n in nodes]),
+        "degree": np.array([static_graph.in_degree(n) + static_graph.out_degree(n) for n in nodes], dtype=float),
+    }
+    new, old = [], []
+    for seed in range(10):
+        rng = np.random.default_rng(seed)
+        labels = {d: rng.choice(v, len(nodes), p=p_) for d, (v, p_) in eq.DIMS.items()}
+        old.append(len(eq.old_rule_flags(labels, metrics)))
+        new.append(len(eq.new_flags(labels, metrics, seed=seed, n_perm=2000)))
+    assert np.mean(new) <= 0.3, new
+    assert np.mean(old) > 4 * max(np.mean(new), 0.1), old

@@ -54,7 +54,7 @@ def get_centrality_distribution(
         cur.execute(
             """
             SELECT group_value, metric, median_score, p25_score, p75_score,
-                   member_count, below_org_median
+                   member_count, below_org_median, mean_ratio, effect_size, p_value, q_value
             FROM structural_equity_scores
             WHERE dimension = %s AND metric = %s AND computed_at = %s
             ORDER BY median_score DESC NULLS LAST
@@ -81,6 +81,10 @@ def get_centrality_distribution(
                 "p75_score": round(float(r["p75_score"]), 6) if r["p75_score"] is not None else None,
                 "member_count": int(r["member_count"] or 0),
                 "below_org_median": bool(r["below_org_median"]),
+                "mean_ratio": _round_or_none(r.get("mean_ratio")),
+                "effect_size": _round_or_none(r.get("effect_size")),
+                "p_value": _round_or_none(r.get("p_value")),
+                "q_value": _round_or_none(r.get("q_value")),
             }
             for r in rows
         ],
@@ -200,3 +204,7 @@ def import_demographics(
 
     conn.commit()
     return {"imported": imported, "skipped": skipped}
+
+
+def _round_or_none(v, digits: int = 4):
+    return round(float(v), digits) if v is not None else None

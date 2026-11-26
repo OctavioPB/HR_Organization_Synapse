@@ -59,6 +59,8 @@ from datetime import date, timedelta
 
 import numpy as np
 
+from ml.stats import benjamini_hochberg  # re-exported; shared with equity and contagion
+
 SUDDEN_WITHDRAWAL_ALPHA = float(os.environ.get("SUDDEN_WITHDRAWAL_ALPHA", "0.001"))
 SUDDEN_WITHDRAWAL_MIN_DROP = float(os.environ.get("SUDDEN_WITHDRAWAL_MIN_DROP", "0.5"))
 SUDDEN_WITHDRAWAL_MIN_WEEKLY = float(os.environ.get("SUDDEN_WITHDRAWAL_MIN_WEEKLY", "7"))
@@ -149,20 +151,6 @@ def detect_activity_drop(
         p_value=p_value,
         recent_weeks=recent_weeks,
     )
-
-
-def benjamini_hochberg(p_values, q: float) -> np.ndarray:
-    """Boolean mask of discoveries controlling the false-discovery rate at *q*."""
-    p = np.asarray(p_values, dtype=float)
-    n = len(p)
-    if n == 0:
-        return np.zeros(0, dtype=bool)
-    order = np.argsort(p)
-    passed = p[order] <= q * np.arange(1, n + 1) / n
-    hits = np.zeros(n, dtype=bool)
-    if passed.any():
-        hits[order[: int(np.max(np.where(passed)[0])) + 1]] = True
-    return hits
 
 
 def select_sudden_withdrawals(

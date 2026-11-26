@@ -151,6 +151,30 @@ On the real SNAP email-Eu-core network (every one of 986 people removed in turn)
 
 **Finding:** at N=300 with 30 training positives, the 3-feature logistic regression outperforms the graph model by 10.6pp AUROC. Individual features (tenure, activity decay, entropy trend) are strong enough that the graph's social-contagion signal is not decisive at this scale. Both models exceed the random floor (AUROC 0.50) and the trivial PR-AUC floor (churn rate = 18.9%). The GNN architecture is expected to show advantage when churn labels cover N > 500 employees across ≥ 3 observation cohorts. Until then: deploy the baseline.
 
+### Churn model — calibrated production model
+
+The deployed model is a logistic regression on **point-in-time** features read from a daily feature log, evaluated on a purged out-of-time fold ([MATH_MODEL §9.1](docs/MATH_MODEL.md#91-calibrated-churn-model-default)). The graph model is a challenger and is adopted only if it beats this one on held-out data.
+
+| Held-out | Forward-simulated org (1,500 people, 30 anchors) | Real e-mail (331 people who stop appearing) |
+|---|---|---|
+| AUROC | 0.81 | 0.57 |
+| Calibration error (ECE) | **0.011** (class-weighted: 0.23) | 0.046: base rate drifted 1.1 % → 5.9 % |
+| Brier skill vs. base rate | +0.17 | +0.004 |
+| Shuffled labels | AUROC 0.52 | — |
+
+**Finding:** probabilities are calibrated when the departure rate is stable and drift when it isn't. The training DAG logs held-out ECE and warns above 0.05.
+
+### Peer departures, structural equity — false alerts when nothing is happening
+
+| Detector | Null (no real signal) | Old rule | New test | Power |
+|---|---|---|---|---|
+| Peer departures | Random departures, synthetic org | 2.3 alerts/run | **0.00** | Team losing half its members: 40 % of the rest flagged |
+| Peer departures | Random departures, real e-mail | 23.3 alerts/run | **0.2** | — |
+| Structural equity | Random labels, 120 people | 1.35 flags/run | **0.10** | Degree −40 %: 100 % · betweenness −60 %: 80 % (old rule 0 %) |
+| Structural equity | Random labels, real network | 2.5 flags/run | **0.2** | — |
+
+On real e-mail, peer exposure **does not** predict leaving (AUROC 0.566 with it vs 0.560 without). The alert is worded as a handover check-in, not a churn prediction.
+
 ---
 
 ### Anomaly detection — Isolation Forest
@@ -181,6 +205,13 @@ Group medians: normal 0.118 · moderate 0.544 · severe 0.776.
 
 **Hardest archetype: bridge collapse** (severe score 0.626, rank 6). The current betweenness and degree values are moderate — the anomaly lives in the 7-day delta features (`betweenness_delta_7d = −0.54`). At production contamination (5%, ~5 flags), entropy-collapse-moderate and bridge-collapse-moderate are missed. Raising contamination to 8% recovers both; the trade-off is more false positives from the normal tail.
 
+
+**Production path (since November 2026):** alerts no longer come from a fixed 5 % contamination share. Today's profiles get **conformal p-values** against the org's last 8 weeks of logged feature vectors, with Benjamini–Hochberg at 10 % ([MATH_MODEL §8](docs/MATH_MODEL.md#8-anomaly-detection-isolation-forest)).
+
+| Day | Fixed 5 % contamination | Conformal + BH |
+|---|---|---|
+| Quiet week (100 normal people) | 5.00 alerts | **0.10** alerts |
+| 8 planted archetypes | 6 of 8 caught | **8 of 8** caught, 0 false alerts |
 ---
 
 ## Architecture

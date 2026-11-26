@@ -45,6 +45,12 @@ This document records every quantitative decision in the platform: why each form
 - §5.3: the two-corner robustness bracket is replaced by **P(critical)** from an event bootstrap plus Dirichlet weight jitter; `critical` requires P(critical) ≥ 0.9
 - §4: sudden-withdrawal alerts use calibrated p-values and Benjamini–Hochberg FDR control across employees (0.00 false alerts per run on a real-data null)
 
+**CHANGELOG v3.5 (Nov 2026 — statistical tests for churn, peer departures, equity, anomalies; MATH_MODEL.md §8–§10.5):**
+- §7: churn default is a **calibrated logistic regression** on point-in-time features from a daily feature log (migration 019), with a purged temporal split. The ChurnGAT trainer could not train (one label date → empty training fold), never saw leavers, and lost to the baseline; it is now a challenger that must beat the baseline on held-out data. Tiers are relative to the base rate
+- §7.4.1: peer contagion = tie-share exposure with 45-day half-life over the retained 90 days, permutation test + BH, 30 % undiscounted-share floor. The old rule could not fire (departed peers were not in the active-only graph). On real e-mail, exposure does **not** predict departure; the alert is a handover check-in
+- §11.1: equity flag = ratio of means vs. **everyone else** < 0.8 **and** BH q ≤ 0.10 from a label-permutation test. The old reference (median of group medians) was wrong, never fired on betweenness, and raised 1.35 chance flags per run on a 120-person org
+- §10 (anomaly): Isolation Forest alerts use conformal p-values against the org's last 8 weeks + BH, instead of `contamination = 0.05` (which flagged 5 % of any org)
+
 ---
 
 ## 1. Notation

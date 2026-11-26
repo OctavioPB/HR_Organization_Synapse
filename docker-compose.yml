@@ -37,6 +37,11 @@ x-airflow-common: &airflow-common
     SPOF_DELTA: ${SPOF_DELTA:-0.125}
     SPOF_UNCERTAINTY_SAMPLES: ${SPOF_UNCERTAINTY_SAMPLES:-30}
     SUDDEN_WITHDRAWAL_FDR: ${SUDDEN_WITHDRAWAL_FDR:-0.10}
+    CHURN_MODEL: ${CHURN_MODEL:-logreg}
+    PEER_CHURN_WINDOW_DAYS: ${PEER_CHURN_WINDOW_DAYS:-90}
+    PEER_CONTAGION_FDR: ${PEER_CONTAGION_FDR:-0.10}
+    EQUITY_FDR: ${EQUITY_FDR:-0.10}
+    IF_FDR: ${IF_FDR:-0.10}
     # Pip-installable project dependencies (pre-baked into custom image in production)
     _PIP_ADDITIONAL_REQUIREMENTS: >-
       networkx>=3.0

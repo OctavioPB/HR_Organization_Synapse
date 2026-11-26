@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 _RAW_EVENTS_RETENTION_DAYS = 90
 _GRAPH_SNAPSHOTS_RETENTION_MONTHS = 12  # stored as 365 days for simplicity
 _GRAPH_SNAPSHOTS_RETENTION_DAYS = 365
+# Point-in-time churn features: a year of anchors plus the 90-day label horizon.
+_CHURN_FEATURE_LOG_RETENTION_DAYS = 455
 
 # ─── Data catalogue ───────────────────────────────────────────────────────────
 
@@ -64,6 +66,16 @@ _DATA_CATEGORIES: list[dict[str, Any]] = [
         "legal_basis": "legitimate_interest",
         "fields": ["churn_prob", "risk_tier", "model_version"],
         "excludes_content": False,
+    },
+    {
+        "table": "churn_feature_log",
+        "description": "Point-in-time model features per employee per day (graph metrics, entropy, peer exposure)",
+        "personal_data": True,
+        "sensitivity": "medium",
+        "retention_days": _CHURN_FEATURE_LOG_RETENTION_DAYS,
+        "legal_basis": "legitimate_interest",
+        "fields": ["feature_date", "feature_version", "features"],
+        "excludes_content": True,
     },
     {
         "table": "employee_knowledge",
@@ -145,7 +157,7 @@ def _count_table(table_name: str, conn) -> int:
 
 
 def run_retention_purge(conn, triggered_by: str = "api") -> list[dict[str, Any]]:
-    """Delete rows that exceed retention policy from raw_events and graph_snapshots.
+    """Delete rows that exceed retention policy (raw_events, graph_snapshots, churn_feature_log).
 
     Returns a list of purge result dicts (one per table) with rows_deleted and cutoff_date.
     """
@@ -153,10 +165,12 @@ def run_retention_purge(conn, triggered_by: str = "api") -> list[dict[str, Any]]
 
     raw_cutoff = date.today() - timedelta(days=_RAW_EVENTS_RETENTION_DAYS)
     graph_cutoff = date.today() - timedelta(days=_GRAPH_SNAPSHOTS_RETENTION_DAYS)
+    feature_cutoff = date.today() - timedelta(days=_CHURN_FEATURE_LOG_RETENTION_DAYS)
 
     tasks = [
         ("raw_events", "ts::date", raw_cutoff),
         ("graph_snapshots", "snapshot_date", graph_cutoff),
+        ("churn_feature_log", "feature_date", feature_cutoff),
     ]
 
     for table, date_col, cutoff in tasks:

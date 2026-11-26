@@ -81,7 +81,7 @@ function EquityChart({ data, metric }) {
       {/* Legend */}
       <div style={{ display: "flex", gap: "16px", marginTop: "12px", fontFamily: "var(--fb)", fontSize: "12px", color: "var(--mid)" }}>
         <span><span style={{ display: "inline-block", width: "10px", height: "10px", background: "#003366", borderRadius: "2px", marginRight: "6px" }} />On track</span>
-        <span><span style={{ display: "inline-block", width: "10px", height: "10px", background: "#E03448", borderRadius: "2px", marginRight: "6px" }} />Below 80% of org median</span>
+        <span><span style={{ display: "inline-block", width: "10px", height: "10px", background: "#E03448", borderRadius: "2px", marginRight: "6px" }} />Below 80% of everyone else's average, not plausibly chance</span>
       </div>
 
       {/* Below-median groups alert */}
@@ -89,7 +89,7 @@ function EquityChart({ data, metric }) {
         <div style={{ marginTop: "16px", background: "#FDEAEA", borderLeft: "3px solid #E03448", borderRadius: "0 8px 8px 0", padding: "12px 16px" }}>
           <div style={{ fontFamily: "var(--fb)", fontSize: "13px", color: "#7A1020", fontWeight: 600 }}>Investigation trigger</div>
           <div style={{ fontFamily: "var(--fb)", fontSize: "13px", color: "#7A1020", marginTop: "4px" }}>
-            {data.groups.filter(g => g.below_org_median).map(g => g.group_value).join(", ")} — below 80% of the organisational median for {metric}. This is a heuristic flag for qualitative human review of whether structural barriers exist — not evidence of discrimination or a legal determination. A possible response is deliberate cross-functional assignments or bridging-role investments for this group.
+            {data.groups.filter(g => g.below_org_median).map(g => g.group_value).join(", ")} — average {metric} below 80% of everyone else's, and a permutation test says the gap is unlikely to be chance (false-discovery rate 10% across all groups tested). This is a heuristic flag for qualitative human review of whether structural barriers exist — not evidence of discrimination or a legal determination. A possible response is deliberate cross-functional assignments or bridging-role investments for this group.
           </div>
         </div>
       )}

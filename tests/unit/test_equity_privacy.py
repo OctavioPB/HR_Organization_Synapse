@@ -80,19 +80,24 @@ def test_router_never_leaks_suppressed_labels_or_stats(client_with):
     assert "0.999" not in text
 
 
-def test_task_filters_small_groups_in_sql():
-    """The aggregation query itself must carry the HAVING guard and the threshold param."""
+def test_task_never_persists_small_groups():
+    """Rows for a group below MIN_GROUP_SIZE must never be written."""
+    people = [
+        {"gender_group": "big", "tenure_band": "1-3y", "level_band": "ic", "betweenness": 0.01 * i, "degree": i}
+        for i in range(12)
+    ] + [
+        {"gender_group": "tiny", "tenure_band": "1-3y", "level_band": "ic", "betweenness": 0.5, "degree": 3}
+        for _ in range(MIN_GROUP_SIZE - 1)
+    ]
     cur = MagicMock()
-    cur.fetchone.return_value = {"cnt": 10}
-    cur.fetchall.return_value = []
+    cur.fetchone.return_value = {"cnt": len(people)}
+    cur.fetchall.return_value = people
     conn = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
 
     task_compute_equity("2026-06-25", conn)
 
-    agg_calls = [c for c in cur.execute.call_args_list if "PERCENTILE_CONT" in c.args[0]]
-    assert agg_calls, "aggregation query was not executed"
-    for call in agg_calls:
-        sql, params = call.args
-        assert "HAVING COUNT(*) >= %s" in sql
-        assert params[-1] == MIN_GROUP_SIZE
+    inserts = [c.args[1] for c in cur.execute.call_args_list if "INSERT INTO structural_equity_scores" in c.args[0]]
+    written_groups = {params[1] for params in inserts}
+    assert "tiny" not in written_groups
+    assert "big" not in written_groups  # a single reportable group has no "everyone else" to compare with
