@@ -58,10 +58,32 @@ logger = logging.getLogger(__name__)
 # ─── Metric computation ───────────────────────────────────────────────────────
 
 
-def compute_betweenness(G: nx.DiGraph) -> dict[str, float]:
-    """Compute normalised betweenness centrality on the directed graph.
+def to_undirected_summed(G: nx.DiGraph) -> nx.Graph:
+    """Undirected projection whose edge weight is w(u,v) + w(v,u).
 
-    Uses edge weights (higher weight = shorter path via weight inversion).
+    ``nx.DiGraph.to_undirected()`` keeps the attributes of whichever direction
+    it visits last, silently discarding the other direction's weight; for a
+    collaboration graph the tie strength is the *total* interaction volume.
+    """
+    U = nx.Graph()
+    U.add_nodes_from(G.nodes(data=True))
+    for u, v, data in G.edges(data=True):
+        w = float(data.get("weight", 1.0))
+        if U.has_edge(u, v):
+            U[u][v]["weight"] += w
+        else:
+            U.add_edge(u, v, weight=w)
+    return U
+
+
+def compute_betweenness(G: nx.DiGraph) -> dict[str, float]:
+    """Normalised betweenness centrality on the undirected projection of G.
+
+    Undirected (Decisions.md §6): knowledge flows A → B → C through B whoever
+    initiated each tie.  Tie strength = w(u,v) + w(v,u); path cost = 1/strength,
+    so frequent collaborators are "closer".  Adopted Nov 2026 on real-network
+    evidence: on SNAP email-Eu-core, undirected BC tracks measured removal damage
+    better than directed (Spearman 0.87 vs 0.86 raw; SPOF 0.85 vs 0.81).
     Returns 0.0 for all nodes in graphs with fewer than 3 nodes.
 
     For graphs larger than BETWEENNESS_EXACT_THRESHOLD nodes, uses Brandes
@@ -79,9 +101,9 @@ def compute_betweenness(G: nx.DiGraph) -> dict[str, float]:
         return {node: 0.0 for node in G.nodes()}
 
     # Invert weights so higher interaction frequency = shorter path
-    G_inv = G.copy()
-    for u, v, data in G_inv.edges(data=True):
-        G_inv[u][v]["inv_weight"] = 1.0 / max(data.get("weight", 1.0), 1e-9)
+    G_inv = to_undirected_summed(G) if G.is_directed() else G.copy()
+    for _u, _v, data in G_inv.edges(data=True):
+        data["inv_weight"] = 1.0 / max(data.get("weight", 1.0), 1e-9)
 
     if n > BETWEENNESS_EXACT_THRESHOLD:
         k = min(n, BETWEENNESS_K_PIVOTS)

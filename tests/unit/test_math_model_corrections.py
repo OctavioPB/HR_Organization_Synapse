@@ -12,7 +12,6 @@ Each test pins one defect that was found by reading the formulas against the cod
 from __future__ import annotations
 
 import importlib
-import itertools
 from datetime import date
 from unittest.mock import MagicMock
 
@@ -189,27 +188,102 @@ class TestHomophilyIndex:
         assert _count_silos(G) == len(detect_silos(G)) == 2
 
 
-# ─── SPOF robustness bracket ──────────────────────────────────────────────────
+# ─── SPOF uncertainty (v3.4: event bootstrap + weight jitter) ─────────────────
 
 
-class TestPerturbationCorners:
-    def test_hi_corner_matches_spec(self):
-        from graph.risk_scorer import _WEIGHTS_HI
+def _bridge_org(seed: int = 0):
+    """Two 12-person departments, dense inside, joined only through 'bridge'.
 
-        assert [round(_WEIGHTS_HI[k], 3) for k in ("alpha", "beta", "gamma", "delta")] == [0.5, 0.3, 0.15, 0.05]
+    Returns (G, raw_edges) with raw_edges in graph.builder's tuple format.
+    """
+    import random
 
-    def test_lo_corner_keeps_strict_ordering(self):
-        """The spec's lo (0.35, 0.25, 0.25, 0.15) ties β and γ; ours keeps α > β > γ > δ."""
-        from graph.risk_scorer import _WEIGHTS_LO
+    from graph.builder import build_graph
 
-        w = [round(_WEIGHTS_LO[k], 3) for k in ("alpha", "beta", "gamma", "delta")]
-        assert w == [0.35, 0.26, 0.24, 0.15]
-        assert all(a > b for a, b in itertools.pairwise(w))
+    rng = random.Random(seed)
+    a = [f"a{i}" for i in range(12)]
+    b = [f"b{i}" for i in range(12)]
+    rows = []
+    for grp, dept in ((a, "A"), (b, "B")):
+        for _ in range(400):
+            u, v = rng.sample(grp, 2)
+            rows.append((u, v, 1.0, dept, dept))
+    for _ in range(40):
+        rows.append(("bridge", rng.choice(a), 1.0, "C", "A"))
+        rows.append(("bridge", rng.choice(b), 1.0, "C", "B"))
+    return build_graph(rows), rows
 
-    def test_bracket_wider_than_old_proportional_one(self):
-        from graph.risk_scorer import _WEIGHTS_HI, _WEIGHTS_LO
 
-        assert _WEIGHTS_HI["alpha"] - _WEIGHTS_LO["alpha"] >= 0.15 - 1e-9  # old ±15 % gave 0.12
+class TestSpofUncertainty:
+    def test_clear_bridge_is_robust_critical(self):
+        from graph.metrics import compute_betweenness, compute_clustering
+        from graph.risk_scorer import score_all_with_bands
+
+        G, rows = _bridge_org()
+        bands = score_all_with_bands(G, compute_betweenness(G), compute_clustering(G), raw_edges=rows, n_samples=20)
+        assert bands["bridge"]["score"] >= 0.7
+        assert bands["bridge"]["p_critical"] >= 0.9
+        assert bands["bridge"]["robust_critical"]
+
+    def test_interval_brackets_central_score_and_is_ordered(self):
+        from graph.metrics import compute_betweenness, compute_clustering
+        from graph.risk_scorer import score_all_with_bands
+
+        G, rows = _bridge_org()
+        bands = score_all_with_bands(G, compute_betweenness(G), compute_clustering(G), raw_edges=rows, n_samples=20)
+        for d in bands.values():
+            assert 0.0 <= d["score_lo"] <= d["score_hi"] <= 1.0
+            assert 0.0 <= d["p_critical"] <= 1.0
+
+    def test_bootstrap_widens_uncertainty_vs_weights_only(self):
+        """Data noise is the dominant uncertainty source; the bootstrap must surface it."""
+        import numpy as np
+
+        from graph.metrics import compute_betweenness, compute_clustering
+        from graph.risk_scorer import score_all_with_bands
+
+        G, rows = _bridge_org()
+        bc, cl = compute_betweenness(G), compute_clustering(G)
+        weights_only = score_all_with_bands(G, bc, cl, n_samples=20)
+        with_data = score_all_with_bands(G, bc, cl, raw_edges=rows, n_samples=20)
+        width = lambda b: np.mean([d["score_hi"] - d["score_lo"] for d in b.values()])  # noqa: E731
+        assert width(with_data) > width(weights_only)
+
+    def test_deterministic_for_a_given_seed(self):
+        from graph.metrics import compute_betweenness, compute_clustering
+        from graph.risk_scorer import score_all_with_bands
+
+        G, rows = _bridge_org()
+        bc, cl = compute_betweenness(G), compute_clustering(G)
+        a = score_all_with_bands(G, bc, cl, raw_edges=rows, n_samples=10, seed=7)
+        b = score_all_with_bands(G, bc, cl, raw_edges=rows, n_samples=10, seed=7)
+        assert a == b
+
+
+def test_betweenness_is_undirected():
+    """v3.4: a node that only RECEIVES from both sides is still the bridge between them."""
+    import networkx as nx
+
+    from graph.metrics import compute_betweenness
+
+    G = nx.DiGraph()
+    G.add_edge("left", "mid", weight=1.0)
+    G.add_edge("right", "mid", weight=1.0)  # mid never initiates
+    G.add_edge("left2", "left", weight=1.0)
+    G.add_edge("right2", "right", weight=1.0)
+    bc = compute_betweenness(G)
+    assert bc["mid"] > 0 and bc["mid"] == max(bc.values())
+
+
+def test_undirected_projection_sums_both_directions():
+    import networkx as nx
+
+    from graph.metrics import to_undirected_summed
+
+    G = nx.DiGraph()
+    G.add_edge("a", "b", weight=2.0)
+    G.add_edge("b", "a", weight=3.0)
+    assert to_undirected_summed(G)["a"]["b"]["weight"] == 5.0
 
 
 # ─── Config names ─────────────────────────────────────────────────────────────

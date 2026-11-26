@@ -135,13 +135,13 @@ function ArchDiagram() {
 
 /* ─── SPOF formula visual ───────────────────────────────────────────────────── */
 const SPOF_COMPONENTS = [
-  { id: "bc", weight: 0.40, color: "#E03448", label: "Bridge Score",       greek: "α = 0.40",
+  { id: "bc", weight: 0.50, color: "#E03448", label: "Bridge Score",       greek: "α = 0.50",
     desc: "Betweenness centrality — how often this person is the shortest path between two colleagues who don't otherwise connect." },
-  { id: "cd", weight: 0.30, color: "#F07020", label: "Cross-Dept Reach",   greek: "β = 0.30",
+  { id: "cd", weight: 0.325, color: "#F07020", label: "Cross-Dept Reach",  greek: "β = 0.325",
     desc: "Fraction of collaboration links that cross department boundaries. Employees who bridge silos score higher." },
-  { id: "cl", weight: 0.20, color: "#336699", label: "Clustering Inverse", greek: "γ = 0.20",
+  { id: "cl", weight: 0.05, color: "#336699", label: "Clustering Inverse", greek: "γ = 0.05",
     desc: "Inverse of the clustering coefficient — solo connectors (whose contacts don't know each other) score higher than members of tight-knit teams." },
-  { id: "et", weight: 0.10, color: "#C9A84C", label: "Entropy Trend",      greek: "δ = 0.10",
+  { id: "et", weight: 0.125, color: "#C9A84C", label: "Entropy Trend",     greek: "δ = 0.125",
     desc: "Rate of decline in interaction diversity. A shrinking network signals early-stage disengagement — the system detects it weeks before HR would." },
 ];
 
@@ -193,7 +193,7 @@ function SpofFormula() {
         borderRadius: 8, borderLeft: "3px solid var(--gold)",
       }}>
         <code style={{ fontFamily: "monospace", fontSize: 12, color: "var(--dark)" }}>
-          SPOF = 0.40 × betweenness + 0.30 × cross_dept_edges + 0.20 × (1 − clustering) + 0.10 × entropy_trend
+          SPOF = 0.50 × betweenness + 0.325 × cross_dept_edges + 0.05 × (1 − clustering) − 0.125 × entropy_trend   (each as a rank percentile)
         </code>
         <p style={{ fontFamily: FB, fontSize: 11, color: "var(--mid)", margin: "6px 0 0" }}>
           Weights are configurable via environment variables. Scores normalize to [0, 1].

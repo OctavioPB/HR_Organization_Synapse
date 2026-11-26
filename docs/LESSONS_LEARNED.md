@@ -90,9 +90,15 @@ Status: **✅ applied** · **🟡 partially applied** · **🔴 open**
 
 **Changed:** the sudden-withdrawal test now compares recent weeks with a personal negative-binomial baseline (1.5 % real false alarms). The entropy noise model gained a population-estimated week-to-week variance (real false positives 2.0 %). Both are guarded by `real_network_evaluator.py`, which CI runs when the data is reachable.
 
-### 1.15 A "fix" that matches the spec can still be wrong 🟡
+### 1.15 A "fix" that matches the spec can still be wrong ✅
 **What happened:** Decisions.md says betweenness should be undirected, and the code was directed. Making it undirected halved validation Precision@critical (100 % → 50 %). Undirected betweenness is tiny but nonzero for nearly everyone, and the rank-percentile step stretches those negligible differences into the full 0–1 range.
-**Lesson:** Run the validation suite on every spec reconciliation, and expect two documented choices to interact. Directed betweenness stays until the BC term gets a tail-aware normalization.
+**Lesson:** Run the validation suite on every spec reconciliation, and expect two documented choices to interact.
+**Resolved (v3.4):** the precision drop came from the synthetic generator (bridges defined by who initiates), not from undirected betweenness. On real data undirected was better, and once the weights were refitted to measured removal damage it passed every synthetic gate too. The fix was the weights, not a new normalization. A tail-aware rank transform was tested and helped neither dataset.
+
+### 1.18 Fit the score to the thing it claims to predict ✅
+**What happened:** SPOF claims to measure "damage if this person leaves", and that damage can be measured directly: remove each person and recompute the network. Doing so on 986 real people showed the v2 composite (0.81) tracking damage *worse than raw betweenness alone* (0.87). Its 0.2 clustering weight carried no signal, and the fitted coefficient was −0.06.
+**Lesson:** When the target is observable, even only in a test bed, fit to it instead of reasoning about weights. Then constrain the fit with the domain gates you care about (here, don't flag sole experts or silo members), so the score stays useful rather than merely accurate.
+**Changed:** weights 0.50/0.325/0.05/0.125, chosen by a constrained search over 575 sets. Spearman with damage rose to 0.85 real and 0.57 synthetic. Uncertainty now comes from resampling the data (top-20 retention under resampling is only ≈77 %), not from two arbitrary weight corners.
 
 ---
 
@@ -201,8 +207,8 @@ Also resolved in November 2026: channel weights applied (4.1), org-health compon
 | 2 | **Privacy:** add the consent/active filter to the dashboard edge queries (`fetch_graph_edges`, ego-network edges in `api/db.py`) | 3.5 | S |
 | 3 | Re-run the graph, risk and health DAGs (or re-seed) so stored scores reflect the corrected math | 1.12–1.14 | S |
 | 4 | Apply migration 018 (`sudden_withdrawal` alert type) to existing databases; run `scripts/migrate_tenants.py` for tenant schemas | 1.14 | S |
-| 5 | Adopt undirected betweenness: real-network evidence now favors it (1.17). Fix the synthetic generator's initiator-defined bridges so the synthetic suite agrees | 1.15, 1.17 | M |
-| 5a | SPOF's CDR/clustering/entropy terms add nothing over raw betweenness for predicting removal damage on real data; decide what they are for, or refit the weights (track D) | 1.17 | M |
+| 5 | Backtest SPOF weights on real departures (impact reports) and refit per tenant once there are enough labels: today's weights are fitted to one real network + one synthetic org | 1.18 | L |
+| 5a | Rank tiers flag a roughly fixed share (≈12 %) of any org as critical; find a structure-adaptive rule that works (log-BC MAD outliers did not) | 1.18 | M |
 | 5b | Suppress `sudden_withdrawal` alerts during HRIS-recorded leave (vacations look identical) | 1.17 | S |
 | 6 | Fix and re-enable `test_tenant.py`, `test_compliance.py` | 2.8 | S |
 | 7 | Isolate cache unit tests from a live local Redis (two tests fail when one is running on :6379) | 2.8 | S |

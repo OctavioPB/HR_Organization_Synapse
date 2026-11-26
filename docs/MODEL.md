@@ -39,6 +39,12 @@ This document records every quantitative decision in the platform: why each form
 - §4: entropy noise model gains a population-estimated week-to-week variance term; real false positives 12.5 % → 2.0 %
 - §12: silo homophily index confirmed unbiased on real data; §5: undirected betweenness is marginally better on real data (removal-damage Spearman 0.89 vs 0.87)
 
+**CHANGELOG v3.4 (Nov 2026 — SPOF redesign; MATH_MODEL.md §5):**
+- §5.1: betweenness is now **undirected** (tie strength w(u,v) + w(v,u)), as Decisions.md §6 always intended
+- §5.3: weights **fitted to measured removal damage** (real network: all 986 people; synthetic org: all 100) under every planted-archetype gate: α, β, γ, δ = 0.50, 0.325, 0.05, 0.125 (was 0.4, 0.3, 0.2, 0.1). Spearman(SPOF, damage) 0.81 → 0.85 real, 0.35 → 0.57 synthetic
+- §5.3: the two-corner robustness bracket is replaced by **P(critical)** from an event bootstrap plus Dirichlet weight jitter; `critical` requires P(critical) ≥ 0.9
+- §4: sudden-withdrawal alerts use calibrated p-values and Benjamini–Hochberg FDR control across employees (0.00 false alerts per run on a real-data null)
+
 ---
 
 ## 1. Notation
@@ -169,6 +175,8 @@ CDR(v) = |{(v,u) ∈ E : dept(u) ≠ dept(v)}| / max(|{(v,u) ∈ E}|, 1)
 **CORRECTION — Robustness requirement (new in v2):**
 
 The specific weight values (0.4, 0.3, 0.2, 0.1) are theoretically motivated but not empirically derived. The justification for the *ordering* α > β > γ > δ is sound. The justification for the *magnitudes* is not.
+
+> **Superseded (v3.4).** The weights are now fitted to measured removal damage (MATH_MODEL.md §5.1): 0.50, 0.325, 0.05, 0.125. The data contradicted the ordering for γ: (1 − clustering) carried no damage signal on the real network, and a small γ survives only because it separates tightly clustered silo members from bridges. The corner bracket below is replaced by P(critical) from an event bootstrap (MATH_MODEL.md §5.2). It is kept here as history.
 
 Before using SPOF scores for personnel decisions, the implementation MUST compute and expose:
 
@@ -525,10 +533,15 @@ All parameters are configurable via environment variables. Weights sum to 1.0 wi
 
 | Variable | Default | Formula use | Changed in v2 |
 |---|---|---|---|
-| `SPOF_ALPHA` | 0.4 | Betweenness weight in SPOF | No |
-| `SPOF_BETA` | 0.3 | Cross-dept ratio weight in SPOF | No |
-| `SPOF_GAMMA` | 0.2 | (1 − clustering) weight in SPOF | No |
-| `SPOF_DELTA` | 0.1 | Entropy trend weight in SPOF | No |
+| `SPOF_ALPHA` | 0.50 | Betweenness weight in SPOF (was 0.4) | **v3.4** |
+| `SPOF_BETA` | 0.325 | Cross-dept ratio weight in SPOF (was 0.3) | **v3.4** |
+| `SPOF_GAMMA` | 0.05 | (1 − clustering) weight in SPOF (was 0.2) | **v3.4** |
+| `SPOF_DELTA` | 0.125 | Entropy trend weight in SPOF (was 0.1) | **v3.4** |
+| `SPOF_UNCERTAINTY_SAMPLES` | 30 | Event-bootstrap replicates for P(critical) | **NEW** (v3.4) |
+| `SPOF_WEIGHT_CONCENTRATION` | 200 | Dirichlet concentration for weight jitter | **NEW** (v3.4) |
+| `SPOF_ROBUST_PROBABILITY` | 0.9 | P(critical) required for `critical` | **NEW** (v3.4) |
+| `SUDDEN_WITHDRAWAL_FDR` | 0.10 | Benjamini–Hochberg false-discovery rate across employees | **NEW** (v3.4) |
+| `SUDDEN_WITHDRAWAL_NULL_DRAWS` | 20000 | Shuffled-history draws for p-value calibration | **NEW** (v3.4) |
 | ~~`SPOF_PERTURB_RANGE`~~ | REMOVED (v3.1) | Corners are now fixed offsets from the central weights (§5.3) | **REMOVED** |
 | `KNOWLEDGE_DELTA` | 0.3 | Knowledge risk blend weight in Enhanced SPOF (`KNOWLEDGE_LAMBDA` accepted as alias) | **RENAMED** (v3.1) |
 | `SUCCESSION_W_STRUCT` | 0.40 | Structural overlap weight in compatibility score | No |

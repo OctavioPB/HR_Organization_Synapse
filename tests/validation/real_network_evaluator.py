@@ -109,7 +109,7 @@ def test_real_departments_are_more_inward_than_chance(static_graph):
 def test_spof_tracks_real_removal_damage(static_graph):
     """Remove people one at a time from the real graph and measure the damage
     (path-length increase + lost reachability, 40 sampled sources).  SPOF must rank
-    damage well [Spearman 0.87 on ~100 removals; raw betweenness 0.90]."""
+    damage well [v3.4 weights + undirected BC: 0.85 over all 986 removals, ~0.9 on this\n    ~90-removal sample; v2 weights + directed BC: 0.81 / 0.87]."""
     import networkx as nx
 
     from graph.metrics import compute_betweenness, compute_clustering
@@ -142,7 +142,7 @@ def test_spof_tracks_real_removal_damage(static_graph):
         lost = max(0.0, 1 - cnt / (base_cnt * len(srcs) / len(sources)))
         damage.append(100 * (apl - base_apl) / base_apl + 100 * lost)
     rho = _spearman([spof[n] for n in cand], damage)
-    assert rho >= 0.75, f"Spearman(SPOF, removal damage) = {rho:.2f}"
+    assert rho >= 0.80, f"Spearman(SPOF, removal damage) = {rho:.2f}"
 
 
 # ─── entropy trend on real e-mail ─────────────────────────────────────────────
@@ -241,3 +241,54 @@ def test_sudden_withdrawal_power_on_injected_near_stop(events):
         s2[63:] = rng.binomial(s2[63:].astype(int), 0.1)
         hits.append(detect_activity_drop(s2.reshape(12, 7).sum(1)) is not None)
     assert np.mean(hits) >= 0.40, f"power {np.mean(hits):.0%}"
+
+
+# ─── alert volume: population-level control on real e-mail ────────────────────
+
+
+def _runs(events, min_weekly=7):
+    """One 'run' = everyone eligible in a non-overlapping 12-week window."""
+    daily = rnd.daily_initiated_counts(events)
+    n_days = len(next(iter(daily.values())))
+    for st in range(0, n_days - 84 + 1, 84):
+        yield {
+            str(pid): c[st : st + 84].reshape(12, 7).sum(1).astype(float)
+            for pid, c in daily.items()
+            if c[st : st + 63].sum() / 9 >= min_weekly
+        }
+
+
+def test_population_alerts_on_real_null_are_near_zero(events):
+    """Each person's weeks shuffled → no real drop anywhere.  Calibrated p-values + BH
+    must keep false alerts per run near zero [0.00; raw α = 0.001 gave 1.4–1.7 per run]."""
+    from ml.features.changepoint import select_sudden_withdrawals
+
+    rng = np.random.default_rng(3)
+    alerts = []
+    for run in _runs(events):
+        shuffled = {k: rng.permutation(v) for k, v in run.items()}
+        alerts.append(len(select_sudden_withdrawals(shuffled, null_draws=8000, seed=1)))
+    assert np.mean(alerts) <= 0.25, f"false alerts per run: {alerts}"
+
+
+def test_population_alerts_still_catch_injected_stops(events):
+    """5 % of people get a 90 % drop injected into their real history, pooled over
+    3 seeds (~50 injections per seed swing from 15 % to 49 % alone).  [36 % caught]"""
+    from ml.features.changepoint import select_sudden_withdrawals
+
+    caught = total = 0
+    for seed in (0, 4, 7):
+        rng = np.random.default_rng(seed)
+        for run in _runs(events):
+            injected = set()
+            series = {}
+            for k, v in run.items():
+                w = v.copy()
+                if rng.random() < 0.05:
+                    w[9:] = rng.binomial(w[9:].astype(int), 0.1)
+                    injected.add(k)
+                series[k] = w
+            hits = select_sudden_withdrawals(series, null_draws=8000, seed=seed)
+            caught += len(injected & set(hits))
+            total += len(injected)
+    assert total > 0 and caught / total >= 0.25, f"caught {caught}/{total}"

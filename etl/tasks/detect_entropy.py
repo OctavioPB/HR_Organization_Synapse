@@ -80,7 +80,9 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
     signals = compute_entropy_signals(d, window_days)
     entropy_trends = {e: s.slope for e, s in signals.items()}
     withdrawing = {e for e, s in signals.items() if s.withdrawing}
-    bands = score_all_with_bands(G, betweenness, clustering, entropy_trends=entropy_trends)
+    # raw_edges → event bootstrap: P(critical) reflects how much the window's own
+    # sampling noise could move each person's score (MATH_MODEL.md §5.2).
+    bands = score_all_with_bands(G, betweenness, clustering, entropy_trends=entropy_trends, raw_edges=raw_edges)
     scores = {node: detail["score"] for node, detail in bands.items()}
     write_scores(scores, entropy_trends, d, bands=bands, withdrawing=withdrawing)
 

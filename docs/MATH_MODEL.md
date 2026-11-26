@@ -71,22 +71,20 @@ A GitHub review is therefore worth 4.5 Slack-message-equivalents per event, and 
 
 | Metric | Definition | Implementation detail |
 |---|---|---|
-| **Betweenness** BC(v) | Σ_{s≠v≠t} σ(s,t\|v) / σ(s,t), normalized | Computed on the **directed** graph with path cost `1 / max(w, 1e-9)`, so frequent collaborators are "closer". Exact for n ≤ 500; above that, Brandes k-pivot sampling with k = 200 and `seed = 42` (error ≈ O(1/√k)). Undirected is the documented intent, but it is not yet adopted; see the note below |
+| **Betweenness** BC(v) | Σ_{s≠v≠t} σ(s,t\|v) / σ(s,t), normalized | Computed on the **undirected** projection, with tie strength w(u,v) + w(v,u) and path cost `1 / strength`, so frequent collaborators are "closer". Exact for n ≤ 500; above that, Brandes k-pivot sampling with k = 200 and `seed = 42` (error ≈ O(1/√k)). See the note below |
 | **Degree** d_in, d_out | in/out degree ÷ (n − 1) | NetworkX degree centrality |
 | **Clustering** CC(v) | Triangles through v ÷ possible triangles | On the **undirected** projection |
 | **Community** | Louvain, max modularity | `random_state = 42`; for n > 500, up to 8 parallel trials and the best modularity wins |
 | **Cross-department ratio** CDR(v) | `|{(v,u) ∈ E_out : dept(u) ≠ dept(v)}| / |E_out(v)|` | Counts out-edges (not weights); 0 if v has no out-edges |
 
-> **Why betweenness is still directed.** [Decisions.md §6](Decisions.md) argues for undirected betweenness: knowledge flows A→B→C through B whoever initiated each tie. Switching to undirected (with tie strength w(u,v) + w(v,u)) was implemented and tested. It cut validation **Precision@critical from 100 % to 50 %**, because three NORMAL employees crossed 0.70.
+> **Why undirected, and why it took two attempts.** [Decisions.md §6](Decisions.md) argues for undirected betweenness: knowledge flows A→B→C through B whoever initiated each tie. The code was directed until v3.4.
 >
-> The cause is the rank-percentile step in §5. Directed betweenness is exactly 0 for most people, so they tie at percentile 0. Undirected betweenness is tiny but nonzero for almost everyone, and ranking stretches those negligible differences across the full 0–1 range, so low-activity people with one cross-department tie rank as top brokers.
+> The first switch, made with the old weights, cut *synthetic* Precision@critical from 100 % to 50 %. The synthetic generator defines bridges purely by who *initiates* cross-department contact, so directed betweenness suited it.
 >
-> Undirected betweenness should be revisited together with a tail-aware normalization of the BC term (track B/D), not on its own.
+> On the real SNAP email-Eu-core network, with all 986 people removed in turn, undirected BC tracks measured damage better than directed: raw BC 0.87 vs 0.86 Spearman, and **SPOF 0.85 vs 0.81** once the weights were refitted (§5).
 >
-> **Real-network evidence (Nov 2026).** On the SNAP email-Eu-core network (986 people), measured removal damage was compared with each score over ~100 one-at-a-time removals. Undirected betweenness does *not* hurt there:
->
-> | Score | Spearman with damage |
-> |---|---|
+> The refitted weights also pass every synthetic gate, so v3.4 adopts undirected BC.
+---|---|
 > | SPOF with directed BC (current) | 0.87 |
 > | SPOF with undirected BC | 0.89 |
 > | Raw directed BC | 0.90 |
@@ -171,7 +169,18 @@ Weekly totals remove the weekday cycle, and the person's own baseline variance m
 
 The 9 + 3 weeks, α = 0.001 operating point was chosen from a grid (10 + 2 and 9 + 3 weeks; α 0.001–0.01). Looser settings raise power to 72 % at 4.6 % false alarms.
 
-- **Alerting.** `graph_builder_dag` → `detect_sudden_withdrawal` fires once per employee per recent window, at severity `high` for drops of 80 % or more and `medium` otherwise. The alert text asks HR to check for leave before acting: vacations look exactly like this, and HRIS PTO data could suppress them (open item).
+**Alert-volume control (v3.4).** The test runs on every employee every day, so a fixed per-person α produces false alerts in proportion to headcount. On real e-mail the raw NB p-values are also ≈15× too small, because a 9-week baseline under-states true variability. So:
+1. Calibrate each p-value against a pooled null: every employee's 12 weeks shuffled ≈20,000 times in total (`SUDDEN_WITHDRAWAL_NULL_DRAWS`), giving p_cal = (1 + #{null ≤ p}) / (1 + #null).
+2. Apply **Benjamini–Hochberg** false-discovery-rate control across employees at q = 0.10 (`SUDDEN_WITHDRAWAL_FDR`).
+
+The only assumption is the one the null already makes: with no real drop, a person's weeks are exchangeable.
+
+| Per run (~117 eligible people, real e-mail) | Raw α = 0.001 | Calibrated + BH (current) |
+|---|---|---|
+| False alerts on the shuffled null | 1.4–1.7 | **0.00** |
+| Injected 90 % drops caught | ≈50 % | 36 % (3 seeds pooled) |
+
+- **Alerting.** `graph_builder_dag` → `detect_sudden_withdrawal` fires once per employee per recent window, at severity `high` for drops of 80 % or more and `medium` otherwise. Unshuffled real data still produces alerts for genuine drops, and vacations look exactly like one. The alert text asks HR to check for leave before acting, and HRIS leave dates could suppress these (open item).
 - **Honest limit.** One person's e-mail volume is noisy, so this is a coarse safety net for near-total stops, not an early-warning system for subtle disengagement.
 > **Fixed November 2026: the trend had never been computed on real data.** The bucketing SQL used `EXTRACT(EPOCH FROM (date − date))`. In Postgres `date − date` is an integer, so the query failed, and every stored `entropy_trend` was 0. That left the SPOF δ term, the anomaly detector's entropy features, and health `entropy_risk` without their signal.
 >
@@ -190,35 +199,54 @@ The 9 + 3 weeks, α = 0.001 operating point was chosen from a grid (10 + 2 and 9
 Every component is converted to a percent rank over the population **before** weighting, so each weight controls its nominal share instead of letting the most skewed metric (betweenness) dominate:
 
 ```
-SPOF(v) = clip(  α · R(BC(v))
+SPOF(v) = clip(  α · R(BC(v))                 BC undirected (§3)
                + β · R(CDR(v))
                + γ · R(1 − CC(v))
                − δ · R(entropy_trend(v)) ,  0, 1)
 
-α, β, γ, δ = 0.4, 0.3, 0.2, 0.1        (SPOF_ALPHA … SPOF_DELTA)
+α, β, γ, δ = 0.50, 0.325, 0.05, 0.125        (SPOF_ALPHA … SPOF_DELTA; v2 was 0.4, 0.3, 0.2, 0.1)
 ```
 
-The entropy term subtracts: the most-withdrawing employee has percentile 0 and loses nothing, while the most-engaging employee loses up to δ. The theoretical maximum is therefore α + β + γ = 0.9.
+The entropy term subtracts: the most-withdrawing employee has percentile 0 and loses nothing, while the most-engaging employee loses up to δ.
 
-### 5.2 Robustness bands
+**Where the weights come from (v3.4).** The v2 weights were theoretically ordered but never fitted. "Damage if this person leaves" can be *measured*: remove each person and record the increase in average path length plus lost reachability. That was done for all 986 people on the real network and for all 100 in the synthetic org.
 
-The weight *ordering* is well-founded, but the magnitudes are not empirically calibrated. Every employee is therefore also scored under two corner weight sets, defined as fixed offsets from the central weights (floored at 0, renormalized to sum 1):
+1. A least-squares fit of damage on the component ranks gave **BC ≈ 0.81, CDR ≈ 0.13, (1 − CC) ≈ −0.06**. Clustering, at 0.2 in v2, carried no damage signal.
+2. Pure betweenness fails the synthetic archetype gates, though: sole experts and silo members score too high. So the final weights come from a **constrained search** over 575 weight sets in 0.025 steps. Only sets passing every gate were kept: all bridges critical, precision@critical ≥ 80 %, sole experts < 0.7, silo members < 0.5. The survivors were ranked by damage agreement on both datasets.
+3. The chosen set sits in the best region (α ≈ 0.5, β ≈ 0.3, small γ, δ ≈ 0.125) with the widest gate margins. A small γ remains necessary, because tightly clustered silo members must not look like bridges.
+
+| Spearman(SPOF, measured removal damage) | v2 (0.4/0.3/0.2/0.1, directed) | v3.4 (0.50/0.325/0.05/0.125, undirected) |
+|---|---|---|
+| Real network, all 986 removals | 0.81 | **0.85** |
+| Synthetic org, all 100 removals | 0.35 | **0.57** |
+
+Raw undirected betweenness alone reaches 0.87–0.91 on the real network. The extra terms cost a little damage agreement in exchange for the archetype separation HR needs, such as not flagging sole experts and silo members as structural SPOFs. δ is a departure-likelihood signal, not a damage signal, so it can't be fitted on static data.
+
+**Honest limits.** The weights are fitted to two networks: one real research institution and one synthetic org. A different organization could prefer different weights, which is why the departure backtesting harness (MATH_MODEL §13, open) matters. Rank tiers also flag a roughly fixed share of the org. On the real network 12.6 % score ≥ 0.7, whatever its structure. A structure-adaptive rule (log-BC outliers beyond median + z·MAD) was tested and flagged almost no one on either dataset, so it was not adopted.
+
+### 5.2 Uncertainty: P(critical)
+
+A person's rank over a 30-day window is noisy. On the real e-mail data, resampling a window's events kept only **≈77 %** of the top-20 brokers, and a baseline #3 landed anywhere between #2 and #20. Data noise, not weight choice, is the main uncertainty, so:
 
 ```
-hi = (α + 0.10, β,        γ − 0.05, δ − 0.05)   → (0.50, 0.30, 0.15, 0.05) at defaults
-lo = (α − 0.05, β − 0.04, γ + 0.04, δ + 0.05)   → (0.35, 0.26, 0.24, 0.15) at defaults
-```
+for b in 1…30 (SPOF_UNCERTAINTY_SAMPLES):
+    resample the window's events with replacement → rebuild graph → recompute BC, CDR (and CC if γ > 0)
+    draw weights ~ Dirichlet(200 · w_central)        (zero weights stay zero)
+    score_b(v) = SPOF formula on the replicate
 
-`hi` is MODEL.md §5.3's corner. The spec's `lo`, (0.35, 0.25, 0.25, 0.15), ties β and γ, which breaks the strict α > β > γ > δ ordering the same section requires. `lo` keeps its α and δ endpoints and moves β and γ by 0.04 instead. This bracket is wider than the previous ±15 % proportional one, which was narrower than documented. On the validation org it reclassifies one planted BRIDGE (0.797 central, 0.699 under `lo`) from `critical` to `critical_uncertain`, which is the sensitivity the band exists to surface.
+P(critical)(v) = share of replicates with score_b(v) ≥ 0.7
+score_lo, score_hi = 10th / 90th percentile of score_b      (an 80 % interval)
+```
 
 | Flag | Rule | Action |
 |---|---|---|
-| `critical` | score ≥ 0.7 under central **and** lo **and** hi | Automatic `spof_critical` alert |
-| `critical_uncertain` | ≥ 0.7 centrally but not under every perturbation | Human review, **no** automatic alert |
+| `critical` | score ≥ 0.7 **and** P(critical) ≥ 0.9 | Automatic `spof_critical` alert |
+| `critical_uncertain` | score ≥ 0.7, P(critical) < 0.9 | Human review, **no** automatic alert |
 | `warning` | 0.5 – 0.7 | Cross-training |
 | `elevated` | 0.4 – 0.5 | Watch entropy weekly |
 | `normal` | < 0.4 | — |
 
+This replaces the v2 two-corner weight bracket: its strict α > β > γ > δ ordering doesn't hold for fitted weights (γ < δ), and it ignored data noise entirely. Cost: one betweenness computation per replicate, ≈0.4 s at 700 people, so ≈12 s per daily run. For larger orgs, k-pivot betweenness keeps each replicate bounded. On the synthetic org, which has no event data and so only weight jitter, the second planted bridge (0.75) has P(critical) = 0.83 and is held for review.
 ![Employee detail — SPOF components, ego network, What-If](screenshots/employee-detail.png)
 
 ---
@@ -465,7 +493,6 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 
 | Area | Spec says | Code does | Why it stays open |
 |---|---|---|---|
-| Betweenness graph | Undirected ([Decisions.md §6](Decisions.md)) | Directed | On a real network undirected is marginally *better* (Spearman with damage 0.89 vs 0.87), but on the synthetic generator it cuts Precision@critical 100 % → 50 % (§3 note). Needs a tail-aware BC normalization first (track B/D) |
 | Onboarding alert | DCP < 0.25 and tenure ≥ 60 | degree ≤ cohort p25 and tenure ≥ 60 | Code is the better rule (cohort-relative). MODEL.md §9 should be updated to match |
 | GNN edge weights | Graph uses ω-weighted edges | ChurnGAT / temporal GNN use `log1p(count)` | Changing inputs invalidates trained checkpoints; adopt ω at next retrain |
 
@@ -483,6 +510,10 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 | Entropy trend | SQL failed on Postgres, so every trend was 0; unequal buckets; no consent filter | Integer-day equal weeks, consent-filtered (§4) |
 | Entropy estimator | 4-point OLS slope; "withdrawing" = any negative slope (≈51 % of stable people) | Theil-Sen + DerSimonian–Laird shrinkage; probabilistic flag, 2.5 % false positives (§4.1) |
 | Sudden withdrawal | Not detected | Recent 3 weeks vs. personal 9-week NB baseline, `sudden_withdrawal` alerts, 1.5 % false alarms on real e-mail (§4.2) |
+| Betweenness graph | Directed, despite the undirected intent | Undirected (tie strength summed), adopted with refitted weights (§3, §5.1) |
+| SPOF weights | Theoretical, never fitted (0.4/0.3/0.2/0.1) | Fitted to measured removal damage under all archetype gates; Spearman with damage 0.81 → 0.85 real, 0.35 → 0.57 synthetic (§5.1) |
+| SPOF uncertainty | Two fixed weight corners; data noise ignored | Event bootstrap + Dirichlet weights → P(critical) and an 80 % interval (§5.2) |
+| Alert volume | Per-person α; false alerts grow with headcount | Calibrated p-values + Benjamini–Hochberg FDR (§4.2) |
 | Silo index bias | Verified on synthetic data only | Unbiased on a real network: Spearman with size +0.00 under shuffled departments (legacy ratio +0.88) |
 
 ---
@@ -511,11 +542,12 @@ Real data has no "who is truly withdrawing" labels. So each test uses a **null b
 | Model | Real-data null / injection | Result | Synthetic said |
 |---|---|---|---|
 | Silo index | Department labels shuffled across people | Size correlation **+0.00**, no silos flagged (legacy ratio +0.88) | unbiased |
-| SPOF | One-at-a-time removals, measured damage | Spearman **0.87** | 0.80 (archetype medians) |
+| SPOF | All 986 people removed in turn, measured damage | Spearman **0.85** (v2: 0.81) | 0.57 individual, 0.90 archetype medians |
 | Entropy flag | Each person's 4 weeks shuffled | **2.0 %** false positives (12.5 % before σ²_extra) | 2.5 % |
 | Entropy flag | Last 2 weeks re-routed to top-2 recipients | **58 %** power | 37 % |
 | Sudden withdrawal | Each person's 12 weeks shuffled | **1.5 %** false alarms (Poisson v1: 32–43 %) | 0.05 % (v1) |
-| Sudden withdrawal | 90 % drop injected for 3 weeks | **53 %** power | 94–100 % (v1) |
+| Sudden withdrawal | 90 % drop injected for 3 weeks | **53 %** power per person | 94–100 % (v1) |
+| Sudden withdrawal, population | Everyone's weeks shuffled, one run ≈ 117 people | **0.00** false alerts per run (raw α: 1.4–1.7) | — |
 
 Fetch the data with `python scripts/fetch_external_data.py`; it is not committed, because SNAP states no redistribution license. The tests skip when it is absent, and CI fetches it on a best-effort basis. Please cite Yin et al. (KDD 2017), Leskovec et al. (TKDD 2007) and Paranjape et al. (WSDM 2017) when publishing results.
 

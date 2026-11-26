@@ -12,7 +12,7 @@ import math
 import numpy as np
 import pytest
 
-from ml.features.changepoint import detect_activity_drop, nb_cdf
+from ml.features.changepoint import benjamini_hochberg, detect_activity_drop, nb_cdf, select_sudden_withdrawals
 from ml.features.feature_extractor import (
     compute_entropy,
     entropy_signals_from_weekly,
@@ -242,3 +242,33 @@ class TestActivityDrop:
 
     def test_too_short_history(self):
         assert detect_activity_drop([30] * 5) is None
+
+
+class TestAlertVolumeControl:
+    def test_benjamini_hochberg_known_case(self):
+        p = [0.001, 0.008, 0.039, 0.041, 0.042, 0.06, 0.074, 0.205, 0.212, 0.216]
+        # classic BH example at q=0.05: the first two are discoveries
+        assert benjamini_hochberg(p, 0.05).tolist() == [True, True] + [False] * 8
+
+    def test_benjamini_hochberg_empty_and_none(self):
+        assert benjamini_hochberg([], 0.1).tolist() == []
+        assert not benjamini_hochberg([0.5, 0.9], 0.1).any()
+
+    def test_population_null_yields_no_alerts(self):
+        """Stable but bursty people only: calibrated BH must stay quiet."""
+        rng = np.random.default_rng(0)
+        series = {}
+        for i in range(150):
+            mean = rng.uniform(10, 60)
+            r = mean / 3.0
+            series[f"e{i}"] = rng.negative_binomial(r, r / (r + mean), 12).astype(float)
+        assert select_sudden_withdrawals(series, fdr=0.10, null_draws=6000) == {}
+
+    def test_population_catches_clear_stops(self):
+        rng = np.random.default_rng(1)
+        series = {f"e{i}": rng.poisson(30, 12).astype(float) for i in range(150)}
+        for i in range(5):
+            series[f"stop{i}"] = np.array([30.0] * 9 + [0.0, 1.0, 0.0])
+        hits = select_sudden_withdrawals(series, fdr=0.10, null_draws=6000)
+        assert {f"stop{i}" for i in range(5)} <= set(hits)
+        assert all(h.drop > 0.9 for k, h in hits.items() if k.startswith("stop"))

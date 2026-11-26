@@ -87,27 +87,27 @@ Each model is evaluated against a controlled synthetic dataset with planted grou
 
 ### SPOF score — structural identification
 
-**Setup:** 100-employee org, planted archetypes with known structural roles (seed=42). Scoring uses the production `score_all_with_bands()` pipeline with rank-percentile transform.
+**Setup:** 100-employee org, planted archetypes with known structural roles (seed=42). Scoring uses the production `score_all_with_bands()` pipeline: rank-percentile transform, undirected betweenness, and weights fitted to measured removal damage (MATH_MODEL §5). Without event data the uncertainty here is weight jitter only.
 
-| Archetype | n | SPOF score | Rank | Flag | Robust critical |
+| Archetype | n | SPOF score | Rank | Flag | P(critical) |
 |---|---|---|---|---|---|
-| BRIDGE | 2 | 0.84 / 0.80 | 2 / 3 | critical / critical_uncertain | yes / no (0.699 under `lo` weights) |
-| WITHDRAWING | 1 | 0.89 | 1 | critical | yes |
-| SOLE_EXPERT | 2 | 0.63 / 0.46 | 9 / 37 | warning / elevated | no |
-| SILO (max) | 10 | 0.49 | 26 | elevated | no |
+| BRIDGE | 2 | 0.80 / 0.75 | 2 / 3 | critical / critical_uncertain | 1.00 / 0.83 |
+| WITHDRAWING | 1 | 0.86 | 1 | critical | 1.00 |
+| SOLE_EXPERT | 2 | 0.61 / 0.47 | 8 / 25 | warning / elevated | 0 |
+| SILO (max) | 10 | 0.47 | 22 | elevated | 0 |
 
 | Metric | Result | Threshold |
 |---|---|---|
 | Precision@critical (score ≥ 0.70) | 100% | ≥ 80% |
 | Recall — BRIDGE employees | 100% | 100% |
 | Recall — WITHDRAWING (score ≥ 0.50) | 100% | 100% |
-| SOLE_EXPERT max score | 0.63 | < 0.70 |
-| SILO max score | 0.49 | < 0.50 |
+| SOLE_EXPERT max score | 0.61 | < 0.70 |
+| SILO max score | 0.47 | < 0.50 |
 | Spearman ρ (5 archetype medians) | 0.800 | ≥ 0.60 |
 
-The second BRIDGE is `critical_uncertain`: it clears 0.70 under the central weights but scores 0.699 under the `lo` corner of the weight-sensitivity bracket (MODEL.md §5.3), so it is held for human review rather than auto-alerted. This is the bracket working as designed. The previous bracket was narrower than specified and hid that sensitivity.
+The second BRIDGE (0.75) is `critical_uncertain`: it clears 0.70 centrally, but only 83% of uncertainty replicates do, below the 90% required for an automatic alert, so it is held for human review. In production the replicates also resample the window's events, which is the larger source of uncertainty (MATH_MODEL §5.2).
 
-The SOLE_EXPERT boundary (max score 0.63, below the 0.70 critical threshold) is a deliberate design property: knowledge depth without cross-department bridging is a different risk signal — scored separately in `graph/knowledge_risk.py`.
+The SOLE_EXPERT boundary (max score 0.61, below the 0.70 critical threshold) is a deliberate design property: knowledge depth without cross-department bridging is a different risk signal — scored separately in `graph/knowledge_risk.py`.
 
 ---
 
@@ -119,18 +119,19 @@ The SOLE_EXPERT boundary (max score 0.63, below the 0.70 critical threshold) is 
 |---|---|---|---|
 | BRIDGE | 1.502 | 2–3 | 1–2 |
 | WITHDRAWING | 0.865 | 1 | 3 |
-| SOLE_EXPERT | 0.209 | 9 | 5 |
-| SILO | 0.102 | 26–67 | 70–95 |
+| SOLE_EXPERT | 0.209 | 8 | 5 |
+| SILO | 0.102 | 22–35 | 70–95 |
 | NORMAL (mean) | −0.035 | 4–100 | — |
 
 | Metric | Result | Threshold |
 |---|---|---|
-| Spearman ρ — individual (N=100) | 0.349 | ≥ 0.30 |
+| Spearman ρ — individual (N=100) | **0.565** (v2 weights, directed BC: 0.349) | ≥ 0.30 |
 | Spearman ρ — archetype medians (N=5) | 0.900 | ≥ 0.80 |
 | Precision@5 | 60% | ≥ 40% |
 | BRIDGE damage > SOLE_EXPERT damage | 1.502 > 0.209 | required |
 | BRIDGE damage > SILO damage | 1.502 > 0.102 | required |
 
+On the real SNAP email-Eu-core network (every one of 986 people removed in turn), Spearman(SPOF, damage) is **0.85**, up from 0.81 with the v2 weights.
 **WITHDRAWING gap (SPOF rank 1, damage rank 3):** the model fires 15 days before departure because it reads the withdrawal signal from the entropy trend, not from current network load. By the time the employee actually leaves, the graph has already partially adapted. This is intended behavior — SPOF is a leading indicator, not a real-time damage meter.
 
 ---
@@ -481,7 +482,7 @@ SPOF_score = α × betweenness_centrality
            − δ × entropy_trend
 ```
 
-Weights are configurable (`SPOF_ALPHA`, `SPOF_BETA`, `SPOF_GAMMA`, `SPOF_DELTA`). Default: 0.4 / 0.3 / 0.2 / 0.1. Thresholds: `normal` < 0.4 · `warning` 0.4–0.7 · `critical` > 0.7.
+Weights are configurable (`SPOF_ALPHA`, `SPOF_BETA`, `SPOF_GAMMA`, `SPOF_DELTA`). Default: 0.50 / 0.325 / 0.05 / 0.125, fitted to measured removal damage. Betweenness is undirected; each term is a rank percentile; `critical` additionally requires P(critical) ≥ 0.9 under an event bootstrap, otherwise `critical_uncertain`. Thresholds: `normal` < 0.4 · `warning` 0.4–0.7 · `critical` > 0.7.
 
 **Enhanced SPOF** fuses the graph score with the knowledge risk score (sole-expert fraction, document volume, domain breadth).
 

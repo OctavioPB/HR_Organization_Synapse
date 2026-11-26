@@ -188,7 +188,9 @@ Replayability is particularly important here: if the graph schema changes (e.g.,
 
 **Why convert to undirected for centrality.** Betweenness centrality in a directed graph measures how often a node lies on the shortest directed path from A to B. But organizational information flows do not require a directed path: if Alice communicates with Bob and Bob communicates with Carol, knowledge can still flow Alice → Carol through Bob, regardless of whether Alice has ever initiated contact with Carol. The undirected interpretation is more relevant for SPOF analysis.
 
-**Status (Nov 2026): intent unchanged, implementation still directed.** Clustering uses the undirected projection as described, but betweenness has always been computed on the directed graph. Switching it to undirected (tie strength w(u,v) + w(v,u)) was implemented and tested, and it dropped validation Precision@critical from 100 % to 50 %. The cause is the rank-percentile step in the SPOF formula: undirected betweenness is tiny but nonzero for almost everyone, and ranking spreads those negligible differences across the full 0–1 scale. Undirected betweenness will be adopted together with a tail-aware normalization of the BC term. See MATH_MODEL.md §3.
+**Status (Nov 2026): implemented (v3.4).** Betweenness had always been computed on the directed graph. A first switch with the old weights dropped *synthetic* Precision@critical from 100 % to 50 %, because the synthetic generator defines bridges by who initiates contact.
+
+On a real e-mail network (SNAP email-Eu-core, all 986 people removed in turn), undirected betweenness tracked measured removal damage better. Once the SPOF weights were refitted to that damage, it also passed every synthetic gate. Tie strength is w(u,v) + w(v,u) (`graph.metrics.to_undirected_summed`). See MATH_MODEL.md §3 and §5.
 
 ### Decision: Exact vs. Approximate Betweenness Centrality
 
