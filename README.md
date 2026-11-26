@@ -26,6 +26,7 @@ A graph-based HR intelligence platform that surfaces structural risk from collab
 | [**Math Model**](docs/MATH_MODEL.md) | Every formula as implemented: SPOF, knowledge risk, churn, succession, org health |
 | [**Business Value**](docs/BUSINESS_VALUE.md) | Value levers, worked ROI example, 90-day pilot, KPIs |
 | [**Lessons Learned**](docs/LESSONS_LEARNED.md) | What we got wrong, what we changed, what's still open |
+| [**MCP Server**](docs/MCP.md) | Use the API and the app from an LLM (Claude Code, Claude Desktop, agents): 34 tools, docs, prompts |
 
 Also: [research foundations](docs/MODEL.md) · [engineering decisions](docs/Decisions.md) · [business case](docs/Business.md) · [model card](docs/MODEL_CARD_CHURN.md) · [DPIA](docs/DPIA_THREAT_MODEL.md) · [all docs + screenshot gallery](docs/README.md)
 
@@ -404,6 +405,17 @@ org-synapse/
 ```
 
 ---
+
+## Use it from an LLM (MCP)
+
+`mcp_server/` exposes the API and the web app to MCP clients as 34 tools, mostly read-only. They cover people search, SPOF risk, what-if departures, silos, churn, succession, reorg scenarios, team building and equity. The server also offers model docs as resources and three ready-made prompts. It calls the REST API, so the API's roles, consent filters and k-anonymity rules apply unchanged.
+
+```bash
+python -m mcp_server                                   # stdio; Claude Code picks it up from .mcp.json
+python -m mcp_server --transport streamable-http       # http://127.0.0.1:8765/mcp
+```
+
+Setup, configuration, the tool list and what is deliberately *not* exposed are in [docs/MCP.md](docs/MCP.md).
 
 ## Quick start
 
