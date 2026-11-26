@@ -1,9 +1,21 @@
-# Model Card — ChurnGAT: Employee Voluntary Departure Risk
+# Model Card — Employee Voluntary Departure Risk
 
-**Version:** `churn_gat_{snapshot_date}` (checkpoint filename convention)  
+> **November 2026 — the production model changed.** The default is now a **calibrated logistic regression** on point-in-time features (`ml/churn/`, checkpoint `churn_logreg_{date}.joblib`); see [MATH_MODEL.md §9.1](MATH_MODEL.md#91-calibrated-churn-model-default).
+> - The ChurnGAT described in the original card below is a **challenger** (`CHURN_MODEL=gat`). It is adopted only if it beats the baseline by ≥ 0.02 held-out AUROC with no worse Brier score.
+> - **Why:** its trainer could not train (every label carried one date, so the training fold was empty), it never saw leavers, its probabilities were uncalibrated, and the baseline beat it in validation.
+>
+> | Held-out result | Forward-simulated org | Real e-mail (people who stop appearing) |
+> |---|---|---|
+> | AUROC | 0.81 | 0.57 |
+> | Calibration error (ECE) | 0.011 | 0.046, because the base rate drifted 1.1 % → 5.9 % |
+> | Brier skill vs. base rate | +0.17 | +0.004 |
+>
+> Treat `churn_prob` as a ranking whenever the training DAG warns that held-out ECE is above 0.05. Peer exposure adds nothing on the real network (AUROC 0.566 vs 0.560).
+
+**Version:** `churn_logreg_{as_of}` (default) · `churn_gat_{snapshot_date}` (challenger)  
 **Type:** Binary classifier — voluntary departure probability, 90-day horizon  
-**Architecture:** Graph Attention Network (PyTorch Geometric `GATConv`)  
-**Source files:** `ml/gnn/model.py`, `ml/gnn/trainer.py`, `ml/gnn/scorer.py`, `ml/gnn/feature_builder.py`
+**Architecture:** Standardised L2 logistic regression (default); Graph Attention Network, PyTorch Geometric `GATConv` (challenger)  
+**Source files:** `ml/churn/model.py`, `ml/churn/pipeline.py` (default); `ml/gnn/model.py`, `ml/gnn/trainer.py`, `ml/gnn/scorer.py`, `ml/gnn/feature_builder.py` (challenger)
 
 ---
 
@@ -147,13 +159,13 @@ No slice-level evaluation (by department, tenure band, role level, or demographi
 
 The evaluation in Section 6 uses a synthetic dataset with planted churn labels constructed from known rules. The model has **never been evaluated against real organizational churn data with verified ground-truth labels.** The synthetic results establish that the model architecture is not degenerate, but they do not establish that the model generalizes to any specific real organization.
 
-Before deployment: collect ≥ 6 months of departure history with voluntary/involuntary labels, train on the organization's data, and evaluate on a held-out cohort with the methodology in `ml/gnn/trainer.py`.
+Before deployment: collect ≥ 6 months of departure history with voluntary/involuntary labels (the HRIS sync writes these from terminations; involuntary exits are censored), train on the organization's data, and evaluate on a held-out cohort with the methodology in `ml/churn/model.py`.
 
 ### 7.2 Graph model does not outperform baseline at N=300
 
 At 300 employees with 30 training positives, the 3-feature logistic regression (tenure, degree_out, entropy_trend) outperforms the GNN by 10.6pp AUROC. The GNN's structural advantage — capturing social contagion through neighbor aggregation — is not decisive when individual features are strong and the training set is small.
 
-**Current deployment recommendation:** LogisticRegression on tabular features. Revisit ChurnGAT when:
+**Current deployment:** calibrated LogisticRegression (`ml/churn/`), implemented November 2026. Revisit ChurnGAT when:
 - Labelled churn history covers N > 500 unique employees
 - Labels span ≥ 3 quarterly observation cohorts
 - `torch_geometric` is installed
@@ -202,7 +214,7 @@ This is not a hypothetical. It is the same mechanism documented in gender-gap re
 
 The platform includes structural equity analytics (`etl/tasks/compute_equity.py`, `api/routers/equity.py`) that compute centrality distributions by `gender_group`, `tenure_band`, and `level_band`. A disparity ratio below 0.80 (configurable via `EQUITY_DISPARITY_RATIO`) between a group's median centrality and the organization median triggers a `below_org_median` flag.
 
-**This flag is an investigative heuristic, not a legal finding.** It is adapted by analogy from the EEOC four-fifths rule (29 C.F.R. § 1607.4D), which applies to employment selection rates — not graph centrality. A flag means: "this group's structural position is far enough below the median to warrant qualitative investigation of whether barriers exist." It does not establish discrimination or legal liability.
+**This flag is an investigative heuristic, not a legal finding.** Since November 2026 a flag also requires a label-permutation test with Benjamini–Hochberg control across every group tested (MATH_MODEL.md §10.5), so chance gaps in small groups are no longer flagged. It is adapted by analogy from the EEOC four-fifths rule (29 C.F.R. § 1607.4D), which applies to employment selection rates — not graph centrality. A flag means: "this group's structural position is far enough below the median to warrant qualitative investigation of whether barriers exist." It does not establish discrimination or legal liability.
 
 ### 8.3 No demographic slice evaluation conducted
 

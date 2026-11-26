@@ -10,6 +10,7 @@ Task chain:
                 → detect_silos
                     → score_risks
                         → flag_spof_critical
+                        → detect_sudden_withdrawal   (recent vs. personal-baseline activity)
 """
 
 import logging
@@ -59,7 +60,11 @@ def _on_failure_callback(context: dict) -> None:
 def graph_builder_dag():
     @task(on_failure_callback=_on_failure_callback)
     def sync_hris_data(**context) -> dict:
-        """Sync HRIS enrichment fields into employees table (skipped if not configured)."""
+        """Sync HRIS enrichment and departures into employees (skipped if not configured).
+
+        Matches on HRIS ID or work e-mail only (migration 020); terminations set
+        left_at / active = false and write churn_labels.
+        """
         import sys
         from pathlib import Path
 
@@ -74,10 +79,10 @@ def graph_builder_dag():
         from ingestion.db import get_conn
 
         with get_conn() as conn:
-            rows_updated = sync_all(conn)
+            report = sync_all(conn)
 
-        logger.info("HRIS sync complete: %d employees updated.", rows_updated)
-        return {"skipped": False, "rows_updated": rows_updated}
+        logger.info("HRIS sync complete: %s", report)
+        return {"skipped": bool(report.get("skipped")), **report}
 
     @task(on_failure_callback=_on_failure_callback)
     def check_raw_events(**context) -> int:
@@ -127,6 +132,13 @@ def graph_builder_dag():
         from etl.tasks.detect_entropy import task_flag_spof_critical as _flag
 
         return _flag(context["ds"])
+
+    @task(on_failure_callback=_on_failure_callback)
+    def detect_sudden_withdrawal(**context) -> dict:
+        """Recent weekly activity vs. personal NB baseline → sudden_withdrawal alerts."""
+        from etl.tasks.detect_entropy import task_detect_sudden_withdrawal as _sudden
+
+        return _sudden(context["ds"])
 
     trigger_neo4j = TriggerDagRunOperator(
         task_id="trigger_neo4j_import",
@@ -208,6 +220,7 @@ def graph_builder_dag():
     silo_stats = detect_silos()
     risk_stats = score_risks()
     spof_stats = flag_spof_critical()
+    sudden_stats = detect_sudden_withdrawal()
     ws_result = broadcast_alerts()
 
     (
@@ -221,6 +234,7 @@ def graph_builder_dag():
         >> spof_stats
         >> trigger_neo4j
     )
+    risk_stats >> sudden_stats >> ws_result
     spof_stats >> ws_result
 
 

@@ -10,6 +10,7 @@ Public API:
     resolve_tenant(tenant_id, api_key, conn) -> TenantContext | None
     set_search_path(conn, schema_name) -> None
     provision_tenant_schema(slug, name, plan, conn) -> dict
+    apply_tenant_migrations(conn, schema_name) -> list[str]
     record_usage(tenant_id, event_count, conn) -> None
 """
 
@@ -17,9 +18,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 import secrets
 from dataclasses import dataclass
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -32,174 +35,61 @@ PLAN_LIMITS: dict[str, dict] = {
     "enterprise": {"events_per_month": None, "employees_max": None},
 }
 
-# ─── Per-tenant table DDL ─────────────────────────────────────────────────────
-# Embedded so provisioning works without reading files from disk.
-# search_path is set to the tenant schema before executing this SQL.
+# ─── Per-tenant schema DDL ────────────────────────────────────────────────────
+# Tenant schemas are built from the same ordered migration files as the default
+# schema, so a new migration automatically reaches every new tenant.
+#
+# History: this used to be an inline copy of the DDL (_TENANT_TABLES_SQL). It
+# silently drifted — it never received migrations 009–017, so freshly
+# provisioned tenants lacked the v2 SPOF band columns and every feature table
+# added after 008.  Worse, the request-time search_path is "tenant, public", so
+# queries against a missing tenant table fell through to the *public* table.
+# Do not reintroduce an inline copy.
 
-_TENANT_TABLES_SQL = """
--- Core tables (001_app_schema)
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+_MIGRATIONS_DIR = Path(
+    os.environ.get("TENANT_MIGRATIONS_DIR", Path(__file__).resolve().parents[1] / "data" / "migrations")
+)
 
-CREATE TABLE IF NOT EXISTS employees (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        TEXT        NOT NULL,
-    department  TEXT        NOT NULL,
-    role        TEXT        NOT NULL,
-    active      BOOLEAN     NOT NULL DEFAULT true,
-    consent     BOOLEAN     NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+# Migrations that only touch shared, non-tenant objects and must not run per
+# tenant: 000 creates the Airflow database (psql \gexec, not executable via a
+# driver); 008 creates the public.* tenant registry.  010 also adds a column to
+# public.tenant_api_keys, but it is idempotent (ADD COLUMN IF NOT EXISTS) and
+# its employees.manager_id change is tenant-scoped, so it stays in the set.
+_CONTROL_PLANE_MIGRATIONS = frozenset({"000_create_airflow_db.sql", "008_tenant_schema.sql"})
 
-CREATE TABLE IF NOT EXISTS raw_events (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    source_id   UUID        NOT NULL REFERENCES employees(id),
-    target_id   UUID        NOT NULL REFERENCES employees(id),
-    channel     TEXT        NOT NULL
-                CHECK (channel IN ('slack','email','jira','calendar','github')),
-    direction   TEXT        NOT NULL
-                CHECK (direction IN ('sent','mentioned','invited','assigned','reviewed')),
-    ts          TIMESTAMPTZ NOT NULL,
-    weight      FLOAT       NOT NULL DEFAULT 1.0,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_raw_events_ts        ON raw_events (ts);
-CREATE INDEX IF NOT EXISTS idx_raw_events_source_id ON raw_events (source_id);
-CREATE INDEX IF NOT EXISTS idx_raw_events_target_id ON raw_events (target_id);
 
-CREATE TABLE IF NOT EXISTS graph_snapshots (
-    id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    snapshot_date   DATE    NOT NULL,
-    employee_id     UUID    NOT NULL REFERENCES employees(id),
-    betweenness     FLOAT,
-    degree_in       FLOAT,
-    degree_out      FLOAT,
-    clustering      FLOAT,
-    community_id    INTEGER,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (snapshot_date, employee_id)
-);
-CREATE INDEX IF NOT EXISTS idx_snapshots_date ON graph_snapshots (snapshot_date);
+def tenant_migration_files(migrations_dir: Path | None = None) -> list[Path]:
+    """Ordered migration files that build a tenant schema (control-plane files excluded)."""
+    directory = Path(migrations_dir or _MIGRATIONS_DIR)
+    files = sorted(p for p in directory.glob("*.sql") if p.name not in _CONTROL_PLANE_MIGRATIONS)
+    if not files:
+        raise FileNotFoundError(
+            f"No tenant migrations found in {directory}. Set TENANT_MIGRATIONS_DIR to the data/migrations directory."
+        )
+    return files
 
-CREATE TABLE IF NOT EXISTS risk_scores (
-    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    scored_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    employee_id     UUID        NOT NULL REFERENCES employees(id),
-    spof_score      FLOAT       NOT NULL,
-    entropy_trend   FLOAT,
-    anomaly_score   FLOAT,
-    flag            TEXT
-    CHECK (flag IN ('critical','warning','withdrawing','normal'))
-);
-CREATE INDEX IF NOT EXISTS idx_risk_scores_employee  ON risk_scores (employee_id);
-CREATE INDEX IF NOT EXISTS idx_risk_scores_scored_at ON risk_scores (scored_at);
 
-CREATE TABLE IF NOT EXISTS alerts (
-    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    fired_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    type              TEXT        NOT NULL
-    CHECK (type IN ('silo','spof_critical','withdrawing','pipeline_failure','connectivity_anomaly')),
-    severity          TEXT        NOT NULL
-    CHECK (severity IN ('critical','high','medium','low')),
-    affected_entities JSONB       NOT NULL DEFAULT '[]',
-    details           TEXT,
-    resolved          BOOLEAN     NOT NULL DEFAULT false,
-    resolved_at       TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_alerts_fired_at ON alerts (fired_at);
-CREATE INDEX IF NOT EXISTS idx_alerts_type     ON alerts (type);
-CREATE INDEX IF NOT EXISTS idx_alerts_resolved ON alerts (resolved);
+def apply_tenant_migrations(conn, schema_name: str, migrations_dir: Path | None = None) -> list[str]:
+    """Apply every tenant migration inside *schema_name*, in order.
 
--- F1: GNN churn risk
-CREATE TABLE IF NOT EXISTS churn_risk_scores (
-    id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    scored_at       DATE    NOT NULL,
-    employee_id     UUID    NOT NULL REFERENCES employees(id),
-    churn_prob      FLOAT   NOT NULL CHECK (churn_prob BETWEEN 0 AND 1),
-    risk_tier       TEXT    NOT NULL CHECK (risk_tier IN ('high','medium','low')),
-    model_version   TEXT    NOT NULL,
-    feature_snapshot JSONB  NOT NULL DEFAULT '{}',
-    UNIQUE (employee_id, scored_at)
-);
-CREATE INDEX IF NOT EXISTS idx_churn_scored_at ON churn_risk_scores (scored_at DESC);
+    All migrations are idempotent (IF NOT EXISTS / DROP CONSTRAINT IF EXISTS),
+    so this is safe both for a brand-new schema and for bringing an existing
+    tenant up to date.  search_path is set to the tenant schema *only* (no
+    public fallback) so an unqualified ALTER can never modify a public table.
+    Runs in the caller's transaction; the caller commits or rolls back.
 
--- F2: Temporal anomaly
-CREATE TABLE IF NOT EXISTS temporal_anomaly_scores (
-    id                  UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    scored_at           DATE    NOT NULL,
-    employee_id         UUID    NOT NULL REFERENCES employees(id),
-    anomaly_score       FLOAT   NOT NULL CHECK (anomaly_score BETWEEN 0 AND 1),
-    anomaly_tier        TEXT    NOT NULL CHECK (anomaly_tier IN ('high','medium','low')),
-    reconstruction_error FLOAT  NOT NULL,
-    trend_slope         FLOAT   NOT NULL DEFAULT 0.0,
-    model_version       TEXT    NOT NULL DEFAULT 'temporal_gae_v1',
-    UNIQUE (employee_id, scored_at)
-);
-CREATE INDEX IF NOT EXISTS idx_temporal_scored_at ON temporal_anomaly_scores (scored_at DESC);
-
--- F3: Knowledge risk
-CREATE TABLE IF NOT EXISTS employee_knowledge (
-    id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    employee_id     UUID    NOT NULL REFERENCES employees(id),
-    domain          TEXT    NOT NULL,
-    doc_count       INT     NOT NULL DEFAULT 0,
-    is_sole_expert  BOOLEAN NOT NULL DEFAULT false,
-    expertise_score FLOAT   NOT NULL DEFAULT 0.0,
-    computed_at     DATE    NOT NULL,
-    UNIQUE (employee_id, domain, computed_at)
-);
-
-CREATE TABLE IF NOT EXISTS knowledge_risk_scores (
-    id                  UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    employee_id         UUID    NOT NULL REFERENCES employees(id),
-    computed_at         DATE    NOT NULL,
-    knowledge_score     FLOAT   NOT NULL,
-    sole_expert_count   INT     NOT NULL DEFAULT 0,
-    domain_count        INT     NOT NULL DEFAULT 0,
-    doc_count           INT     NOT NULL DEFAULT 0,
-    enhanced_spof_score FLOAT,
-    impacted_departments JSONB  NOT NULL DEFAULT '[]',
-    UNIQUE (employee_id, computed_at)
-);
-CREATE INDEX IF NOT EXISTS idx_knowledge_risk_computed_at
-    ON knowledge_risk_scores (computed_at DESC);
-
--- F4: Succession planning
-CREATE TABLE IF NOT EXISTS succession_recommendations (
-    id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    computed_at             DATE        NOT NULL,
-    source_employee_id      UUID        NOT NULL REFERENCES employees(id),
-    candidate_employee_id   UUID        NOT NULL REFERENCES employees(id),
-    compatibility_score     FLOAT       NOT NULL CHECK (compatibility_score BETWEEN 0 AND 1),
-    rank                    SMALLINT    NOT NULL CHECK (rank >= 1),
-    structural_overlap      FLOAT,
-    clustering_score        FLOAT,
-    domain_overlap          FLOAT,
-    rationale               JSONB       NOT NULL DEFAULT '{}',
-    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (source_employee_id, candidate_employee_id, computed_at)
-);
-CREATE INDEX IF NOT EXISTS idx_succession_computed_at
-    ON succession_recommendations (computed_at DESC);
-
--- F9: Org health score
-CREATE TABLE IF NOT EXISTS org_health_scores (
-    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    computed_at       DATE        NOT NULL,
-    score             FLOAT       NOT NULL CHECK (score BETWEEN 0 AND 100),
-    tier              TEXT        NOT NULL
-    CHECK (tier IN ('healthy','caution','at_risk','critical')),
-    silo_count        INT         NOT NULL DEFAULT 0,
-    avg_spof_score    FLOAT       NOT NULL DEFAULT 0.0,
-    avg_entropy_trend FLOAT,
-    wcc_count         INT         NOT NULL DEFAULT 1,
-    node_count        INT         NOT NULL DEFAULT 0,
-    component_scores  JSONB       NOT NULL DEFAULT '{}',
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (computed_at)
-);
-CREATE INDEX IF NOT EXISTS idx_org_health_computed_at
-    ON org_health_scores (computed_at DESC);
-"""
+    Returns:
+        Names of the migration files applied, in order.
+    """
+    safe = _safe_schema_name(schema_name)
+    applied: list[str] = []
+    with conn.cursor() as cur:
+        cur.execute(f"SET LOCAL search_path TO {safe}")
+        for path in tenant_migration_files(migrations_dir):
+            cur.execute(path.read_text(encoding="utf-8"))
+            applied.append(path.name)
+    logger.info("Applied %d migrations to schema %s", len(applied), safe)
+    return applied
 
 
 # ─── Data classes ─────────────────────────────────────────────────────────────
@@ -355,10 +245,8 @@ def provision_tenant_schema(
     with conn.cursor() as cur:
         cur.execute(f"CREATE SCHEMA IF NOT EXISTS {safe_schema}")
 
-    # 4. Run DDL inside the tenant schema
-    with conn.cursor() as cur:
-        cur.execute(f"SET LOCAL search_path TO {safe_schema}, public")
-        cur.execute(_TENANT_TABLES_SQL)
+    # 4. Build the tenant schema from the migration set (same DDL as the default schema)
+    apply_tenant_migrations(conn, safe_schema)
 
     conn.commit()
     logger.info("Tenant provisioned: slug=%s schema=%s id=%s", slug, schema_name, tenant_id)

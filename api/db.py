@@ -8,6 +8,8 @@ mock these functions instead of mocking psycopg2 internals.
 from datetime import date, timedelta
 from typing import Any
 
+from graph.edge_weights import weighted_edge_sql
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,14 +78,14 @@ def fetch_graph_edges(snapshot_date: date, window_days: int, conn) -> list[dict]
     start_ts = (snapshot_date - timedelta(days=window_days)).isoformat()
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                source_id::text AS source,
-                target_id::text AS target,
-                SUM(weight)     AS weight
-            FROM raw_events
-            WHERE ts BETWEEN %s::timestamptz AND %s::timestamptz
-            GROUP BY source_id, target_id
+                re.source_id::text AS source,
+                re.target_id::text AS target,
+                SUM({weighted_edge_sql("re")}) AS weight
+            FROM raw_events re
+            WHERE re.ts BETWEEN %s::timestamptz AND %s::timestamptz
+            GROUP BY re.source_id, re.target_id
             ORDER BY weight DESC
             """,
             (start_ts, end_ts),
@@ -114,13 +116,25 @@ def fetch_ego_network(
                 gs.degree_in,
                 gs.degree_out,
                 gs.clustering,
-                gs.community_id
+                gs.community_id,
+                rs.spof_score,
+                rs.flag,
+                rs.scored_at::date AS risk_scored_at
             FROM graph_snapshots gs
             JOIN employees e ON gs.employee_id = e.id
+            -- Latest SPOF score on or before the snapshot date (NULLs if never scored).
+            LEFT JOIN LATERAL (
+                SELECT r.spof_score, r.flag, r.scored_at
+                FROM risk_scores r
+                WHERE r.employee_id = gs.employee_id
+                  AND r.scored_at::date <= %s
+                ORDER BY r.scored_at DESC
+                LIMIT 1
+            ) rs ON TRUE
             WHERE gs.snapshot_date = %s
               AND gs.employee_id = %s::uuid
             """,
-            (snapshot_date, employee_id),
+            (snapshot_date, snapshot_date, employee_id),
         )
         node_row = cur.fetchone()
 
@@ -158,13 +172,26 @@ def fetch_ego_network(
                     gs.degree_in,
                     gs.degree_out,
                     gs.clustering,
-                    gs.community_id
+                    gs.community_id,
+                    rs.spof_score,
+                    rs.flag,
+                    rs.scored_at::date AS risk_scored_at
                 FROM graph_snapshots gs
                 JOIN employees e ON gs.employee_id = e.id
+                -- Same lookup as the centre node, so every node in the ego
+                -- chart is colored from the same scoring run (NULLs if unscored).
+                LEFT JOIN LATERAL (
+                    SELECT r.spof_score, r.flag, r.scored_at
+                    FROM risk_scores r
+                    WHERE r.employee_id = gs.employee_id
+                      AND r.scored_at::date <= %s
+                    ORDER BY r.scored_at DESC
+                    LIMIT 1
+                ) rs ON TRUE
                 WHERE gs.snapshot_date = %s
                   AND gs.employee_id = ANY(%s::uuid[])
                 """,
-                (snapshot_date, neighbor_ids),
+                (snapshot_date, snapshot_date, neighbor_ids),
             )
             neighbors = [dict(r) for r in cur.fetchall()]
     else:
@@ -174,16 +201,16 @@ def fetch_ego_network(
     all_ids = [employee_id] + neighbor_ids
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                source_id::text AS source,
-                target_id::text AS target,
-                SUM(weight)     AS weight
-            FROM raw_events
-            WHERE ts BETWEEN %s::timestamptz AND %s::timestamptz
-              AND source_id = ANY(%s::uuid[])
-              AND target_id = ANY(%s::uuid[])
-            GROUP BY source_id, target_id
+                re.source_id::text AS source,
+                re.target_id::text AS target,
+                SUM({weighted_edge_sql("re")}) AS weight
+            FROM raw_events re
+            WHERE re.ts BETWEEN %s::timestamptz AND %s::timestamptz
+              AND re.source_id = ANY(%s::uuid[])
+              AND re.target_id = ANY(%s::uuid[])
+            GROUP BY re.source_id, re.target_id
             """,
             (start_ts, end_ts, all_ids, all_ids),
         )
@@ -366,7 +393,7 @@ def fetch_entropy_alerts(conn) -> list[dict]:
             details,
             resolved
         FROM alerts
-        WHERE type IN ('withdrawing', 'connectivity_anomaly', 'spof_critical')
+        WHERE type IN ('withdrawing', 'sudden_withdrawal', 'connectivity_anomaly', 'spof_critical')
           AND resolved = false
         ORDER BY fired_at DESC
         LIMIT 200

@@ -1,37 +1,37 @@
-"""Turnover-contagion alert layer (MODEL.md §7.4.1).
+"""Peer-departure alert layer (MODEL.md §7.4.1, MATH_MODEL.md §9.2).
 
-AlKetbi et al. (2025) show employees are ~23% more likely to depart when >30% of
-their immediate peers depart within a six-month window, and that embedding such
-a contagion signal improves turnover prediction accuracy by ~30% over
-individual-attribute baselines.  The current GNN feature matrix (ml/gnn) captures
-individual + 1-hop structural signals but no measure of *peer departure rate*.
+AlKetbi et al. (2025) report that employees are ~23 % more likely to leave when
+more than 30 % of their immediate peers left within six months.  This task
+turns that finding into a tested alert; the maths lives in
+ml/churn/contagion.py:
 
-Rather than retrain the GNN (which would invalidate existing checkpoints), this
-module implements the recommended rule-based alert layer on top of it:
+    E(v) = Σ_{u departed recently} s(v,u) · 2^(−age_u / half_life)
 
-    peer_churn_rate(v, t) = |{u ∈ N(v) : departed(u, t−W, t)}| / max(|N(v)|, 1)
+where s(v,u) is u's share of v's collaboration volume.  Each E(v) is compared
+against the same departures landed on random people (permutation test), and
+alerts are Benjamini–Hochberg controlled at PEER_CONTAGION_FDR with an
+effect-size floor: at least PEER_CONTAGION_MIN_EXPOSURE (30 %) of v's
+collaboration volume was with people who left in the window.
 
-where W = PEER_CHURN_WINDOW_DAYS (default 180).  When peer_churn_rate exceeds
-PEER_CONTAGION_THRESHOLD (default 0.30) a supplemental ``peer_contagion_risk``
-alert fires, independent of the GNN churn score.  The rate is also persisted onto
-the day's ``churn_scores`` rows so the dashboard can surface it alongside the
-model score.
+Previous version, kept for reference: ``peer_churn_rate`` = unweighted share
+of last-30-day neighbours who departed, alert if > 0.30.  It could not fire in
+production: the 30-day graph contained active employees only, so a departed
+peer was never a neighbour.  It also opened its DB connection incorrectly
+(``get_conn()`` is a context manager) and re-inserted the same alert every day.
+
+The departure window defaults to 90 days rather than the paper's 180, because
+raw_events are retained for 90 days (graph/compliance.py): ties to someone who
+left earlier than that are no longer observable.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
-from datetime import date, timedelta
-
-import networkx as nx
+import uuid
+from datetime import date
 
 logger = logging.getLogger(__name__)
-
-_PEER_CHURN_WINDOW_DAYS = int(os.environ.get("PEER_CHURN_WINDOW_DAYS", "180"))
-_PEER_CONTAGION_THRESHOLD = float(os.environ.get("PEER_CONTAGION_THRESHOLD", "0.30"))
-_GRAPH_WINDOW_DAYS = int(os.environ.get("GRAPH_WINDOW_DAYS", "30"))
 
 
 def peer_churn_rate(neighbors: set[str], departed: set[str]) -> float:
@@ -44,109 +44,109 @@ def peer_churn_rate(neighbors: set[str], departed: set[str]) -> float:
     return len(neighbors & departed) / len(neighbors)
 
 
-def _undirected_neighbors(G: nx.DiGraph) -> dict[str, set[str]]:
-    """Map each node to its undirected neighbor set (predecessors ∪ successors)."""
-    return {n: set(G.predecessors(n)) | set(G.successors(n)) for n in G.nodes()}
-
-
 def task_compute_peer_contagion(
     snapshot_date_str: str,
-    window_days: int = _GRAPH_WINDOW_DAYS,
+    window_days: int = 30,
     conn=None,
 ) -> dict:
-    """Compute peer_churn_rate per employee and fire peer_contagion_risk alerts.
+    """Compute peer exposure, run the permutation test, raise FDR-controlled alerts.
 
     Args:
-        snapshot_date_str: ISO date string YYYY-MM-DD.
-        window_days: Rolling window for building the collaboration graph.
-        conn: Optional open psycopg2 connection.  Opens its own if None.
+        snapshot_date_str: ISO date YYYY-MM-DD.
+        window_days: Unused; kept for DAG signature compatibility.
+        conn: Optional open psycopg2 connection.  Opens a pooled one if None.
 
     Returns:
-        JSON-serialisable dict with employee_count, flagged_count, threshold.
+        JSON-serialisable stats: employee_count, flagged_count, new_alerts, ...
     """
-    from graph.builder import build_graph, load_raw_edges
+    from ml.churn.contagion import (
+        PEER_CHURN_WINDOW_DAYS,
+        PEER_CONTAGION_FDR,
+        PEER_CONTAGION_MIN_EXPOSURE,
+        select_peer_exposure,
+    )
+    from ml.churn.pipeline import load_departures, load_tie_edges
 
     snapshot_date = date.fromisoformat(snapshot_date_str)
-    depart_start = snapshot_date - timedelta(days=_PEER_CHURN_WINDOW_DAYS)
 
-    raw_edges = load_raw_edges(snapshot_date, window_days)
-    G = build_graph(raw_edges)
-    if G.number_of_nodes() == 0:
-        logger.warning("task_compute_peer_contagion: empty graph for %s", snapshot_date_str)
-        return {"snapshot_date": snapshot_date_str, "employee_count": 0, "flagged_count": 0}
-
-    neighbor_map = _undirected_neighbors(G)
-
-    own_conn = conn is None
-    if own_conn:
+    if conn is None:
         from ingestion.db import get_conn
 
-        conn = get_conn()
+        with get_conn() as own:
+            return task_compute_peer_contagion(snapshot_date_str, window_days, conn=own)
 
-    try:
-        # Employees who departed within the trailing contagion window.
-        with conn.cursor() as cur:
+    with conn.cursor() as cur:
+        departures = load_departures(cur)
+        tie_edges = load_tie_edges(snapshot_date, cur)
+
+    results = select_peer_exposure(tie_edges, departures, snapshot_date)
+    flagged = [r for r in results.values() if r.flagged]
+
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            UPDATE churn_scores
+            SET peer_churn_rate = %s, peer_contagion_risk = %s, peer_exposure_p = %s
+            WHERE employee_id = %s::uuid AND scored_at = %s
+            """,
+            [
+                (round(r.exposure, 4), r.flagged, round(r.p_value, 4), r.employee_id, snapshot_date)
+                for r in results.values()
+            ],
+        )
+
+        cur.execute(
+            """
+            SELECT DISTINCT affected_entities->>'employee_id'
+            FROM alerts
+            WHERE type = 'peer_contagion_risk' AND resolved = false
+              AND fired_at >= %s::date - %s * INTERVAL '1 day'
+            """,
+            (snapshot_date, PEER_CHURN_WINDOW_DAYS),
+        )
+        already = {row[0] for row in cur.fetchall()}
+
+        new_alerts = 0
+        for r in flagged:
+            if r.employee_id in already:
+                continue
             cur.execute(
                 """
-                SELECT DISTINCT employee_id::text
-                FROM churn_labels
-                WHERE churned = true
-                  AND label_date BETWEEN %s AND %s
+                INSERT INTO alerts (id, type, severity, affected_entities, details)
+                VALUES (%s, 'peer_contagion_risk', %s, %s::jsonb, %s)
                 """,
-                (depart_start, snapshot_date),
+                (
+                    str(uuid.uuid4()),
+                    "high" if r.departed_share >= 0.5 else "medium",
+                    json.dumps(
+                        {
+                            "employee_id": r.employee_id,
+                            "peer_exposure": round(r.exposure, 4),
+                            "departed_share": round(r.departed_share, 4),
+                            "p_value": round(r.p_value, 4),
+                            "departed_peers": r.departed_peers,
+                            "snapshot_date": snapshot_date_str,
+                        }
+                    ),
+                    f"About {round(r.departed_share * 100)}% of this person's recent collaboration was with "
+                    f"{r.departed_peers} colleague(s) who left in the last {PEER_CHURN_WINDOW_DAYS} days — "
+                    f"more than random departures would explain (FDR {PEER_CONTAGION_FDR:.0%}). "
+                    "Check in on workload and handover gaps.",
+                ),
             )
-            departed = {str(r[0]) for r in cur.fetchall()}
-
-        flagged = 0
-        with conn.cursor() as cur:
-            for emp_id, neighbors in neighbor_map.items():
-                rate = peer_churn_rate(neighbors, departed)
-
-                # Persist rate onto today's churn_scores row, if one exists.
-                cur.execute(
-                    """
-                    UPDATE churn_scores
-                    SET peer_churn_rate    = %s,
-                        peer_contagion_risk = %s
-                    WHERE employee_id = %s::uuid AND scored_at = %s
-                    """,
-                    (round(rate, 4), rate > _PEER_CONTAGION_THRESHOLD, emp_id, snapshot_date),
-                )
-
-                if rate > _PEER_CONTAGION_THRESHOLD:
-                    flagged += 1
-                    cur.execute(
-                        """
-                        INSERT INTO alerts (type, severity, affected_entities, details)
-                        VALUES ('peer_contagion_risk', 'high', %s::jsonb, %s)
-                        ON CONFLICT DO NOTHING
-                        """,
-                        (
-                            json.dumps(
-                                {
-                                    "employee_id": emp_id,
-                                    "peer_churn_rate": round(rate, 4),
-                                    "departed_peers": len(neighbors & departed),
-                                    "total_peers": len(neighbors),
-                                    "snapshot_date": snapshot_date_str,
-                                }
-                            ),
-                            f"Employee {emp_id[:8]}… has {round(rate * 100)}% of peers departed "
-                            f"in the last {_PEER_CHURN_WINDOW_DAYS} days "
-                            f"(> {round(_PEER_CONTAGION_THRESHOLD * 100)}% contagion threshold).",
-                        ),
-                    )
-
-        conn.commit()
-    finally:
-        if own_conn:
-            conn.close()
+            new_alerts += 1
+    conn.commit()
 
     stats = {
         "snapshot_date": snapshot_date_str,
-        "employee_count": len(neighbor_map),
-        "flagged_count": flagged,
-        "threshold": _PEER_CONTAGION_THRESHOLD,
+        "employee_count": len(results),
+        "departures_in_window": sum(
+            1 for d in departures.values() if 0 <= (snapshot_date - d).days < PEER_CHURN_WINDOW_DAYS
+        ),
+        "flagged_count": len(flagged),
+        "new_alerts": new_alerts,
+        "min_exposure": PEER_CONTAGION_MIN_EXPOSURE,
+        "fdr": PEER_CONTAGION_FDR,
     }
     logger.info("task_compute_peer_contagion: %s", stats)
     return stats

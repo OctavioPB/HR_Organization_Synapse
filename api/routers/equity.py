@@ -11,6 +11,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.deps import get_db
+from etl.tasks.compute_equity import MIN_GROUP_SIZE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/equity", tags=["equity"])
@@ -25,6 +26,8 @@ def get_centrality_distribution(
     """Return centrality distribution by demographic group for the latest computed date.
 
     All values are aggregated at the group level — no individual data exposed.
+    Groups with fewer than MIN_GROUP_SIZE members are suppressed (k-anonymity);
+    only their count is reported, never their label or statistics.
     """
     valid_dims = {"gender_group", "tenure_band", "level_band"}
     valid_metrics = {"betweenness", "degree"}
@@ -51,19 +54,25 @@ def get_centrality_distribution(
         cur.execute(
             """
             SELECT group_value, metric, median_score, p25_score, p75_score,
-                   member_count, below_org_median
+                   member_count, below_org_median, mean_ratio, effect_size, p_value, q_value
             FROM structural_equity_scores
             WHERE dimension = %s AND metric = %s AND computed_at = %s
             ORDER BY median_score DESC NULLS LAST
             """,
             (dimension, metric, latest),
         )
-        rows = [dict(r) for r in cur.fetchall()]
+        all_rows = [dict(r) for r in cur.fetchall()]
+
+    # Defence in depth: filter here too, so rows persisted before the SQL guard
+    # in compute_equity existed can never leak a small group.
+    rows = [r for r in all_rows if int(r["member_count"] or 0) >= MIN_GROUP_SIZE]
 
     return {
         "computed_at": str(latest),
         "dimension": dimension,
         "metric": metric,
+        "min_group_size": MIN_GROUP_SIZE,
+        "suppressed_groups": len(all_rows) - len(rows),
         "groups": [
             {
                 "group_value": r["group_value"],
@@ -72,6 +81,10 @@ def get_centrality_distribution(
                 "p75_score": round(float(r["p75_score"]), 6) if r["p75_score"] is not None else None,
                 "member_count": int(r["member_count"] or 0),
                 "below_org_median": bool(r["below_org_median"]),
+                "mean_ratio": _round_or_none(r.get("mean_ratio")),
+                "effect_size": _round_or_none(r.get("effect_size")),
+                "p_value": _round_or_none(r.get("p_value")),
+                "q_value": _round_or_none(r.get("q_value")),
             }
             for r in rows
         ],
@@ -191,3 +204,7 @@ def import_demographics(
 
     conn.commit()
     return {"imported": imported, "skipped": skipped}
+
+
+def _round_or_none(v, digits: int = 4):
+    return round(float(v), digits) if v is not None else None

@@ -17,6 +17,7 @@ import networkx as nx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from graph.edge_weights import weighted_edge_sql
 from ingestion.db import get_conn
 
 logger = logging.getLogger(__name__)
@@ -43,11 +44,11 @@ def load_raw_edges(
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     re.source_id::text,
                     re.target_id::text,
-                    re.weight,
+                    {weighted_edge_sql("re")} AS weight,
                     es.department,
                     et.department
                 FROM raw_events re

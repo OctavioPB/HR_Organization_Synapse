@@ -28,23 +28,38 @@ def test_graph_builder_dag_id():
     assert dag.dag_id == "graph_builder_dag"
 
 
-def test_graph_builder_dag_has_six_tasks():
+_GRAPH_BUILDER_TASKS = {
+    "sync_hris_data",
+    "check_raw_events",
+    "build_graph",
+    "compute_metrics",
+    "compute_onboarding",
+    "detect_silos",
+    "score_risks",
+    "flag_spof_critical",
+    "detect_sudden_withdrawal",
+    "trigger_neo4j_import",
+    "broadcast_alerts",
+}
+
+
+def test_graph_builder_dag_task_count():
     dag = _gb_module.graph_builder_dag.airflow_dag
-    assert len(dag.tasks) == 6, f"Expected 6 tasks, got {len(dag.tasks)}: {[t.task_id for t in dag.tasks]}"
+    assert len(dag.tasks) == len(_GRAPH_BUILDER_TASKS), [t.task_id for t in dag.tasks]
 
 
 def test_graph_builder_dag_task_ids():
     dag = _gb_module.graph_builder_dag.airflow_dag
     task_ids = {t.task_id for t in dag.tasks}
-    expected = {
-        "check_raw_events",
-        "build_graph",
-        "compute_metrics",
-        "detect_silos",
-        "score_risks",
-        "flag_spof_critical",
-    }
-    assert expected == task_ids, f"Missing tasks: {expected - task_ids}"
+    assert task_ids == _GRAPH_BUILDER_TASKS, (
+        f"missing={_GRAPH_BUILDER_TASKS - task_ids} unexpected={task_ids - _GRAPH_BUILDER_TASKS}"
+    )
+
+
+def test_sudden_withdrawal_runs_after_scoring():
+    dag = _gb_module.graph_builder_dag.airflow_dag
+    task = dag.get_task("detect_sudden_withdrawal")
+    assert "score_risks" in task.upstream_task_ids
 
 
 def test_graph_builder_dag_schedule():

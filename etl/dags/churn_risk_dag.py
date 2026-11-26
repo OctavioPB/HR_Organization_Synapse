@@ -1,4 +1,10 @@
-"""Airflow DAG: Churn Risk GNN — weekly training + daily scoring.
+"""Airflow DAG: churn risk — weekly training + daily scoring.
+
+Default model: calibrated logistic regression on point-in-time features
+(ml/churn, MATH_MODEL.md §9.1).  The ChurnGAT is a challenger only: set
+CHURN_MODEL=gat to use it, and only after it beats the baseline on held-out
+data (ml.churn.model.select_champion).  Its trainer cannot currently build a
+leakage-free split (see ml/churn/model.py docstring).
 
 Schedules:
     churn_gnn_train   — every Sunday at 02:00 UTC (weekly model refresh)
@@ -58,23 +64,45 @@ def churn_gnn_train_dag():
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-        from ml.gnn.trainer import train
+        import os
 
         snapshot_date = date.fromisoformat(ds) if ds else date.today()
-        logger.info("Training ChurnGAT for snapshot_date=%s", snapshot_date)
-        checkpoint_path, metrics = train(
-            snapshot_date=snapshot_date,
-            window_days=30,
-        )
+        if os.environ.get("CHURN_MODEL", "logreg") == "gat":
+            from ml.gnn.trainer import train
+
+            logger.info("Training ChurnGAT challenger for snapshot_date=%s", snapshot_date)
+            checkpoint_path, metrics = train(snapshot_date=snapshot_date, window_days=30)
+        else:
+            from ml.churn.pipeline import train_churn_model
+
+            logger.info("Training calibrated churn model as of %s", snapshot_date)
+            checkpoint_path, metrics = train_churn_model(snapshot_date)
         logger.info("Training complete — checkpoint=%s metrics=%s", checkpoint_path, metrics)
         return metrics
 
     @task()
     def log_metrics(metrics: dict) -> None:
         """Log training metrics; alert if val_auroc below threshold."""
-        val_auroc = metrics.get("val_auroc", 0.0)
-        test_auroc = metrics.get("test_auroc")
-        n_train = metrics.get("n_train", 0)
+        if metrics.get("error"):
+            logger.warning("Churn model not trained: %s", metrics)
+            return
+        test = metrics.get("test", {})
+        val_auroc = metrics.get("val_auroc", test.get("auroc", 0.0)) or 0.0
+        test_auroc = metrics.get("test_auroc", test.get("auroc"))
+        n_train = metrics.get("n_train", metrics.get("train", {}).get("n", 0))
+        if test:
+            logger.info(
+                "Held-out calibration — brier=%.4f skill=%.3f ece=%.4f",
+                test.get("brier", float("nan")),
+                test.get("brier_skill", float("nan")),
+                test.get("ece", float("nan")),
+            )
+            if test.get("ece", 0.0) > 0.05:
+                logger.warning(
+                    "Held-out ECE %.3f > 0.05: probabilities are miscalibrated, usually because the "
+                    "departure base rate shifted. Treat churn_prob as a ranking until it recovers.",
+                    test["ece"],
+                )
 
         logger.info(
             "ChurnGAT metrics — val_auroc=%.4f test_auroc=%s n_train=%d",
@@ -134,10 +162,18 @@ def churn_gnn_score_dag():
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-        from ml.gnn.scorer import score
+        import os
 
         snapshot_date = date.fromisoformat(ds) if ds else date.today()
         logger.info("Scoring employees for snapshot_date=%s", snapshot_date)
+
+        if os.environ.get("CHURN_MODEL", "logreg") != "gat":
+            from ml.churn.pipeline import score_churn
+
+            # Always logs today's features (training needs them), scores if a model exists.
+            return score_churn(snapshot_date=snapshot_date, window_days=30)
+
+        from ml.gnn.scorer import score
 
         try:
             results = score(snapshot_date=snapshot_date, window_days=30)

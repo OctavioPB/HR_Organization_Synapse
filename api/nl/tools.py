@@ -388,6 +388,7 @@ def _get_silo_alerts(conn) -> dict:
 
 def _simulate_removal(inp: dict, conn) -> dict:
     from graph.builder import build_graph
+    from graph.edge_weights import weighted_edge_sql
     from graph.metrics import compute_betweenness
     from api import db as queries
     import networkx as nx
@@ -403,9 +404,9 @@ def _simulate_removal(inp: dict, conn) -> dict:
     start_ts = end_ts - timedelta(days=window_days)
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT re.source_id::text, re.target_id::text, re.weight,
-                   es.department, et.department
+            f"""
+            SELECT re.source_id::text, re.target_id::text, {weighted_edge_sql("re")} AS weight,
+                   es.department AS dept_source, et.department AS dept_target
             FROM raw_events re
             JOIN employees es ON re.source_id = es.id
             JOIN employees et ON re.target_id = et.id

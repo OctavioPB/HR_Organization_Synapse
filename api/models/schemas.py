@@ -55,11 +55,24 @@ class CommunitiesResponse(BaseModel):
     communities: list[Community]
 
 
+class EgoNode(NodeMetrics):
+    """Ego-network node (centre or neighbour), enriched with its latest SPOF risk.
+
+    ``flag`` / ``spof_score`` are None when the employee has no risk score on or
+    before the snapshot date — clients must render that as *unknown*, never as
+    ``normal`` (a missing score is not evidence of low risk).
+    """
+
+    spof_score: float | None = None
+    flag: str | None = None
+    risk_scored_at: date | None = None
+
+
 class EgoNetwork(BaseModel):
     employee_id: str
     snapshot_date: date
-    node: NodeMetrics
-    neighbors: list[NodeMetrics]
+    node: EgoNode
+    neighbors: list[EgoNode]
     edges: list[GraphEdge]
 
 
@@ -585,6 +598,11 @@ class SiloMember(BaseModel):
 class SiloMembersResponse(BaseModel):
     alert_id: str
     department: str
-    isolation_ratio: float
+    isolation_ratio: float  # legacy, informational: internal/outgoing edge counts
+    # Size-corrected silo measure (Coleman homophily).  None for alerts written
+    # before the homophily detector existed.
+    homophily: float | None = None
+    internal_share: float | None = None
+    expected_internal_share: float | None = None
     member_count: int
     members: list[SiloMember]

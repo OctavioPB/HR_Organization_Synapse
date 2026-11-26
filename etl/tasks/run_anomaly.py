@@ -49,7 +49,7 @@ def task_run_isolation_forest(
     Returns:
         JSON-serialisable dict with employees_scored and anomalies_detected counts.
     """
-    from ml.anomaly.isolation_forest import run_isolation_forest, write_anomaly_alerts
+    from ml.anomaly.isolation_forest import detect_anomalies, load_reference, write_anomaly_alerts
     from ml.features.feature_extractor import extract_features
 
     d = date.fromisoformat(snapshot_date_str)
@@ -63,7 +63,8 @@ def task_run_isolation_forest(
             "anomalies_detected": 0,
         }
 
-    results = run_isolation_forest(features)
+    reference = load_reference(d, window_days)
+    results = detect_anomalies(features, reference)
     write_anomaly_alerts(results, d)
 
     anomalies_detected = sum(1 for r in results if r["is_anomaly"])
@@ -71,6 +72,7 @@ def task_run_isolation_forest(
         "snapshot_date": snapshot_date_str,
         "employees_scored": len(results),
         "anomalies_detected": anomalies_detected,
+        "reference_rows": int(len(reference)),
     }
     logger.info("task_run_isolation_forest: %s", stats)
     return stats

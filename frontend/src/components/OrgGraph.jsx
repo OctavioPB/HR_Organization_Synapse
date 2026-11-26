@@ -5,8 +5,15 @@ import { SigmaContainer, useLoadGraph, useRegisterEvents } from "@react-sigma/co
 import { useWorkerLayoutForceAtlas2 } from "@react-sigma/layout-forceatlas2";
 import "@react-sigma/core/lib/react-sigma.min.css";
 
+// No score on record. Deliberately neutral grey, never the green "low" color:
+// a missing score is not evidence of low structural risk.
+const NO_SCORE_COLOR = "#B8BEC7";
+
+const hasScore = (score) => typeof score === "number" && Number.isFinite(score);
+
 // SPOF score → node color per BRAND.md spec
 function spofColor(score) {
+  if (!hasScore(score)) return NO_SCORE_COLOR;
   if (score > 0.75) return "#E03448";
   if (score > 0.5)  return "#F07020";
   if (score > 0.25) return "#336699";
@@ -30,7 +37,7 @@ function GraphLoader({ nodes, edges }) {
       graph.addNode(n.employee_id, {
         label: n.name,
         size: spofSize(n.betweenness ?? 0),
-        color: spofColor(n.spof_score ?? 0),
+        color: spofColor(n.spof_score),
         x: Math.cos(angle) * 50,
         y: Math.sin(angle) * 50,
         employeeId: n.employee_id,
@@ -227,6 +234,7 @@ export default function OrgGraph({ nodes = [], edges = [], style }) {
           { color: "#336699", label: "Moderate (0.25–0.5)" },
           { color: "#F07020", label: "High  (0.5–0.75)" },
           { color: "#E03448", label: "Critical  (> 0.75)" },
+          ...(nodes.some((n) => !hasScore(n.spof_score)) ? [{ color: NO_SCORE_COLOR, label: "No score" }] : []),
         ].map(({ color, label }) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span

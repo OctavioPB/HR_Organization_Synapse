@@ -842,6 +842,18 @@ def test_graph_vs_baseline_verdict_documented():
     assert True, f"Verdict: {verdict}, delta={report.delta_auroc:+.4f}"
 
 
+def test_champion_selection_keeps_baseline_when_graph_does_not_earn_it():
+    """Production rule (ml.churn.model.select_champion): the graph model is used
+    only if it beats the tabular baseline by >= 2pp AUROC on held-out data."""
+    from ml.churn.model import select_champion
+
+    report = _get_report()
+    base = {"auroc": report.baseline["auroc"], "brier": 0.0}
+    graph = {"auroc": report.graph_mlp["auroc"], "brier": 0.0}
+    expected = "challenger" if report.delta_auroc >= 0.02 else "baseline"
+    assert select_champion(base, graph) == expected
+
+
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
 

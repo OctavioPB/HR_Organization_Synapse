@@ -21,6 +21,36 @@ This document records every quantitative decision in the platform: why each form
 - §13: Limitations — three new: hybrid-work channel drift, turnover contagion blind spot, discrete-snapshot GNN
 - §15: References — five new peer-reviewed citations
 
+**CHANGELOG v3.1 (Nov 2026 — spec/implementation reconciliation; details in MATH_MODEL.md §12):**
+- §2.2: Channel × direction weights ω are now applied in every edge loader (they were documented but unread)
+- §4: Entropy trend — weekly bucketing fixed (the SQL never ran on Postgres, so every trend was 0); equal 7-day weeks; consent filter
+- §5.3: `lo` corner corrected to (0.35, 0.26, 0.24, 0.15) so it respects the strict ordering it requires
+- §12: spof_risk replaced by brokerage concentration (mean rank-based SPOF is ≈0.4 for every org); silo detection and silo_risk replaced by Coleman homophily (the isolation ratio was size-biased)
+- §14: parameter table updated (new, renamed and retired variables)
+- Betweenness remains **directed** in code despite the undirected intent (Decisions.md §6): switching alone halved validation precision (MATH_MODEL.md §3)
+
+**CHANGELOG v3.2 (Nov 2026 — entropy trend estimator; details in MATH_MODEL.md §4.1–4.2):**
+- §4: entropy trend = Theil-Sen slope over 4 weeks, shrunk toward the population median by its sampling variance (DerSimonian–Laird τ²); the `withdrawing` flag requires P(slope < −0.05) ≥ 0.90. Validation: slope RMSE −53 %, false-positive withdrawal flags 50.8 % → 2.5 %
+- §4: new `sudden_withdrawal` alert from a Poisson change-point on daily initiated activity (simulated 0.05 % false alarms; superseded in v3.3 after it failed on real e-mail)
+
+**CHANGELOG v3.3 (Nov 2026 — real-network test bed; MATH_MODEL.md §13.1):**
+- New validation against the public SNAP email-Eu-core networks, using real-data nulls and injected signals
+- §4: the Poisson daily change-point false-alarmed on 32–43 % of real trendless histories and was replaced by a recent-vs-personal-baseline negative-binomial test (1.5 % false alarms, 53 % power for a 90 % drop)
+- §4: entropy noise model gains a population-estimated week-to-week variance term; real false positives 12.5 % → 2.0 %
+- §12: silo homophily index confirmed unbiased on real data; §5: undirected betweenness is marginally better on real data (removal-damage Spearman 0.89 vs 0.87)
+
+**CHANGELOG v3.4 (Nov 2026 — SPOF redesign; MATH_MODEL.md §5):**
+- §5.1: betweenness is now **undirected** (tie strength w(u,v) + w(v,u)), as Decisions.md §6 always intended
+- §5.3: weights **fitted to measured removal damage** (real network: all 986 people; synthetic org: all 100) under every planted-archetype gate: α, β, γ, δ = 0.50, 0.325, 0.05, 0.125 (was 0.4, 0.3, 0.2, 0.1). Spearman(SPOF, damage) 0.81 → 0.85 real, 0.35 → 0.57 synthetic
+- §5.3: the two-corner robustness bracket is replaced by **P(critical)** from an event bootstrap plus Dirichlet weight jitter; `critical` requires P(critical) ≥ 0.9
+- §4: sudden-withdrawal alerts use calibrated p-values and Benjamini–Hochberg FDR control across employees (0.00 false alerts per run on a real-data null)
+
+**CHANGELOG v3.5 (Nov 2026 — statistical tests for churn, peer departures, equity, anomalies; MATH_MODEL.md §8–§10.5):**
+- §7: churn default is a **calibrated logistic regression** on point-in-time features from a daily feature log (migration 019), with a purged temporal split. The ChurnGAT trainer could not train (one label date → empty training fold), never saw leavers, and lost to the baseline; it is now a challenger that must beat the baseline on held-out data. Tiers are relative to the base rate
+- §7.4.1: peer contagion = tie-share exposure with 45-day half-life over the retained 90 days, permutation test + BH, 30 % undiscounted-share floor. The old rule could not fire (departed peers were not in the active-only graph). On real e-mail, exposure does **not** predict departure; the alert is a handover check-in
+- §11.1: equity flag = ratio of means vs. **everyone else** < 0.8 **and** BH q ≤ 0.10 from a label-permutation test. The old reference (median of group medians) was wrong, never fired on betweenness, and raised 1.35 chance flags per run on a 120-person org
+- §10 (anomaly): Isolation Forest alerts use conformal p-values against the org's last 8 weeks + BH, instead of `contamination = 0.05` (which flagged 5 % of any org)
+
 ---
 
 ## 1. Notation
@@ -152,14 +182,18 @@ CDR(v) = |{(v,u) ∈ E : dept(u) ≠ dept(v)}| / max(|{(v,u) ∈ E}|, 1)
 
 The specific weight values (0.4, 0.3, 0.2, 0.1) are theoretically motivated but not empirically derived. The justification for the *ordering* α > β > γ > δ is sound. The justification for the *magnitudes* is not.
 
+> **Superseded (v3.4).** The weights are now fitted to measured removal damage (MATH_MODEL.md §5.1): 0.50, 0.325, 0.05, 0.125. The data contradicted the ordering for γ: (1 − clustering) carried no damage signal on the real network, and a small γ survives only because it separates tightly clustered silo members from bridges. The corner bracket below is replaced by P(critical) from an event bootstrap (MATH_MODEL.md §5.2). It is kept here as history.
+
 Before using SPOF scores for personnel decisions, the implementation MUST compute and expose:
 
 ```
-SPOF_lo(v) = SPOF(v) evaluated with α=0.35, β=0.25, γ=0.25, δ=0.15
+SPOF_lo(v) = SPOF(v) evaluated with α=0.35, β=0.26, γ=0.24, δ=0.15
 SPOF_hi(v) = SPOF(v) evaluated with α=0.50, β=0.30, γ=0.15, δ=0.05
 ```
 
 These bracket a ±20% perturbation in weight space while preserving the ordering constraint.
+
+**CORRECTION (v3.1, Nov 2026):** v2 specified `lo` as (0.35, 0.25, **0.25**, 0.15), which ties β and γ and so violates the strict ordering this section requires. `lo` now keeps its α and δ endpoints and moves β and γ by 0.04. The implementation expresses both corners as offsets from the central weights, so they follow `SPOF_ALPHA..SPOF_DELTA` overrides.
 
 **Robustness condition:** An employee is flagged as `robust_critical` only if their SPOF score exceeds the critical threshold under ALL weight combinations in the perturbation set. An employee who crosses the threshold only under the central weights but not under perturbations is flagged as `weight_sensitive` — the classification depends on the specific weight choice and should not be acted upon without additional qualitative investigation.
 
@@ -379,12 +413,22 @@ health_score = (1 − composite_risk) × 100    ∈ [0, 100]
 
 | Component | Weight | Formula |
 |---|---|---|
-| silo_risk | 0.20 | See §12.1 (corrected) |
-| spof_risk | 0.35 | mean(SPOF(v)) over all v with SPOF > 0.3 |
+| silo_risk | 0.20 | Size-weighted mean of max(H_D, 0), Coleman homophily per department (§12.1, v3.1) |
+| spof_risk | 0.35 | Brokerage concentration: (S_k − k/N)/(1 − k/N), S_k = share of total betweenness held by the top k = ⌈0.05·N⌉ (v3.1) |
 | entropy_risk | 0.20 | fraction of employees with entropy_trend < −0.05 |
 | fragmentation_risk | 0.25 | See §12.2 (corrected) |
 
-### 12.1 Silo Risk — CORRECTED
+**CORRECTION (v3.1, Nov 2026): spof_risk.** v1–v3 defined spof_risk as mean SPOF (over employees with SPOF > 0.3; the code averaged over all). Since v2, SPOF is a weighted sum of rank percentiles (§5.1), and the mean percentile of any population is ≈0.5. Mean SPOF is therefore ≈0.5·(α+β+γ−δ) ≈ 0.4 for *every* organization, so the component carrying 35 % of the score could not distinguish a fragile org from a robust one. On the demo data it moved 0.427–0.433 across eight weeks. Brokerage concentration is an absolute, graph-level measure: it is 0 when brokerage is spread evenly and 1 when the top 5 % hold all of it.
+
+### 12.1 Silo Risk — CORRECTED (v2), REPLACED (v3.1)
+
+> **v3.1 (Nov 2026):** both the v2 count-based formula below and the isolation ratio it counted are superseded.
+>
+> The isolation ratio `internal/outgoing` is biased by department size. Under pure random mixing its expected value is (n−1)/(N−n): ≈1.0 for a department holding half the org, ≈0.2 for a small one. On the demo data that **inverted the ranking**: the largest department scored most siloed and the most inward one, relative to its size, scored least.
+>
+> Detection now uses Coleman's homophily index H_D = (p_D − q_D)/(1 − q_D), with p_D the internal share of the department's interaction volume and q_D = (n_D−1)/(N−1). A department is a silo at H_D ≥ 0.50 and critical at H_D ≥ 0.75.
+>
+> `silo_risk` is the size-weighted mean of max(H_D, 0). The count-based form below saturated at 1.0 as soon as two departments were flagged. `SILO_THRESHOLD` and `SILO_THRESHOLD_RATIO` are no longer read. See MATH_MODEL.md §7 and §11.
 
 **CORRECTION from v1:** The original formula:
 
@@ -495,12 +539,17 @@ All parameters are configurable via environment variables. Weights sum to 1.0 wi
 
 | Variable | Default | Formula use | Changed in v2 |
 |---|---|---|---|
-| `SPOF_ALPHA` | 0.4 | Betweenness weight in SPOF | No |
-| `SPOF_BETA` | 0.3 | Cross-dept ratio weight in SPOF | No |
-| `SPOF_GAMMA` | 0.2 | (1 − clustering) weight in SPOF | No |
-| `SPOF_DELTA` | 0.1 | Entropy trend weight in SPOF | No |
-| `SPOF_PERTURB_RANGE` | 0.15 | Weight perturbation range for sensitivity bands | **NEW** |
-| `KNOWLEDGE_LAMBDA` | 0.3 | Knowledge risk blend weight in Enhanced SPOF | No |
+| `SPOF_ALPHA` | 0.50 | Betweenness weight in SPOF (was 0.4) | **v3.4** |
+| `SPOF_BETA` | 0.325 | Cross-dept ratio weight in SPOF (was 0.3) | **v3.4** |
+| `SPOF_GAMMA` | 0.05 | (1 − clustering) weight in SPOF (was 0.2) | **v3.4** |
+| `SPOF_DELTA` | 0.125 | Entropy trend weight in SPOF (was 0.1) | **v3.4** |
+| `SPOF_UNCERTAINTY_SAMPLES` | 30 | Event-bootstrap replicates for P(critical) | **NEW** (v3.4) |
+| `SPOF_WEIGHT_CONCENTRATION` | 200 | Dirichlet concentration for weight jitter | **NEW** (v3.4) |
+| `SPOF_ROBUST_PROBABILITY` | 0.9 | P(critical) required for `critical` | **NEW** (v3.4) |
+| `SUDDEN_WITHDRAWAL_FDR` | 0.10 | Benjamini–Hochberg false-discovery rate across employees | **NEW** (v3.4) |
+| `SUDDEN_WITHDRAWAL_NULL_DRAWS` | 20000 | Shuffled-history draws for p-value calibration | **NEW** (v3.4) |
+| ~~`SPOF_PERTURB_RANGE`~~ | REMOVED (v3.1) | Corners are now fixed offsets from the central weights (§5.3) | **REMOVED** |
+| `KNOWLEDGE_DELTA` | 0.3 | Knowledge risk blend weight in Enhanced SPOF (`KNOWLEDGE_LAMBDA` accepted as alias) | **RENAMED** (v3.1) |
 | `SUCCESSION_W_STRUCT` | 0.40 | Structural overlap weight in compatibility score | No |
 | `SUCCESSION_W_CLUST` | 0.25 | Clustering weight in compatibility score | No |
 | `SUCCESSION_W_DOMAIN` | 0.35 | Domain overlap weight in compatibility score | No |
@@ -508,12 +557,24 @@ All parameters are configurable via environment variables. Weights sum to 1.0 wi
 | `HEALTH_W_SPOF` | 0.35 | SPOF component weight in Org Health | No |
 | `HEALTH_W_ENTROPY` | 0.20 | Entropy component weight in Org Health | No |
 | `HEALTH_W_FRAG` | 0.25 | Fragmentation component weight in Org Health | No |
-| `SILO_THRESHOLD` | ~~4.0~~ REMOVED | Fixed threshold — deprecated | **REMOVED** |
-| `SILO_THRESHOLD_RATIO` | 3.0 | Departments per silo threshold | **NEW** |
+| `SILO_THRESHOLD` | ~~4.0~~ REMOVED | Fixed isolation-ratio threshold — no longer read (v3.1) | **REMOVED** |
+| ~~`SILO_THRESHOLD_RATIO`~~ | REMOVED (v3.1) | Count-based silo_risk denominator, replaced by homophily | **REMOVED** |
+| `SILO_HOMOPHILY_THRESHOLD` | 0.50 | Coleman homophily index at which a department is a silo | **NEW** (v3.1) |
+| `SILO_HOMOPHILY_CRITICAL` | 0.75 | Homophily index for critical severity | **NEW** (v3.1) |
+| `SILO_MIN_DEPT_SIZE` | 3 | Smaller departments are never flagged | **NEW** (v3.1) |
+| `HEALTH_SPOF_TOP_FRACTION` | 0.05 | "Top" share of employees for brokerage concentration | **NEW** (v3.1) |
+| `CHANNEL_WEIGHTING` | on | `off` reverts edges to raw event weights | **NEW** (v3.1) |
 | `FRAGMENTATION_LAMBDA` | 1.5 | Exponential decay parameter for fragmentation risk | **NEW** |
 | `BETWEENNESS_EXACT_THRESHOLD` | 500 | Node count below which exact betweenness is computed | No |
 | `BETWEENNESS_K_PIVOTS` | 200 | k-pivot count for approximate betweenness | No |
-| `ENTROPY_SLOPE_THRESHOLD` | −0.05 | Weekly slope below which employee is flagged `withdrawing` | No |
+| `ENTROPY_SLOPE_THRESHOLD` | −0.05 | Slope the `withdrawing` flag tests against (now probabilistically) | v3.2 |
+| `ENTROPY_WITHDRAW_CONFIDENCE` | 0.90 | Required P(true slope < threshold) for `withdrawing` | **NEW** (v3.2) |
+| `SUDDEN_WITHDRAWAL_BASELINE_WEEKS` | 9 | Personal baseline length | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_RECENT_WEEKS` | 3 | Recent window tested against the baseline | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_ALPHA` | 0.001 | NB tail probability for an alert | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_MIN_DROP` | 0.5 | Minimum fractional drop | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_MIN_WEEKLY` | 7 | Minimum baseline interactions/week | **NEW** (v3.3) |
+| ~~`CHANGEPOINT_*`~~ | REMOVED (v3.3) | Poisson daily change-point; failed on real e-mail (32–43 % false alarms) | **REMOVED** |
 | `ENTROPY_WINDOW_DAYS` | 30 | Rolling window for entropy and slope computation | No |
 | `GRAPH_WINDOW_DAYS` | 30 | Rolling window for edge accumulation | No |
 | `GRAPH_MIN_EVENTS` | 100 | Minimum events in window before DAG proceeds | No |

@@ -15,7 +15,9 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 def get_silo_alerts(conn=Depends(get_db)) -> AlertsResponse:
     """Active (unresolved) silo community alerts.
 
-    A silo alert fires when a community's isolation_ratio exceeds SILO_THRESHOLD.
+    A silo alert fires when a department's homophily index (share of its
+    interaction volume kept inside, corrected for what random mixing would give
+    a department of that size) reaches SILO_HOMOPHILY_THRESHOLD.
     Returns up to 100 most recent unresolved silo alerts.
     """
     rows = queries.fetch_silo_alerts(conn)
@@ -27,7 +29,7 @@ def get_silo_alerts(conn=Depends(get_db)) -> AlertsResponse:
 def get_entropy_alerts(conn=Depends(get_db)) -> AlertsResponse:
     """Active alerts for withdrawing employees and connectivity anomalies.
 
-    Includes alerts of type: withdrawing, connectivity_anomaly, spof_critical.
+    Includes alerts of type: withdrawing, sudden_withdrawal, connectivity_anomaly, spof_critical.
     Returns up to 200 most recent unresolved alerts.
     """
     rows = queries.fetch_entropy_alerts(conn)
@@ -52,6 +54,10 @@ def get_silo_members(alert_id: str, conn=Depends(get_db)) -> SiloMembersResponse
     department = (entities.get("departments") or ["Unknown"])[0]
     isolation_ratio = float(entities.get("isolation_ratio", 0.0))
 
+    def _opt(key: str) -> float | None:
+        v = entities.get(key)
+        return float(v) if v is not None else None
+
     member_rows = queries.fetch_silo_members(alert_id, conn)
     members = [SiloMember(**r) for r in member_rows]
 
@@ -59,6 +65,9 @@ def get_silo_members(alert_id: str, conn=Depends(get_db)) -> SiloMembersResponse
         alert_id=alert_id,
         department=department,
         isolation_ratio=isolation_ratio,
+        homophily=_opt("homophily"),
+        internal_share=_opt("internal_share"),
+        expected_internal_share=_opt("expected_internal_share"),
         member_count=len(members),
         members=members,
     )

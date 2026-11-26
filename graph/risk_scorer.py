@@ -1,37 +1,49 @@
 """SPOF risk scoring: computes Single-Point-of-Failure scores per employee.
 
-Formula (MODEL.md §5.1, v2 — rank-percentile normalized):
-    SPOF(v) = α × R(BC_norm(v), V)
-            + β × R(CDR(v), V)
+Formula (MATH_MODEL.md §5; v3.4 weights fitted to measured removal damage):
+    SPOF(v) = α × R(BC(v), V)                (undirected betweenness, graph.metrics)
+            + β × R(CDR(v), V)               (cross-department ratio)
             + γ × R((1 − CC(v)), V)
             − δ × R_signed(entropy_trend(v), V)
 
-CORRECTION (v2): each metric is passed through a rank-percentile transform
-R(·, V) over the population V *before* the linear combination.  Raw values have
-wildly different empirical variances (betweenness is heavily right-skewed,
-cross-dept ratio near-uniform, entropy trend a near-zero slope), so combining
-raw values lets the highest-variance term dominate regardless of its nominal
-weight.  Rank-percentile mapping forces each term into [0, 1] uniformly so that
-α = 0.4 really contributes 40% of the score variance.  R_signed maps the most
-*negative* (withdrawing) entropy trend to percentile 0 and the most positive
-(engaging) to 1, so the `− δ × R_signed` term subtracts little from withdrawing
-employees (keeps their risk high) and more from engaging ones.
+    α, β, γ, δ = 0.50, 0.325, 0.05, 0.125   (SPOF_ALPHA … SPOF_DELTA)
 
-Weight sensitivity (MODEL.md §5.3): the nominal weights are theoretically
-ordered (α > β > γ > δ) but not empirically calibrated, so each employee is also
-scored under a ±perturbation bracket.  An employee is `robust_critical` only if
-their score crosses the critical threshold under ALL weight sets; one that
-crosses only under the central weights is `weight_sensitive` and must get
-qualitative review before any personnel action.
+Each metric is rank-percentile transformed over the population V before the
+linear combination (MODEL.md §5.1), so a weight controls its nominal share
+rather than letting the most skewed metric dominate.
 
-Weights are configurable via environment variables (SPOF_ALPHA, _BETA, _GAMMA,
-_DELTA); the perturbation magnitude via SPOF_PERTURB_RANGE.
+Why these weights (Nov 2026).  The v2 weights (0.4, 0.3, 0.2, 0.1) were
+theoretically ordered but never fitted.  Against *measured* removal damage —
+every employee removed in turn on the public SNAP email-Eu-core network (986
+people) and on the synthetic validation org — a least-squares fit gave
+betweenness ≈0.8, CDR ≈0.13 and (1 − clustering) ≈ −0.06.  A constrained grid
+search (575 weight sets, step 0.025) kept only those passing every synthetic
+planted-archetype gate — all bridges critical, precision@critical ≥ 80 %, sole
+experts < 0.7, silo members < 0.5 — and ranked them by damage agreement on both
+datasets.  The chosen set sits in the best region (α ≈ 0.5, β ≈ 0.3, small γ,
+δ ≈ 0.125) with the widest gate margins (silo max 0.47, sole-expert max 0.61).
+It raises Spearman(SPOF, damage) from 0.81 to 0.85 on the real network and from
+0.36 to 0.57 on the synthetic org.  A small γ is still needed: tightly clustered
+silo members must not look like bridges.  δ is a departure-likelihood signal,
+not a damage signal, and cannot be fitted on static data.
+
+Uncertainty (MATH_MODEL §5.2).  Rank on a 30-day window is noisy: on real e-mail,
+resampling a window's events keeps only ≈77 % of the top-20 brokers.  So
+P(critical) comes mainly from an EVENT BOOTSTRAP — the graph is rebuilt from
+resampled events SPOF_UNCERTAINTY_SAMPLES times — with each replicate also
+drawing weights from a Dirichlet centred on the central weights.  An employee
+is ``robust_critical`` when the central score is ≥ 0.7 AND P(critical) ≥ 0.9;
+``weight_sensitive`` (flag ``critical_uncertain``) when the central score is
+≥ 0.7 but P(critical) < 0.9.  ``score_lo`` / ``score_hi`` are the 10th / 90th
+percentiles of the replicate scores (an 80 % interval).  This replaces the v2
+two-corner weight bracket, whose strict α > β > γ > δ ordering no longer holds
+for fitted weights (γ < δ), and which ignored data noise entirely.
 
 Public functions:
     compute_spof_score(betweenness, cross_dept, clustering, entropy_trend, α, β, γ, δ) → float
     score_all(G, betweenness, clustering, entropy_trends, weights) → dict[str, float]
-    score_all_with_bands(G, betweenness, clustering, entropy_trends, weights) → dict[str, dict]
-    write_scores(scores, entropy_trends, snapshot_date, bands) → None
+    score_all_with_bands(G, betweenness, clustering, entropy_trends, weights, raw_edges, …) → dict[str, dict]
+    write_scores(scores, entropy_trends, snapshot_date, bands, withdrawing) → None
 
 CLI:
     python graph/risk_scorer.py --snapshot-date 2025-04-25
@@ -62,40 +74,33 @@ from ingestion.db import get_conn
 logger = logging.getLogger(__name__)
 
 _DEFAULT_WEIGHTS = {
-    "alpha": float(os.environ.get("SPOF_ALPHA", "0.4")),
-    "beta": float(os.environ.get("SPOF_BETA", "0.3")),
-    "gamma": float(os.environ.get("SPOF_GAMMA", "0.2")),
-    "delta": float(os.environ.get("SPOF_DELTA", "0.1")),
+    "alpha": float(os.environ.get("SPOF_ALPHA", "0.50")),
+    "beta": float(os.environ.get("SPOF_BETA", "0.325")),
+    "gamma": float(os.environ.get("SPOF_GAMMA", "0.05")),
+    "delta": float(os.environ.get("SPOF_DELTA", "0.125")),
 }
 
 # Score at/above which an employee is flagged critical (MODEL.md §5.5).
 _CRITICAL_THRESHOLD = 0.7
-
-# Weight perturbation for the robustness bracket (MODEL.md §5.3).  The two
-# corner weight-sets bracket a ±SPOF_PERTURB_RANGE move in weight space while
-# preserving the ordering constraint α > β > γ > δ.  They are derived from the
-# central weights so they continue to track SPOF_ALPHA..SPOF_DELTA overrides.
-_PERTURB_RANGE = float(os.environ.get("SPOF_PERTURB_RANGE", "0.15"))
-
-
-def _perturbed_weights(direction: int) -> dict[str, float]:
-    """Return a perturbed weight set (direction +1 = 'hi', -1 = 'lo').
-
-    'hi' leans harder on the structural primary signal (betweenness), 'lo'
-    spreads weight toward the cross-dept / clustering terms and up-weights the
-    noisy entropy term.  Both are renormalised to sum to 1.0 so the score stays
-    in the same range as the central formula.
-    """
-    a = _DEFAULT_WEIGHTS["alpha"] + direction * _PERTURB_RANGE * _DEFAULT_WEIGHTS["alpha"]
-    b = _DEFAULT_WEIGHTS["beta"]
-    g = _DEFAULT_WEIGHTS["gamma"] - direction * _PERTURB_RANGE * _DEFAULT_WEIGHTS["gamma"]
-    d = _DEFAULT_WEIGHTS["delta"] - direction * _PERTURB_RANGE * _DEFAULT_WEIGHTS["delta"]
-    total = a + b + g + d
-    return {"alpha": a / total, "beta": b / total, "gamma": g / total, "delta": d / total}
+# Uncertainty: replicates (event bootstrap + Dirichlet weight jitter), the
+# Dirichlet concentration (higher = weights vary less), and the probability of
+# being critical required for `robust_critical`.
+SPOF_UNCERTAINTY_SAMPLES = int(os.environ.get("SPOF_UNCERTAINTY_SAMPLES", "30"))
+SPOF_WEIGHT_CONCENTRATION = float(os.environ.get("SPOF_WEIGHT_CONCENTRATION", "200"))
+SPOF_ROBUST_PROBABILITY = float(os.environ.get("SPOF_ROBUST_PROBABILITY", "0.9"))
+_WEIGHT_KEYS = ("alpha", "beta", "gamma", "delta")
 
 
-_WEIGHTS_LO = _perturbed_weights(-1)
-_WEIGHTS_HI = _perturbed_weights(+1)
+def _sample_weights(rng, central: dict[str, float], concentration: float) -> dict[str, float]:
+    """Dirichlet draw centred on the central weights; zero weights stay zero."""
+
+    keys = [k for k in _WEIGHT_KEYS if central.get(k, 0.0) > 0]
+    total = sum(central[k] for k in keys) or 1.0
+    draw = rng.dirichlet([concentration * central[k] / total for k in keys])
+    out = dict.fromkeys(_WEIGHT_KEYS, 0.0)
+    for k, v in zip(keys, draw, strict=True):
+        out[k] = float(v) * total
+    return out
 
 
 def compute_spof_score(
@@ -155,68 +160,97 @@ def score_all_with_bands(
     clustering: dict[str, float],
     entropy_trends: dict[str, float] | None = None,
     weights: dict[str, float] | None = None,
+    raw_edges: list | None = None,
+    n_samples: int | None = None,
+    seed: int = 42,
 ) -> dict[str, dict]:
-    """Compute SPOF scores plus the weight-sensitivity bracket per employee.
+    """Central SPOF score plus its uncertainty for every employee.
 
-    Each of the four components is rank-percentile transformed across the whole
-    population (MODEL.md §5.1) before the linear combination, so the betweenness
-    term no longer dominates purely because it is the highest-variance metric.
-
-    For every employee the central score and the lo/hi perturbed scores are
-    computed, and the employee is marked ``robust_critical`` only if the score
-    crosses the critical threshold under *all three* weight sets (MODEL.md §5.3).
-
-    Args:
-        G: Directed collaboration graph with 'department' node attributes.
-        betweenness: Per-employee betweenness centrality (raw NetworkX values).
-        clustering: Per-employee clustering coefficient.
-        entropy_trends: Per-employee entropy trend (defaults to 0.0 if absent).
-        weights: Central alpha/beta/gamma/delta dict (defaults to env-var weights).
+    Each component is rank-percentile transformed across the population
+    (MODEL.md §5.1).  Uncertainty comes from *n_samples* replicates: when
+    *raw_edges* (the rows the graph was built from) are given, each replicate
+    rebuilds the graph from events resampled with replacement and recomputes
+    betweenness and CDR — the dominant source of uncertainty; every replicate
+    also draws weights from a Dirichlet centred on the central weights.  Without
+    *raw_edges* only the weight jitter applies.
 
     Returns:
-        Dict mapping employee_id → {
-            "score": float,            central SPOF ∈ [0, 1],
-            "score_lo": float,         score under the lo-weight perturbation,
-            "score_hi": float,         score under the hi-weight perturbation,
-            "robust_critical": bool,   critical under all three weight sets,
-            "weight_sensitive": bool,  critical centrally but not robustly,
+        employee_id → {
+            "score":            central SPOF ∈ [0, 1],
+            "score_lo":         10th percentile of replicate scores,
+            "score_hi":         90th percentile of replicate scores,
+            "p_critical":       share of replicates with score ≥ 0.7,
+            "robust_critical":  central ≥ 0.7 and p_critical ≥ SPOF_ROBUST_PROBABILITY,
+            "weight_sensitive": central ≥ 0.7 but not robust (flag critical_uncertain),
         }
     """
+    import numpy as np
+
     central = weights or _DEFAULT_WEIGHTS
     trends = entropy_trends or {}
-    cross_dept = compute_cross_dept_ratio(G)
-
     nodes = list(G.nodes())
+    n_samples = SPOF_UNCERTAINTY_SAMPLES if n_samples is None else n_samples
+    use_clustering = central.get("gamma", 0.0) > 0
 
-    # Rank-percentile transform each component across the population V.
-    r_bc = _percent_rank({n: betweenness.get(n, 0.0) for n in nodes})
-    r_cdr = _percent_rank({n: cross_dept.get(n, 0.0) for n in nodes})
-    r_inv_cc = _percent_rank({n: 1.0 - clustering.get(n, 0.0) for n in nodes})
+    def _components(graph: nx.DiGraph, bc: dict[str, float], cl: dict[str, float] | None):
+        cdr = compute_cross_dept_ratio(graph)
+        r_bc = _percent_rank({n: bc.get(n, 0.0) for n in nodes})
+        r_cdr = _percent_rank({n: cdr.get(n, 0.0) for n in nodes})
+        r_cc = _percent_rank({n: 1.0 - (cl or {}).get(n, 0.0) for n in nodes}) if cl is not None else {}
+        return r_bc, r_cdr, r_cc
+
     # R_signed: most-negative (withdrawing) trend → 0, most-positive → 1.
     r_ent = _percent_rank({n: trends.get(n, 0.0) for n in nodes})
 
-    def _score(node: str, w: dict[str, float]) -> float:
-        raw = (
-            w["alpha"] * r_bc.get(node, 0.0)
-            + w["beta"] * r_cdr.get(node, 0.0)
-            + w["gamma"] * r_inv_cc.get(node, 0.0)
-            - w["delta"] * r_ent.get(node, 0.0)
+    def _scores(comp, w: dict[str, float]) -> np.ndarray:
+        r_bc, r_cdr, r_cc = comp
+        return np.array(
+            [
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        w["alpha"] * r_bc.get(n, 0.0)
+                        + w["beta"] * r_cdr.get(n, 0.0)
+                        + w["gamma"] * r_cc.get(n, 0.0)
+                        - w["delta"] * r_ent.get(n, 0.0),
+                    ),
+                )
+                for n in nodes
+            ]
         )
-        return max(0.0, min(1.0, raw))
+
+    base_comp = _components(G, betweenness, clustering if use_clustering else None)
+    central_scores = _scores(base_comp, central)
+
+    rng = np.random.default_rng(seed)
+    reps = []
+    for _ in range(max(0, n_samples)):
+        if raw_edges:
+            idx = rng.integers(0, len(raw_edges), len(raw_edges))
+            Gb = build_graph([raw_edges[i] for i in idx])
+            comp = _components(Gb, compute_betweenness(Gb), compute_clustering(Gb) if use_clustering else None)
+        else:
+            comp = base_comp
+        reps.append(_scores(comp, _sample_weights(rng, central, SPOF_WEIGHT_CONCENTRATION)))
+    rep = np.vstack(reps) if reps else central_scores[None, :]
+
+    lo = np.percentile(rep, 10, axis=0)
+    hi = np.percentile(rep, 90, axis=0)
+    p_crit = (rep >= _CRITICAL_THRESHOLD).mean(axis=0)
 
     out: dict[str, dict] = {}
-    for node in nodes:
-        s = _score(node, central)
-        s_lo = _score(node, _WEIGHTS_LO)
-        s_hi = _score(node, _WEIGHTS_HI)
-        crosses_central = s >= _CRITICAL_THRESHOLD
-        robust = crosses_central and s_lo >= _CRITICAL_THRESHOLD and s_hi >= _CRITICAL_THRESHOLD
+    for i, node in enumerate(nodes):
+        s_c = float(central_scores[i])
+        crosses = s_c >= _CRITICAL_THRESHOLD
+        robust = crosses and float(p_crit[i]) >= SPOF_ROBUST_PROBABILITY
         out[node] = {
-            "score": s,
-            "score_lo": s_lo,
-            "score_hi": s_hi,
+            "score": s_c,
+            "score_lo": float(lo[i]),
+            "score_hi": float(hi[i]),
+            "p_critical": float(p_crit[i]),
             "robust_critical": robust,
-            "weight_sensitive": crosses_central and not robust,
+            "weight_sensitive": crosses and not robust,
         }
     return out
 
@@ -254,15 +288,21 @@ def write_scores(
     entropy_trends: dict[str, float],
     snapshot_date: date,
     bands: dict[str, dict] | None = None,
+    withdrawing: set[str] | None = None,
 ) -> None:
     """Persist SPOF scores (and weight-sensitivity bands) to risk_scores.
+
+    ``withdrawing`` is the set of employees whose entropy trend is confidently
+    below the withdrawal threshold (EntropySignal.withdrawing).  When omitted,
+    the fallback is ``trend < ENTROPY_SLOPE_THRESHOLD`` — previously any
+    negative slope counted, which on raw slopes flagged about half the org.
 
     Flag tiers (MODEL.md §5.5):
         ≥ 0.7 and robust under weight perturbation → critical
         ≥ 0.7 but weight-sensitive                  → critical_uncertain
         0.5 – 0.7                                   → warning
         0.4 – 0.5                                   → elevated
-        < 0.4 and trend < 0                         → withdrawing
+        < 0.4 and confidently withdrawing           → withdrawing
         otherwise                                   → normal
 
     ``critical_uncertain`` employees crossed the threshold only under the
@@ -280,6 +320,10 @@ def write_scores(
         bands: Optional per-employee detail from :func:`score_all_with_bands`.
     """
     bands = bands or {}
+    if withdrawing is None:
+        from ml.features.feature_extractor import ENTROPY_SLOPE_THRESHOLD
+
+        withdrawing = {e for e, t in entropy_trends.items() if t < ENTROPY_SLOPE_THRESHOLD}
 
     def _flag(emp_id: str, score: float) -> str:
         if score >= 0.7:
@@ -291,7 +335,7 @@ def write_scores(
             return "warning"
         if score >= 0.4:
             return "elevated"
-        if entropy_trends.get(emp_id, 0.0) < 0:
+        if emp_id in withdrawing:
             return "withdrawing"
         return "normal"
 

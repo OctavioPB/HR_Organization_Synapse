@@ -1,10 +1,5 @@
 import { Link } from "react-router-dom";
-
-function spofBadgeClass(flag) {
-  if (flag === "critical") return "badge badge-critical";
-  if (flag === "warning")  return "badge badge-warning";
-  return "badge badge-normal";
-}
+import { spofFlagStyle } from "../lib/spofFlag.js";
 
 function trendArrow(trend) {
   if (trend === null || trend === undefined) return null;
@@ -211,7 +206,7 @@ export default function CriticalNodePanel({ scores = [], loading = false }) {
                   >
                     {(s.spof_score * 100).toFixed(0)}
                   </span>
-                  <span className={spofBadgeClass(s.flag)}>{s.flag}</span>
+                  <span className={spofFlagStyle(s.flag).cls}>{spofFlagStyle(s.flag).label}</span>
                 </div>
 
                 {/* Trend arrow */}

@@ -97,6 +97,14 @@ html, body {
 .badge-normal::before   { background: #27B97C; }
 .badge-info     { background: #E0EAF4; color: #001F4D; }
 .badge-info::before     { background: #003366; }
+/* SPOF tiers added in migration 017 (MODEL.md §5.5) */
+.badge-critical-uncertain { background: #FDEAEA; color: #7A1020; outline: 1px dashed #E03448; outline-offset: -1px; }
+.badge-critical-uncertain::before { background: #E03448; }
+.badge-elevated { background: #FFF6DB; color: #6B4E00; }
+.badge-elevated::before { background: #C8982A; }
+/* No score on record — deliberately neutral, never styled as "normal" */
+.badge-unknown  { background: #EEF0F3; color: #4B5563; }
+.badge-unknown::before  { background: #9CA3AF; }
 
 /* Sigma container */
 .sigma-container {

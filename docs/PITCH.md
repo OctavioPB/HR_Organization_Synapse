@@ -46,12 +46,14 @@ Each employee receives a daily **SPOF (Single Point of Failure) Score** between 
 
 | Component | Weight | What It Measures |
 |---|---|---|
-| **Network centrality** | 40% | How often this person sits on the shortest communication path between other employees — how many structural holes they bridge |
-| **Cross-department ratio** | 30% | What fraction of their interactions cross departmental boundaries — the hallmark of an irreplaceable connector |
-| **Neighbor self-sufficiency** | 20% | How much their direct collaborators depend on them specifically, rather than being connected to each other |
-| **Engagement trend** | 10% | Whether their interaction diversity is growing or contracting over the past 30 days |
+| **Network centrality** | 50% | How often this person sits on the shortest communication path between other employees — how many structural holes they bridge |
+| **Cross-department ratio** | 32.5% | What fraction of their interactions cross departmental boundaries — the hallmark of an irreplaceable connector |
+| **Neighbor self-sufficiency** | 5% | How much their direct collaborators depend on them specifically, rather than being connected to each other |
+| **Engagement trend** | 12.5% | Whether their interaction diversity is growing or contracting over the past 30 days |
 
-An employee with a SPOF score above **0.7** is flagged **critical** — their unplanned departure would create immediate, measurable disruption to organizational connectivity. A score of 0.5–0.7 is a **warning**: cross-training investment is warranted now, before risk becomes urgency.
+The weights are not opinions. They were fitted to the structural damage measured when each person is removed from the network, on a real e-mail network and on a controlled test organization.
+
+An employee with a SPOF score above **0.7** is flagged **critical**: their unplanned departure would create immediate, measurable disruption to organizational connectivity. Each score comes with a confidence level. When the data cannot support a firm call, the employee is marked "critical, needs review" instead of raising an alert. A score of 0.5–0.7 is a **warning**: cross-training investment is warranted now, before risk becomes urgency.
 
 The model also applies a sensitivity check: an employee is only designated `robust_critical` if they exceed the threshold across multiple statistical weight configurations, not just the central estimate. This prevents acting on borderline classifications.
 

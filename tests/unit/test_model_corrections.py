@@ -38,18 +38,37 @@ class TestPercentRank:
 # ─── §5.3: weight perturbation bracket ────────────────────────────────────────
 
 
-class TestWeightPerturbation:
-    def test_perturbed_weights_sum_to_one(self):
-        from graph.risk_scorer import _WEIGHTS_HI, _WEIGHTS_LO
+class TestWeightSampling:
+    """v3.4: the two fixed corner weight sets were replaced by Dirichlet draws."""
 
-        assert sum(_WEIGHTS_LO.values()) == pytest.approx(1.0)
-        assert sum(_WEIGHTS_HI.values()) == pytest.approx(1.0)
+    def test_samples_sum_to_central_total_and_stay_nonnegative(self):
+        import numpy as np
 
-    def test_ordering_preserved(self):
-        from graph.risk_scorer import _WEIGHTS_HI, _WEIGHTS_LO
+        from graph.risk_scorer import _DEFAULT_WEIGHTS, _sample_weights
 
-        for w in (_WEIGHTS_LO, _WEIGHTS_HI):
-            assert w["alpha"] > w["beta"] > w["gamma"] > w["delta"]
+        rng = np.random.default_rng(0)
+        for _ in range(200):
+            w = _sample_weights(rng, _DEFAULT_WEIGHTS, 200.0)
+            assert sum(w.values()) == pytest.approx(sum(_DEFAULT_WEIGHTS.values()))
+            assert all(v >= 0 for v in w.values())
+
+    def test_samples_centred_on_central_weights(self):
+        import numpy as np
+
+        from graph.risk_scorer import _DEFAULT_WEIGHTS, _sample_weights
+
+        rng = np.random.default_rng(1)
+        draws = [_sample_weights(rng, _DEFAULT_WEIGHTS, 200.0) for _ in range(2000)]
+        for k, v in _DEFAULT_WEIGHTS.items():
+            assert np.mean([d[k] for d in draws]) == pytest.approx(v, abs=0.01)
+
+    def test_zero_weight_stays_zero(self):
+        import numpy as np
+
+        from graph.risk_scorer import _sample_weights
+
+        w = _sample_weights(np.random.default_rng(2), {"alpha": 0.6, "beta": 0.3, "gamma": 0.0, "delta": 0.1}, 50.0)
+        assert w["gamma"] == 0.0
 
 
 # ─── §5.1/§5.3: banded SPOF scoring ───────────────────────────────────────────

@@ -17,6 +17,7 @@ import {
   fetchEmployeeRiskHistory,
   simulateRemoval,
 } from "../lib/api.js";
+import { spofFlagStyle } from "../lib/spofFlag.js";
 import OrgGraph from "../components/OrgGraph.jsx";
 import TransferPlanPanel from "../components/TransferPlanPanel.jsx";
 
@@ -81,13 +82,8 @@ function ImpactRow({ label, value, note, severity = "neutral" }) {
 }
 
 function SpofBadge({ flag }) {
-  const cls =
-    flag === "critical"
-      ? "badge badge-critical"
-      : flag === "warning"
-      ? "badge badge-warning"
-      : "badge badge-normal";
-  return <span className={cls}>{flag ?? "normal"}</span>;
+  const { cls, label } = spofFlagStyle(flag);
+  return <span className={cls}>{label}</span>;
 }
 
 function SimulatePanel({ employeeId }) {
@@ -265,10 +261,10 @@ export default function EmployeeDetail() {
   const neighbors = egoData?.neighbors ?? [];
   const egoEdges = egoData?.edges ?? [];
 
-  // Build mini ego-graph nodes/edges for Sigma
-  const egoNodes = employee
-    ? [employee, ...neighbors].map((n) => ({ ...n, spof_score: n.betweenness ?? 0 }))
-    : [];
+  // Mini ego-graph for Sigma. Color = real SPOF score from the API (null when the
+  // person has no score on record → OrgGraph renders "no score", not "low").
+  // Node size still encodes betweenness, as the panel copy says.
+  const egoNodes = employee ? [employee, ...neighbors] : [];
 
   const chartData = (historyData?.history ?? []).map((p) => ({
     date: format(new Date(p.scored_at), "MMM d"),
@@ -348,7 +344,7 @@ export default function EmployeeDetail() {
                   {employee?.department}
                 </span>
                 {employee && (
-                  <SpofBadge flag={employee.spof_flag ?? employee.flag ?? "normal"} />
+                  <SpofBadge flag={employee.flag} />
                 )}
               </div>
             </>

@@ -1,9 +1,44 @@
 # Organizational Synapse & Knowledge Risk
 
-[![CI](https://github.com/YOUR_ORG/HR_Organization_Synapse/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/HR_Organization_Synapse/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/YOUR_ORG/HR_Organization_Synapse/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_ORG/HR_Organization_Synapse)
+[![CI](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ci.yml/badge.svg)](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ci.yml)
+[![Ruff](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ruff.yml/badge.svg)](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ruff.yml)
+[![codecov](https://codecov.io/gh/OctavioPB/HR_Organization_Synapse/branch/main/graph/badge.svg)](https://codecov.io/gh/OctavioPB/HR_Organization_Synapse)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](frontend/package.json)
+[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://img.shields.io/badge/mypy-checked-2A6DB2)](https://mypy-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/OctavioPB/HR_Organization_Synapse)](https://github.com/OctavioPB/HR_Organization_Synapse/commits/main)
 
 A graph-based HR intelligence platform that surfaces structural risk from collaboration metadata — before HR has any subjective signal.
+
+![Organizational Synapse dashboard](docs/screenshots/dashboard.png)
+
+---
+
+## Documentation
+
+| | |
+|---|---|
+| [**Architecture**](docs/ARCHITECTURE.md) | Components, data flow, storage, multi-tenancy, privacy boundaries, scaling |
+| [**Engineering**](docs/ENGINEERING.md) | Conventions, local setup, quality gates, tests, recipe for adding a score |
+| [**Math Model**](docs/MATH_MODEL.md) | Every formula as implemented: SPOF, knowledge risk, churn, succession, org health |
+| [**Business Value**](docs/BUSINESS_VALUE.md) | Value levers, worked ROI example, 90-day pilot, KPIs |
+| [**Lessons Learned**](docs/LESSONS_LEARNED.md) | What we got wrong, what we changed, what's still open |
+
+Also: [research foundations](docs/MODEL.md) · [engineering decisions](docs/Decisions.md) · [business case](docs/Business.md) · [model card](docs/MODEL_CARD_CHURN.md) · [DPIA](docs/DPIA_THREAT_MODEL.md) · [all docs + screenshot gallery](docs/README.md)
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| **Collaboration graph.** Node size = bridging, color = departure risk<br>![](docs/screenshots/dashboard-graph.png) | **Employee detail.** SPOF components, ego network, What-If<br>![](docs/screenshots/employee-detail.png) |
+| **People roster.** Org-wide SPOF and leave risk<br>![](docs/screenshots/people-roster.png) | **My Team.** Manager traffic-light view, no raw scores<br>![](docs/screenshots/manager-view.png) |
+| **Reorg scenarios.** Before/after structural impact<br>![](docs/screenshots/scenario-planner.png) | **Team builder.** Bridge departments, cover domains<br>![](docs/screenshots/team-optimizer.png) |
+| **Structural equity.** Centrality by group, aggregates only<br>![](docs/screenshots/equity-dashboard.png) | **API.** FastAPI Swagger UI<br>![](docs/screenshots/api-swagger.png) |
 
 ---
 
@@ -33,9 +68,10 @@ Daily and weekly ML pipelines derive:
 |---|---|
 | **SPOF score** | Betweenness centrality + cross-department bridging + clustering coefficient + entropy trend (formula below) |
 | **Knowledge risk** | Sole-expert fraction × document volume × domain breadth, fused with SPOF score |
-| **Churn probability** | Graph Attention Network (11-feature node matrix, 90-day horizon) enriched with HRIS tenure, promotion, and PTO signals — see [MODEL_CARD_CHURN.md](MODEL_CARD_CHURN.md) |
-| **Silo detection** | Louvain community detection; internal/external edge ratio vs. configurable threshold |
-| **Org health** | Composite 0–100 weekly score with AI executive briefing |
+| **Churn probability** | Graph Attention Network (11-feature node matrix, 90-day horizon) enriched with HRIS tenure, promotion, and PTO signals — see [MODEL_CARD_CHURN.md](docs/MODEL_CARD_CHURN.md) |
+| **Withdrawal** | Entropy trend: Theil-Sen slope shrunk by its noise, flagged only when P(slope < −0.05) ≥ 0.9; plus a sudden-withdrawal alert when recent weeks fall far below the person's own baseline |
+| **Silo detection** | Per-department Coleman homophily index: internal share of collaboration vs. what random mixing gives a department of that size |
+| **Org health** | Composite 0–100 weekly score (brokerage concentration, silo exposure, withdrawal share, fragmentation) with AI executive briefing |
 
 Outputs are prescriptive: succession cross-training plans, 90-day knowledge transfer schedules, reorg what-if simulations, onboarding cohort alerts, departure impact forecasts.
 
@@ -43,31 +79,35 @@ Outputs are prescriptive: succession cross-training plans, 90-day knowledge tran
 
 ## Validation & Results
 
-Each model is evaluated against a controlled synthetic dataset with planted ground truth. All numbers below are the **direct output of the test suite** (`tests/validation/`) — not targets or predictions. The suite runs without a database or Kafka: 30 tests, ~12 seconds.
+Each model is evaluated against a controlled synthetic dataset with planted ground truth. All numbers below are the **direct output of the test suite** (`tests/validation/`) — not targets or predictions. The suite runs without a database or Kafka: 46 tests, ~30 seconds. Withdrawal-detection results are in [MATH_MODEL.md §4](docs/MATH_MODEL.md#4-interaction-entropy-and-trend).
+
+**Real-network test bed.** Synthetic data shares the models' assumptions, so every model is also checked on the public SNAP email-Eu-core e-mail networks (986 people, 42 departments, 803 days of e-mail). Those tests use nulls built from real data and withdrawals injected into real histories. They overturned two simulated results: a sudden-withdrawal detector with 0.05 % simulated false alarms showed 32–43 % on real data, and was replaced. Run `python scripts/fetch_external_data.py` to enable them. Details: [MATH_MODEL.md §13.1](docs/MATH_MODEL.md#131-real-network-test-bed).
 
 ---
 
 ### SPOF score — structural identification
 
-**Setup:** 100-employee org, planted archetypes with known structural roles (seed=42). Scoring uses the production `score_all_with_bands()` pipeline with rank-percentile transform.
+**Setup:** 100-employee org, planted archetypes with known structural roles (seed=42). Scoring uses the production `score_all_with_bands()` pipeline: rank-percentile transform, undirected betweenness, and weights fitted to measured removal damage (MATH_MODEL §5). Without event data the uncertainty here is weight jitter only.
 
-| Archetype | n | SPOF score | Rank | Flag | Robust critical |
+| Archetype | n | SPOF score | Rank | Flag | P(critical) |
 |---|---|---|---|---|---|
-| BRIDGE | 2 | 0.84 / 0.80 | 2 / 3 | critical | yes |
-| WITHDRAWING | 1 | 0.89 | 1 | critical | yes |
-| SOLE_EXPERT | 2 | 0.63 / 0.46 | 9 / 37 | warning / elevated | no |
-| SILO (max) | 10 | 0.49 | 26 | elevated | no |
+| BRIDGE | 2 | 0.80 / 0.75 | 2 / 3 | critical / critical_uncertain | 1.00 / 0.83 |
+| WITHDRAWING | 1 | 0.86 | 1 | critical | 1.00 |
+| SOLE_EXPERT | 2 | 0.61 / 0.47 | 8 / 25 | warning / elevated | 0 |
+| SILO (max) | 10 | 0.47 | 22 | elevated | 0 |
 
 | Metric | Result | Threshold |
 |---|---|---|
 | Precision@critical (score ≥ 0.70) | 100% | ≥ 80% |
 | Recall — BRIDGE employees | 100% | 100% |
 | Recall — WITHDRAWING (score ≥ 0.50) | 100% | 100% |
-| SOLE_EXPERT max score | 0.63 | < 0.70 |
-| SILO max score | 0.49 | < 0.50 |
+| SOLE_EXPERT max score | 0.61 | < 0.70 |
+| SILO max score | 0.47 | < 0.50 |
 | Spearman ρ (5 archetype medians) | 0.800 | ≥ 0.60 |
 
-The SOLE_EXPERT boundary (max score 0.63, below the 0.70 critical threshold) is a deliberate design property: knowledge depth without cross-department bridging is a different risk signal — scored separately in `graph/knowledge_risk.py`.
+The second BRIDGE (0.75) is `critical_uncertain`: it clears 0.70 centrally, but only 83% of uncertainty replicates do, below the 90% required for an automatic alert, so it is held for human review. In production the replicates also resample the window's events, which is the larger source of uncertainty (MATH_MODEL §5.2).
+
+The SOLE_EXPERT boundary (max score 0.61, below the 0.70 critical threshold) is a deliberate design property: knowledge depth without cross-department bridging is a different risk signal — scored separately in `graph/knowledge_risk.py`.
 
 ---
 
@@ -79,18 +119,19 @@ The SOLE_EXPERT boundary (max score 0.63, below the 0.70 critical threshold) is 
 |---|---|---|---|
 | BRIDGE | 1.502 | 2–3 | 1–2 |
 | WITHDRAWING | 0.865 | 1 | 3 |
-| SOLE_EXPERT | 0.209 | 9 | 5 |
-| SILO | 0.102 | 26–67 | 70–95 |
+| SOLE_EXPERT | 0.209 | 8 | 5 |
+| SILO | 0.102 | 22–35 | 70–95 |
 | NORMAL (mean) | −0.035 | 4–100 | — |
 
 | Metric | Result | Threshold |
 |---|---|---|
-| Spearman ρ — individual (N=100) | 0.349 | ≥ 0.30 |
+| Spearman ρ — individual (N=100) | **0.565** (v2 weights, directed BC: 0.349) | ≥ 0.30 |
 | Spearman ρ — archetype medians (N=5) | 0.900 | ≥ 0.80 |
 | Precision@5 | 60% | ≥ 40% |
 | BRIDGE damage > SOLE_EXPERT damage | 1.502 > 0.209 | required |
 | BRIDGE damage > SILO damage | 1.502 > 0.102 | required |
 
+On the real SNAP email-Eu-core network (every one of 986 people removed in turn), Spearman(SPOF, damage) is **0.85**, up from 0.81 with the v2 weights.
 **WITHDRAWING gap (SPOF rank 1, damage rank 3):** the model fires 15 days before departure because it reads the withdrawal signal from the entropy trend, not from current network load. By the time the employee actually leaves, the graph has already partially adapted. This is intended behavior — SPOF is a leading indicator, not a real-time damage meter.
 
 ---
@@ -109,6 +150,30 @@ The SOLE_EXPERT boundary (max score 0.63, below the 0.70 critical threshold) is 
 | Recall (optimal) | 0.706 | 0.353 | −0.353 |
 
 **Finding:** at N=300 with 30 training positives, the 3-feature logistic regression outperforms the graph model by 10.6pp AUROC. Individual features (tenure, activity decay, entropy trend) are strong enough that the graph's social-contagion signal is not decisive at this scale. Both models exceed the random floor (AUROC 0.50) and the trivial PR-AUC floor (churn rate = 18.9%). The GNN architecture is expected to show advantage when churn labels cover N > 500 employees across ≥ 3 observation cohorts. Until then: deploy the baseline.
+
+### Churn model — calibrated production model
+
+The deployed model is a logistic regression on **point-in-time** features read from a daily feature log, evaluated on a purged out-of-time fold ([MATH_MODEL §9.1](docs/MATH_MODEL.md#91-calibrated-churn-model-default)). The graph model is a challenger and is adopted only if it beats this one on held-out data.
+
+| Held-out | Forward-simulated org (1,500 people, 30 anchors) | Real e-mail (331 people who stop appearing) |
+|---|---|---|
+| AUROC | 0.81 | 0.57 |
+| Calibration error (ECE) | **0.011** (class-weighted: 0.23) | 0.046: base rate drifted 1.1 % → 5.9 % |
+| Brier skill vs. base rate | +0.17 | +0.004 |
+| Shuffled labels | AUROC 0.52 | — |
+
+**Finding:** probabilities are calibrated when the departure rate is stable and drift when it isn't. The training DAG logs held-out ECE and warns above 0.05.
+
+### Peer departures, structural equity — false alerts when nothing is happening
+
+| Detector | Null (no real signal) | Old rule | New test | Power |
+|---|---|---|---|---|
+| Peer departures | Random departures, synthetic org | 2.3 alerts/run | **0.00** | Team losing half its members: 40 % of the rest flagged |
+| Peer departures | Random departures, real e-mail | 23.3 alerts/run | **0.2** | — |
+| Structural equity | Random labels, 120 people | 1.35 flags/run | **0.10** | Degree −40 %: 100 % · betweenness −60 %: 80 % (old rule 0 %) |
+| Structural equity | Random labels, real network | 2.5 flags/run | **0.2** | — |
+
+On real e-mail, peer exposure **does not** predict leaving (AUROC 0.566 with it vs 0.560 without). The alert is worded as a handover check-in, not a churn prediction.
 
 ---
 
@@ -140,6 +205,13 @@ Group medians: normal 0.118 · moderate 0.544 · severe 0.776.
 
 **Hardest archetype: bridge collapse** (severe score 0.626, rank 6). The current betweenness and degree values are moderate — the anomaly lives in the 7-day delta features (`betweenness_delta_7d = −0.54`). At production contamination (5%, ~5 flags), entropy-collapse-moderate and bridge-collapse-moderate are missed. Raising contamination to 8% recovers both; the trade-off is more false positives from the normal tail.
 
+
+**Production path (since November 2026):** alerts no longer come from a fixed 5 % contamination share. Today's profiles get **conformal p-values** against the org's last 8 weeks of logged feature vectors, with Benjamini–Hochberg at 10 % ([MATH_MODEL §8](docs/MATH_MODEL.md#8-anomaly-detection-isolation-forest)).
+
+| Day | Fixed 5 % contamination | Conformal + BH |
+|---|---|---|
+| Quiet week (100 normal people) | 5.00 alerts | **0.10** alerts |
+| 8 planted archetypes | 6 of 8 caught | **8 of 8** caught, 0 false alerts |
 ---
 
 ## Architecture
@@ -167,7 +239,7 @@ Collaboration tools (Slack, Teams, Jira, GitHub, Calendar, Confluence, Notion)
         │
         ▼
 [PostgreSQL] ── schema-per-tenant isolation
-   ├── employees              hire_date  manager_id  reporting_level  pto_days_ytd  hris_source
+   ├── employees              work_email (unique)  hris_source + hris_external_id (unique)  hire_date  left_at  departure_type  reporting_level  pto_days_ytd
    ├── raw_events             90-day retention
    ├── graph_snapshots        365-day retention
    ├── risk_scores            knowledge_risk_scores  succession_recommendations
@@ -219,8 +291,18 @@ org-synapse/
 ├── demo.ps1                    # One-command launcher (Windows/PowerShell)
 ├── docker-compose.yml
 ├── .env.example
-├── MODEL_CARD_CHURN.md         # ChurnGAT model card (architecture, fairness, limitations)
-├── DPIA_THREAT_MODEL.md        # GDPR Art. 35 DPIA + threat model (re-identification, misuse, controls)
+│
+├── docs/
+│   ├── ARCHITECTURE.md         # Components, data flow, tenancy, privacy boundaries
+│   ├── ENGINEERING.md          # Conventions, local setup, quality gates, extension recipe
+│   ├── MATH_MODEL.md           # Every formula as implemented + spec-vs-code ledger
+│   ├── BUSINESS_VALUE.md       # Value levers, ROI example, pilot plan, KPIs
+│   ├── LESSONS_LEARNED.md      # Modeling, engineering, product, process lessons
+│   ├── MODEL.md                # Research foundations (theory, literature, v2/v3 corrections)
+│   ├── Decisions.md            # Engineering decision records
+│   ├── MODEL_CARD_CHURN.md     # ChurnGAT model card (architecture, fairness, limitations)
+│   ├── DPIA_THREAT_MODEL.md    # GDPR Art. 35 DPIA + threat model
+│   └── screenshots/            # Dashboard captures used in README and docs
 │
 ├── ingestion/
 │   ├── producers/              # Kafka producers (synthetic + real-API + multi-tenant)
@@ -247,8 +329,9 @@ org-synapse/
 │
 ├── graph/
 │   ├── builder.py              # NetworkX DiGraph from edge list
+│   ├── edge_weights.py         # Channel × direction semantic weights ω (shared by every edge loader)
 │   ├── metrics.py              # Betweenness (exact + k-pivot), degree, clustering
-│   ├── silo_detector.py        # Louvain community detection + silo alerting
+│   ├── silo_detector.py        # Department silos via size-corrected homophily index
 │   ├── risk_scorer.py          # SPOF formula (α β γ δ env-configurable)
 │   ├── succession.py           # Structural compatibility scoring
 │   ├── scenario_simulator.py   # Multi-operation reorg What-If engine
@@ -263,7 +346,8 @@ org-synapse/
 │   ├── anomaly/
 │   │   └── isolation_forest.py
 │   └── features/
-│       └── feature_extractor.py
+│       ├── changepoint.py      # Sudden-withdrawal detection (recent vs. personal NB baseline)
+│       └── feature_extractor.py # Robust, shrunk entropy trend + graph features
 │
 ├── api/
 │   ├── main.py                 # FastAPI app + all router registrations
@@ -429,7 +513,7 @@ SPOF_score = α × betweenness_centrality
            − δ × entropy_trend
 ```
 
-Weights are configurable (`SPOF_ALPHA`, `SPOF_BETA`, `SPOF_GAMMA`, `SPOF_DELTA`). Default: 0.4 / 0.3 / 0.2 / 0.1. Thresholds: `normal` < 0.4 · `warning` 0.4–0.7 · `critical` > 0.7.
+Weights are configurable (`SPOF_ALPHA`, `SPOF_BETA`, `SPOF_GAMMA`, `SPOF_DELTA`). Default: 0.50 / 0.325 / 0.05 / 0.125, fitted to measured removal damage. Betweenness is undirected; each term is a rank percentile; `critical` additionally requires P(critical) ≥ 0.9 under an event bootstrap, otherwise `critical_uncertain`. Thresholds: `normal` < 0.4 · `warning` 0.4–0.7 · `critical` > 0.7.
 
 **Enhanced SPOF** fuses the graph score with the knowledge risk score (sole-expert fraction, document volume, domain breadth).
 
@@ -438,15 +522,15 @@ Weights are configurable (`SPOF_ALPHA`, `SPOF_BETA`, `SPOF_GAMMA`, `SPOF_DELTA`)
 ## Org health score
 
 ```
-composite_risk = 0.20 × silo_risk
-              + 0.35 × spof_risk
-              + 0.20 × entropy_risk
-              + 0.25 × fragmentation_risk
+composite_risk = 0.20 × silo_risk           size-weighted mean positive homophily across departments
+              + 0.35 × spof_risk           share of all brokerage held by the top 5 % (rescaled: even spread = 0)
+              + 0.20 × entropy_risk        share of employees whose interaction diversity is falling
+              + 0.25 × fragmentation_risk  1 − exp(−1.5 · (components − 1))
 
 health_score = (1 − composite_risk) × 100   [0–100]
 ```
 
-Tiers: `healthy` ≥ 80 · `caution` 60–79 · `at_risk` 40–59 · `critical` < 40.
+Tiers: `healthy` ≥ 80 · `caution` 60–79 · `at_risk` 40–59 · `critical` < 40. Every component is an absolute property of the network, so scores are comparable week to week and across organizations. Derivations are in [MATH_MODEL.md §11](docs/MATH_MODEL.md#11-org-health-score).
 
 A Monday morning digest delivers the score, top risk signals, and one Claude-authored recommendation via email and Slack. Configure recipients in Admin → Digest Config.
 
@@ -604,7 +688,7 @@ curl http://localhost:8000/risk/scores \
 - **Manager view abstraction.** Managers see traffic-light status only — numeric SPOF scores and churn probabilities are `hr_admin`-scoped and never travel over the wire for `manager` role keys.
 - **GDPR Article 20.** `GET /compliance/data-export/{id}` returns a complete personal data package.
 - **Retention.** `raw_events` purged after 90 days; `graph_snapshots` after 365 days.
-- **DPIA.** [`DPIA_THREAT_MODEL.md`](DPIA_THREAT_MODEL.md) documents the full GDPR Art. 35 Data Protection Impact Assessment: data inventory, 15 identified threats (re-identification, misuse vectors, technical exploitation, model-specific harms), risk matrix, and controls map. Required reading before production deployment.
+- **DPIA.** [`DPIA_THREAT_MODEL.md`](docs/DPIA_THREAT_MODEL.md) documents the full GDPR Art. 35 Data Protection Impact Assessment: data inventory, 15 identified threats (re-identification, misuse vectors, technical exploitation, model-specific harms), risk matrix, and controls map. Required reading before production deployment.
 
 ---
 

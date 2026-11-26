@@ -252,15 +252,16 @@ def test_silo_alerts_have_valid_severity(pipeline):
         assert alert.severity in valid, f"Invalid severity: {alert.severity}"
 
 
-def test_silo_isolation_ratios_above_threshold(pipeline):
-    """All returned silo alerts must exceed the detection threshold."""
-    from graph.silo_detector import _DEFAULT_SILO_THRESHOLD
+def test_silo_homophily_at_or_above_threshold(pipeline):
+    """All returned silo alerts must reach the homophily-index threshold."""
+    from graph.silo_detector import SILO_HOMOPHILY_THRESHOLD
 
     for alert in pipeline["silo_alerts"]:
-        assert alert.isolation_ratio > _DEFAULT_SILO_THRESHOLD, (
-            f"Alert community_id={alert.community_id} ratio={alert.isolation_ratio:.2f} "
-            f"is at or below threshold={_DEFAULT_SILO_THRESHOLD}"
+        assert alert.homophily >= SILO_HOMOPHILY_THRESHOLD, (
+            f"Alert community_id={alert.community_id} H={alert.homophily:.2f} "
+            f"is below threshold={SILO_HOMOPHILY_THRESHOLD}"
         )
+        assert alert.internal_share > alert.expected_internal_share
 
 
 # ─── Full pipeline health ─────────────────────────────────────────────────────
