@@ -1,4 +1,4 @@
-"""Unit tests for the robust entropy trend and the sudden-withdrawal change-point.
+"""Unit tests for the robust entropy trend and the sudden-withdrawal detector.
 
 Statistical performance (error reduction, false-positive rate, power) is measured
 on planted ground truth in tests/validation/entropy_trend_evaluator.py; these
@@ -12,7 +12,7 @@ import math
 import numpy as np
 import pytest
 
-from ml.features.changepoint import detect_rate_drop
+from ml.features.changepoint import detect_activity_drop, nb_cdf
 from ml.features.feature_extractor import (
     compute_entropy,
     entropy_signals_from_weekly,
@@ -127,6 +127,41 @@ class TestShrinkage:
         assert out["a"][0] == -0.3 and out["a"][2] == 1.0
 
 
+# ─── extra week-to-week variance ──────────────────────────────────────────────
+
+
+class TestExtraWeekVariance:
+    def test_zero_when_scatter_matches_sampling_noise(self):
+        from ml.features.feature_extractor import estimate_extra_week_variance
+
+        rng = np.random.default_rng(0)
+        h = {f"e{i}": list(3 + rng.normal(0, 0.1, 4)) for i in range(50)}
+        v = {k: [0.01] * 4 for k in h}  # sampling variance = true scatter (0.1²)
+        assert estimate_extra_week_variance(h, v) < 0.01
+
+    def test_detects_jitter_beyond_sampling(self):
+        from ml.features.feature_extractor import estimate_extra_week_variance
+
+        rng = np.random.default_rng(1)
+        h = {f"e{i}": list(3 + rng.normal(0, 0.6, 4)) for i in range(200)}  # true scatter 0.36
+        v = {k: [0.01] * 4 for k in h}
+        assert 0.15 < estimate_extra_week_variance(h, v) < 0.5
+
+    def test_robust_to_a_few_erratic_people(self):
+        from ml.features.feature_extractor import estimate_extra_week_variance
+
+        rng = np.random.default_rng(2)
+        h = {f"e{i}": list(3 + rng.normal(0, 0.1, 4)) for i in range(60)}
+        h.update({f"wild{i}": [0.0, 6.0, 0.0, 6.0] for i in range(5)})
+        v = {k: [0.01] * 4 for k in h}
+        assert estimate_extra_week_variance(h, v) < 0.02
+
+    def test_small_population_returns_zero(self):
+        from ml.features.feature_extractor import estimate_extra_week_variance
+
+        assert estimate_extra_week_variance({"a": [0, 5, 0, 5]}, {"a": [0.01] * 4}) == 0.0
+
+
 # ─── entropy_signals_from_weekly ──────────────────────────────────────────────
 
 
@@ -163,38 +198,47 @@ class TestEntropySignals:
         assert len(s.weekly_entropy) == 4
 
 
-# ─── change-point ─────────────────────────────────────────────────────────────
+# ─── sudden withdrawal: recent vs. personal baseline ─────────────────────────
 
 
-class TestRateDrop:
-    def test_detects_abrupt_drop_and_locates_it(self):
-        rng = np.random.default_rng(3)
-        counts = np.concatenate([rng.poisson(8, 18), rng.poisson(1, 10)])
-        hit = detect_rate_drop(counts)
+class TestNbCdf:
+    def test_matches_scipy(self):
+        scipy_stats = pytest.importorskip("scipy.stats")
+        for k, r, p in [(0, 2.0, 0.4), (5, 3.5, 0.3), (40, 12.0, 0.25), (3, 0.7, 0.6)]:
+            assert nb_cdf(k, r, p) == pytest.approx(scipy_stats.nbinom.cdf(k, r, p), rel=1e-9)
+
+    def test_negative_k(self):
+        assert nb_cdf(-1, 2.0, 0.5) == 0.0
+
+
+class TestActivityDrop:
+    def test_sustained_drop_detected(self):
+        weeks = [30, 34, 28, 31, 33, 29, 32, 30, 35] + [4, 3, 2]
+        hit = detect_activity_drop(weeks)
         assert hit is not None
-        assert abs(hit.change_index - 18) <= 2
-        assert hit.drop > 0.7
-        assert hit.days_since_change == 28 - hit.change_index
+        assert hit.weekly_before == pytest.approx(np.mean(weeks[:9]), rel=1e-3)
+        assert hit.drop > 0.85
+        assert hit.p_value < 0.001
 
-    def test_stable_series_not_flagged(self):
-        rng = np.random.default_rng(4)
-        assert detect_rate_drop(rng.poisson(6, 28)) is None
+    def test_bursty_baseline_needs_more_evidence(self):
+        """Same means and the same recent dip; a volatile history makes it unremarkable."""
+        steady = [30, 31, 29, 30, 32, 28, 30, 31, 29] + [12, 12, 12]
+        bursty = [5, 70, 2, 60, 8, 55, 3, 48, 19] + [12, 12, 12]
+        assert detect_activity_drop(steady) is not None
+        assert detect_activity_drop(bursty) is None
 
-    def test_increase_not_flagged(self):
-        rng = np.random.default_rng(5)
-        assert detect_rate_drop(np.concatenate([rng.poisson(2, 14), rng.poisson(9, 14)])) is None
-
-    def test_small_drop_not_flagged_even_if_significant(self):
-        """A 25 % dip on a busy person is statistically real but not a 'withdrawal'."""
-        counts = np.array([40] * 14 + [30] * 14)
-        assert detect_rate_drop(counts) is None
-        assert detect_rate_drop(counts, min_drop=0.2) is not None
+    def test_small_dip_not_flagged(self):
+        """A 30 % dip on a very steady person is significant but not a 'withdrawal'."""
+        weeks = [100] * 9 + [70, 70, 70]
+        assert detect_activity_drop(weeks) is None
+        assert detect_activity_drop(weeks, min_drop=0.2) is not None
 
     def test_low_baseline_not_flagged(self):
-        counts = np.array([1] * 10 + [0] * 18)
-        assert detect_rate_drop(counts, min_rate=1.5) is None
+        assert detect_activity_drop([4] * 9 + [0, 0, 0]) is None
 
-    def test_degenerate_inputs(self):
-        assert detect_rate_drop([]) is None
-        assert detect_rate_drop([0] * 28) is None
-        assert detect_rate_drop([5] * 6) is None  # shorter than two segments
+    def test_uses_only_the_most_recent_window(self):
+        old_drop_then_recovery = [30] * 3 + [2] * 3 + [30] * 9 + [31, 29, 30]
+        assert detect_activity_drop(old_drop_then_recovery) is None
+
+    def test_too_short_history(self):
+        assert detect_activity_drop([30] * 5) is None

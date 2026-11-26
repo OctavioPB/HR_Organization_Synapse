@@ -31,7 +31,13 @@ This document records every quantitative decision in the platform: why each form
 
 **CHANGELOG v3.2 (Nov 2026 — entropy trend estimator; details in MATH_MODEL.md §4.1–4.2):**
 - §4: entropy trend = Theil-Sen slope over 4 weeks, shrunk toward the population median by its sampling variance (DerSimonian–Laird τ²); the `withdrawing` flag requires P(slope < −0.05) ≥ 0.90. Validation: slope RMSE −53 %, false-positive withdrawal flags 50.8 % → 2.5 %
-- §4: new `sudden_withdrawal` alert from a Poisson change-point on daily initiated activity (0.05 % false alarms; 94–100 % power for a 70 % drop at ≥ 5 interactions/day)
+- §4: new `sudden_withdrawal` alert from a Poisson change-point on daily initiated activity (simulated 0.05 % false alarms; superseded in v3.3 after it failed on real e-mail)
+
+**CHANGELOG v3.3 (Nov 2026 — real-network test bed; MATH_MODEL.md §13.1):**
+- New validation against the public SNAP email-Eu-core networks, using real-data nulls and injected signals
+- §4: the Poisson daily change-point false-alarmed on 32–43 % of real trendless histories and was replaced by a recent-vs-personal-baseline negative-binomial test (1.5 % false alarms, 53 % power for a 90 % drop)
+- §4: entropy noise model gains a population-estimated week-to-week variance term; real false positives 12.5 % → 2.0 %
+- §12: silo homophily index confirmed unbiased on real data; §5: undirected betweenness is marginally better on real data (removal-damage Spearman 0.89 vs 0.87)
 
 ---
 
@@ -544,11 +550,12 @@ All parameters are configurable via environment variables. Weights sum to 1.0 wi
 | `BETWEENNESS_K_PIVOTS` | 200 | k-pivot count for approximate betweenness | No |
 | `ENTROPY_SLOPE_THRESHOLD` | −0.05 | Slope the `withdrawing` flag tests against (now probabilistically) | v3.2 |
 | `ENTROPY_WITHDRAW_CONFIDENCE` | 0.90 | Required P(true slope < threshold) for `withdrawing` | **NEW** (v3.2) |
-| `CHANGEPOINT_THRESHOLD` | 13.8 | max 2·LLR for a sudden-withdrawal change-point (simulation-calibrated) | **NEW** (v3.2) |
-| `CHANGEPOINT_MIN_DROP` | 0.5 | Minimum fractional rate drop | **NEW** (v3.2) |
-| `CHANGEPOINT_MIN_RATE` | 1.0 | Minimum pre-drop interactions/day | **NEW** (v3.2) |
-| `CHANGEPOINT_MIN_SEGMENT` | 5 | Minimum days on each side of the change | **NEW** (v3.2) |
-| `CHANGEPOINT_WINDOW_DAYS` | 28 | Daily-activity window | **NEW** (v3.2) |
+| `SUDDEN_WITHDRAWAL_BASELINE_WEEKS` | 9 | Personal baseline length | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_RECENT_WEEKS` | 3 | Recent window tested against the baseline | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_ALPHA` | 0.001 | NB tail probability for an alert | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_MIN_DROP` | 0.5 | Minimum fractional drop | **NEW** (v3.3) |
+| `SUDDEN_WITHDRAWAL_MIN_WEEKLY` | 7 | Minimum baseline interactions/week | **NEW** (v3.3) |
+| ~~`CHANGEPOINT_*`~~ | REMOVED (v3.3) | Poisson daily change-point; failed on real e-mail (32–43 % false alarms) | **REMOVED** |
 | `ENTROPY_WINDOW_DAYS` | 30 | Rolling window for entropy and slope computation | No |
 | `GRAPH_WINDOW_DAYS` | 30 | Rolling window for edge accumulation | No |
 | `GRAPH_MIN_EVENTS` | 100 | Minimum events in window before DAG proceeds | No |

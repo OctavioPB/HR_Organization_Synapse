@@ -10,7 +10,7 @@ Task chain:
                 → detect_silos
                     → score_risks
                         → flag_spof_critical
-                        → detect_sudden_withdrawal   (daily-activity change-point)
+                        → detect_sudden_withdrawal   (recent vs. personal-baseline activity)
 """
 
 import logging
@@ -131,7 +131,7 @@ def graph_builder_dag():
 
     @task(on_failure_callback=_on_failure_callback)
     def detect_sudden_withdrawal(**context) -> dict:
-        """Poisson change-point on daily activity → sudden_withdrawal alerts."""
+        """Recent weekly activity vs. personal NB baseline → sudden_withdrawal alerts."""
         from etl.tasks.detect_entropy import task_detect_sudden_withdrawal as _sudden
 
         return _sudden(context["ds"])

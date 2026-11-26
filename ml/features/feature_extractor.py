@@ -14,6 +14,7 @@ Pure computation functions (no DB, fully testable):
     theil_sen_slope(values) → float
     slope_sampling_variance(point_variances) → float
     shrink_toward_center(slopes, variances) → {id: (mean, sd, B)}
+    estimate_extra_week_variance(weekly_entropy, week_variances) → float
     entropy_signals_from_weekly(weekly) → {id: EntropySignal}
     build_feature_vector(current, prev, entropy_current, entropy_trend) → dict
 
@@ -204,6 +205,42 @@ def shrink_toward_center(
     return {i: (float(post[k]), float(sd[k]), float(b[k])) for k, i in enumerate(ids)}
 
 
+def estimate_extra_week_variance(
+    weekly_entropy: dict[str, list[float]],
+    week_variances: dict[str, list[float]],
+    min_population: int = 10,
+) -> float:
+    """Population-level week-to-week entropy variance beyond multinomial sampling noise.
+
+    Real people's collaboration sets shift week to week for reasons sampling
+    noise does not capture (projects, meetings, travel).  Without this term the
+    posterior is over-confident: on real e-mail (SNAP email-Eu-core-temporal)
+    the withdrawing flag fired on 12.5 % of week-shuffled — i.e. trendless —
+    histories.  Per employee, residual scatter around their own OLS line has
+    E[RSS/2] ≈ mean sampling variance + extra; the estimate is the *median* of
+    that excess (the mean is dominated by a few very erratic people).
+
+        extra = max(0, median_v (RSS_v / 2 − mean_k Var(H_vk)))
+
+    It comes out ≈0 on data that really is only sampling noise (the synthetic
+    validation org) and ≈0.37 bits² on real e-mail, cutting real false positives
+    from 12.5 % to 2.0 % at unchanged power.  Returns 0.0 for populations below
+    *min_population*, where a median of residuals is not reliable.
+    """
+    if len(weekly_entropy) < min_population:
+        return 0.0
+    excess = []
+    for emp_id, hs in weekly_entropy.items():
+        n = len(hs)
+        if n < 3:
+            continue
+        x = np.arange(n, dtype=float)
+        coef = np.polyfit(x, np.asarray(hs, dtype=float), 1)
+        rss = float(((np.polyval(coef, x) - np.asarray(hs)) ** 2).sum())
+        excess.append(rss / (n - 2) - float(np.mean(week_variances[emp_id])))
+    return max(0.0, float(np.median(excess))) if excess else 0.0
+
+
 def _normal_cdf(z: float) -> float:
     return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 
@@ -234,7 +271,7 @@ def entropy_signals_from_weekly(
 ) -> dict[str, EntropySignal]:
     """Turn {employee: {week: {partner: count}}} into robust, shrunk entropy signals."""
     raw: dict[str, float] = {}
-    var: dict[str, float] = {}
+    week_vars: dict[str, list[float]] = {}
     hist: dict[str, tuple[tuple[float, ...], tuple[int, ...]]] = {}
     for emp_id, week_data in weekly.items():
         hs, vs, ns = [], [], []
@@ -245,8 +282,11 @@ def entropy_signals_from_weekly(
             vs.append(v)
             ns.append(int(sum(c for c in counts.values() if c > 0)))
         raw[emp_id] = theil_sen_slope(hs)
-        var[emp_id] = slope_sampling_variance(vs)
+        week_vars[emp_id] = vs
         hist[emp_id] = (tuple(round(h, 4) for h in hs), tuple(ns))
+
+    extra = estimate_extra_week_variance({e: list(hist[e][0]) for e in weekly}, week_vars)
+    var = {e: slope_sampling_variance([v + extra for v in vs]) for e, vs in week_vars.items()}
 
     out: dict[str, EntropySignal] = {}
     for emp_id, (mean, sd, b) in shrink_toward_center(raw, var).items():

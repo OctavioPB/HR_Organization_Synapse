@@ -1,4 +1,9 @@
-"""Validation: robust entropy trend + sudden-withdrawal change-point on planted ground truth.
+"""Validation on SYNTHETIC ground truth: robust entropy trend + sudden-withdrawal detector.
+
+Real-data counterparts (false-positive rates on real-data nulls, power on
+withdrawals injected into real histories) are in real_network_evaluator.py —
+synthetic results here were 5–600× too optimistic about false alarms until the
+models were corrected against real e-mail.
 
 Synthetic org (seeded, no DB):
   * every employee has a TRUE entropy slope.  Stable people: N(0, 0.08) bits/week.
@@ -13,8 +18,9 @@ Each estimator is run through the production code path
 (ml.features.feature_extractor.entropy_signals_from_weekly) and compared with the
 OLS slope the pipeline used before.
 
-Change-point: stable Poisson daily series (28 days, 1–8 events/day) for the
-false-alarm rate, and series with a 70 % drop at day 18 for power and location.
+Sudden withdrawal: 12-week weekly series from a negative binomial (variance 3×
+the mean, i.e. overdispersed like real e-mail) for the false-alarm rate, and the
+same with a 90 % drop in the last 3 weeks for power.
 
 Gates (with measured values at the time of writing in brackets):
     RMSE reduction vs OLS, all employees          ≥ 35 %   [53 %: 0.300 → 0.140]
@@ -23,10 +29,8 @@ Gates (with measured values at the time of writing in brackets):
     withdrawing flag: false-positive rate          ≤  6 %   [2.5 %]  (legacy "any negative
                                                              slope" rule: 50.8 %; OLS < −0.05: 39 %)
     withdrawing flag: recall on planted withdrawers ≥ 30 %   [37 %; 84 % for ≥ 20 events/week]
-    change-point false alarms per series          ≤ 0.5 %  [0.05 %]
-    change-point power, 70 % drop, rate ≥ 5/day   ≥ 95 %   [94 % at 5/day, 100 % at ≥ 8/day;
-                                                             61 % at 3/day, 9 % at 1/day]
-    change-point location error (median)          ≤ 2 days [0 days]
+    sudden-withdrawal false alarms (NB null)       ≤ 0.5 %
+    sudden-withdrawal power, 90 % drop, ≥ 25/week  ≥ 80 %
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from ml.features.changepoint import detect_rate_drop
+from ml.features.changepoint import detect_activity_drop
 from ml.features.feature_extractor import entropy_signals_from_weekly
 
 _N = 2000
@@ -144,30 +148,33 @@ def test_well_measured_withdrawers_mostly_caught(results):
     assert flag[busy_withdrawers].mean() >= 0.70
 
 
-# ─── change-point ─────────────────────────────────────────────────────────────
+# ─── sudden withdrawal (synthetic, overdispersed) ────────────────────────────
+# Real-data false-alarm rate and power are measured in real_network_evaluator.py;
+# here we pin behaviour on a controlled negative-binomial null (variance 3× mean).
 
 
-def test_changepoint_false_alarm_rate():
+def _nb_weeks(rng, mean, n, dispersion=3.0):
+    r = mean / (dispersion - 1.0)
+    return rng.negative_binomial(r, r / (r + mean), n).astype(float)
+
+
+def test_sudden_withdrawal_false_alarm_rate_overdispersed():
     rng = np.random.default_rng(11)
     alarms = trials = 0
-    for rate in (1, 2, 4, 8):
-        for _ in range(1000):
-            alarms += detect_rate_drop(rng.poisson(rate, 28)) is not None
+    for mean in (10, 25, 60):
+        for _ in range(1500):
+            alarms += detect_activity_drop(_nb_weeks(rng, mean, 12)) is not None
             trials += 1
     assert alarms / trials <= 0.005, f"false alarms {alarms}/{trials}"
 
 
-def test_changepoint_power_and_location():
+def test_sudden_withdrawal_power_for_near_stop():
     rng = np.random.default_rng(12)
-    hits, errors = 0, []
-    trials = 0
-    for rate in (5, 8, 12):
-        for _ in range(400):
-            series = np.concatenate([rng.poisson(rate, 18), rng.poisson(rate * 0.3, 10)])
-            r = detect_rate_drop(series)
+    hits = trials = 0
+    for mean in (25, 60):
+        for _ in range(500):
+            w = _nb_weeks(rng, mean, 12)
+            w[9:] = rng.binomial(w[9:].astype(int), 0.1)  # 90 % drop for 3 weeks
+            hits += detect_activity_drop(w) is not None
             trials += 1
-            if r is not None:
-                hits += 1
-                errors.append(abs(r.change_index - 18))
-    assert hits / trials >= 0.95, f"power {hits / trials:.0%}"
-    assert float(np.median(errors)) <= 2
+    assert hits / trials >= 0.80, f"power {hits / trials:.0%}"

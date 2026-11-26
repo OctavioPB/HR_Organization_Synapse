@@ -1,38 +1,44 @@
-"""Sudden-withdrawal detection: single change-point in an employee's daily activity rate.
+"""Sudden-withdrawal detection: a person's recent activity vs. their own history.
 
 The entropy trend (feature_extractor) is deliberately smoothed and shrunk, so it
-is slow to react to an abrupt stop — exactly the "quiet quitting overnight" or
-pre-resignation dropout pattern HR most wants to see early.  This module looks
-for that pattern directly.
+reacts slowly to an abrupt stop.  This module tests that pattern directly.
 
 Model (MATH_MODEL.md §4.2)
 ──────────────────────────
-Daily initiated interactions c_1 … c_T are Poisson.  For every split day τ the
-likelihood-ratio statistic for "rate λ₁ before, λ₂ after" against "one rate λ₀":
+Weekly initiated interactions over the last B + R weeks are split into a
+personal *baseline* (first B weeks) and a *recent* window (last R weeks).  The
+baseline is fitted with a negative binomial by method of moments:
 
-    2·LLR(τ) = 2 [ A·ln(λ₁/λ₀) + B·ln(λ₂/λ₀) ],   A = Σ_{t<τ} c_t,  B = Σ_{t≥τ} c_t,
-               λ₁ = A/τ,  λ₂ = B/(T−τ),  λ₀ = (A+B)/T
+    m = mean(baseline weeks),   v = max(var(baseline weeks), m)   (≥ Poisson)
+    one week ~ NB(r, p),        r = m² / (v − m),   p = r / (r + m)
+    R recent weeks ~ NB(R·r, p)
 
-Only drops (λ₂ < λ₁) are considered and τ is restricted so both segments have
-≥ CHANGEPOINT_MIN_SEGMENT days.  A sudden withdrawal is declared when
+Sudden withdrawal is declared when
 
-    max_τ 2·LLR(τ) ≥ CHANGEPOINT_THRESHOLD           (default 13.8)
-    λ₂ / λ₁        ≤ 1 − CHANGEPOINT_MIN_DROP         (default: at least a 50 % drop)
-    λ₁             ≥ CHANGEPOINT_MIN_RATE             (default 1 interaction/day before)
+    P(NB(R·r, p) ≤ recent total) < SUDDEN_WITHDRAWAL_ALPHA      (default 0.001)
+    recent weekly rate ≤ (1 − SUDDEN_WITHDRAWAL_MIN_DROP) · m   (default: ≥ 50 % drop)
+    m ≥ SUDDEN_WITHDRAWAL_MIN_WEEKLY                            (default 7 / week)
 
-Calibration: the maximum over splits is not χ²₁-distributed, so the threshold
-was set by simulation on stable Poisson series (28 days, rates 1–8/day): the
-99.5th percentile of max 2·LLR is ≈ 11 at every rate, and 13.8 gives ≈ 0.1 %
-false alarms per employee-run.  tests/validation/entropy_trend_evaluator.py
-re-measures false-alarm rate and power on every test run.
+Why this design and not a Poisson change-point on daily counts (the first
+version): on real e-mail (SNAP email-Eu-core-temporal, 803 days) daily activity
+has a strong weekly cycle (weekends ≈ 0.1× weekdays) and is overdispersed
+(variance ≈ 5× the mean), and a Poisson daily change-point false-alarmed on
+32–43 % of order-shuffled real windows instead of the simulated 0.05 %.  Weekly
+totals remove the weekday cycle, and the person's own baseline variance makes
+bursty people need more evidence.  On the same real-data null this test
+false-alarms on ≈1.5 % (tests/validation/real_network_evaluator.py).
 
-Activity counts only interactions the employee *initiated* (source side):
-inbound messages keep arriving after someone withdraws.
+Cost of honesty: individual e-mail volume is noisy, so power on real histories
+is modest — ≈22 % for a sustained 70 % drop and ≈53 % for a 90 % drop over three
+weeks — rising with how active the person is.  Activity counts only
+interactions the employee *initiated*: inbound messages keep arriving after
+someone withdraws.  B + R = 12 weeks fits inside the 90-day raw_events retention.
 
 Public functions:
-    detect_rate_drop(daily_counts, ...) → RateDrop | None          (pure)
-    load_daily_activity(snapshot_date, days, cur) → {id: np.ndarray}
-    compute_sudden_withdrawals(snapshot_date, days) → {id: RateDrop}
+    nb_cdf(k, r, p) → float                                           (pure)
+    detect_activity_drop(weekly_counts, ...) → ActivityDrop | None    (pure)
+    load_weekly_activity(snapshot_date, weeks, cur) → {id: np.ndarray}
+    compute_sudden_withdrawals(snapshot_date) → {id: ActivityDrop}
 """
 
 from __future__ import annotations
@@ -44,88 +50,82 @@ from datetime import date, timedelta
 
 import numpy as np
 
-CHANGEPOINT_THRESHOLD = float(os.environ.get("CHANGEPOINT_THRESHOLD", "13.8"))
-CHANGEPOINT_MIN_DROP = float(os.environ.get("CHANGEPOINT_MIN_DROP", "0.5"))
-CHANGEPOINT_MIN_RATE = float(os.environ.get("CHANGEPOINT_MIN_RATE", "1.0"))
-CHANGEPOINT_MIN_SEGMENT = int(os.environ.get("CHANGEPOINT_MIN_SEGMENT", "5"))
-CHANGEPOINT_WINDOW_DAYS = int(os.environ.get("CHANGEPOINT_WINDOW_DAYS", "28"))
+SUDDEN_WITHDRAWAL_ALPHA = float(os.environ.get("SUDDEN_WITHDRAWAL_ALPHA", "0.001"))
+SUDDEN_WITHDRAWAL_MIN_DROP = float(os.environ.get("SUDDEN_WITHDRAWAL_MIN_DROP", "0.5"))
+SUDDEN_WITHDRAWAL_MIN_WEEKLY = float(os.environ.get("SUDDEN_WITHDRAWAL_MIN_WEEKLY", "7"))
+SUDDEN_WITHDRAWAL_BASELINE_WEEKS = int(os.environ.get("SUDDEN_WITHDRAWAL_BASELINE_WEEKS", "9"))
+SUDDEN_WITHDRAWAL_RECENT_WEEKS = int(os.environ.get("SUDDEN_WITHDRAWAL_RECENT_WEEKS", "3"))
 
 
 @dataclass(frozen=True)
-class RateDrop:
-    """A detected drop in daily activity rate."""
+class ActivityDrop:
+    """A recent activity level implausibly low given the person's own history."""
 
-    change_index: int  # first day (0-based within the series) of the lower-rate segment
-    days_since_change: int  # T − change_index: how long the lower rate has lasted
-    rate_before: float  # λ₁, interactions / day
-    rate_after: float  # λ₂
-    drop: float  # 1 − λ₂/λ₁ ∈ (0, 1]
-    statistic: float  # max 2·LLR
-
-
-def _xlogy(x: float, y: float) -> float:
-    return x * math.log(y) if x > 0 else 0.0
+    weekly_before: float  # baseline mean interactions / week
+    weekly_after: float  # recent mean interactions / week
+    drop: float  # 1 − after/before ∈ (0, 1]
+    p_value: float  # P(recent total this low | baseline NB)
+    recent_weeks: int  # length of the recent window (weeks)
 
 
-def detect_rate_drop(
-    daily_counts,
-    threshold: float = CHANGEPOINT_THRESHOLD,
-    min_drop: float = CHANGEPOINT_MIN_DROP,
-    min_rate: float = CHANGEPOINT_MIN_RATE,
-    min_segment: int = CHANGEPOINT_MIN_SEGMENT,
-) -> RateDrop | None:
-    """Return the strongest significant downward rate change, or None.
+def nb_cdf(k: int, r: float, p: float) -> float:
+    """P(X ≤ k) for X ~ NB(r, p) (number of failures, success prob p), summed in log space."""
+    if k < 0:
+        return 0.0
+    log_p, log_q = math.log(p), math.log1p(-p)
+    lg_r = math.lgamma(r)
+    total = 0.0
+    for j in range(int(k) + 1):
+        total += math.exp(math.lgamma(j + r) - lg_r - math.lgamma(j + 1) + r * log_p + j * log_q)
+    return min(total, 1.0)
 
-    Args:
-        daily_counts: Interactions per day, oldest first.
-    """
-    c = np.asarray(daily_counts, dtype=float)
-    t_total = len(c)
-    total = float(c.sum())
-    if t_total < 2 * min_segment or total <= 0:
+
+def detect_activity_drop(
+    weekly_counts,
+    baseline_weeks: int = SUDDEN_WITHDRAWAL_BASELINE_WEEKS,
+    recent_weeks: int = SUDDEN_WITHDRAWAL_RECENT_WEEKS,
+    alpha: float = SUDDEN_WITHDRAWAL_ALPHA,
+    min_drop: float = SUDDEN_WITHDRAWAL_MIN_DROP,
+    min_weekly: float = SUDDEN_WITHDRAWAL_MIN_WEEKLY,
+) -> ActivityDrop | None:
+    """Test the last *recent_weeks* against the preceding *baseline_weeks* (oldest first)."""
+    w = np.asarray(weekly_counts, dtype=float)
+    if len(w) < baseline_weeks + recent_weeks:
         return None
-    lam0 = total / t_total
-    prefix = np.concatenate([[0.0], np.cumsum(c)])
-
-    best: tuple[float, int, float, float] | None = None
-    for tau in range(min_segment, t_total - min_segment + 1):
-        a = float(prefix[tau])
-        b = total - a
-        lam1 = a / tau
-        lam2 = b / (t_total - tau)
-        if lam2 >= lam1:
-            continue
-        stat = 2.0 * (_xlogy(a, lam1 / lam0) + _xlogy(b, lam2 / lam0))
-        if best is None or stat > best[0]:
-            best = (stat, tau, lam1, lam2)
-
-    if best is None:
+    w = w[-(baseline_weeks + recent_weeks) :]
+    base, recent = w[:baseline_weeks], w[baseline_weeks:]
+    m = float(base.mean())
+    if m < min_weekly or baseline_weeks < 2:
         return None
-    stat, tau, lam1, lam2 = best
-    drop = 1.0 - lam2 / lam1
-    if stat < threshold or drop < min_drop or lam1 < min_rate:
+    after = float(recent.mean())
+    drop = 1.0 - after / m
+    if drop < min_drop:
         return None
-    return RateDrop(
-        change_index=tau,
-        days_since_change=t_total - tau,
-        rate_before=round(lam1, 4),
-        rate_after=round(lam2, 4),
+    v = max(float(base.var(ddof=1)), m * 1.0001)  # never tighter than Poisson
+    r = m * m / (v - m)
+    p = r / (r + m)
+    p_value = nb_cdf(int(round(recent.sum())), recent_weeks * r, p)
+    if p_value >= alpha:
+        return None
+    return ActivityDrop(
+        weekly_before=round(m, 3),
+        weekly_after=round(after, 3),
         drop=round(drop, 4),
-        statistic=round(stat, 3),
+        p_value=p_value,
+        recent_weeks=recent_weeks,
     )
 
 
-def load_daily_activity(snapshot_date: date, days: int, cur) -> dict[str, np.ndarray]:
-    """Initiated interactions per day for the *days* days ending on snapshot_date.
+def load_weekly_activity(snapshot_date: date, weeks: int, cur) -> dict[str, np.ndarray]:
+    """Initiated interactions per 7-day week, oldest first, ending on snapshot_date.
 
     Consent/active filters mirror graph.builder.load_raw_edges.  Every consenting
-    active employee gets a series (all zeros if silent), so a complete stop is
-    visible rather than missing.
+    active employee gets a series (zeros if silent), so a complete stop is visible.
     """
-    start = snapshot_date - timedelta(days=days - 1)
+    start = snapshot_date - timedelta(days=7 * weeks - 1)
     cur.execute(
         """
-        SELECT re.source_id::text, (re.ts::date - %s::date) AS day_idx, COUNT(*) AS cnt
+        SELECT re.source_id::text, (re.ts::date - %s::date) / 7 AS week_idx, COUNT(*) AS cnt
         FROM raw_events re
         JOIN employees es ON es.id = re.source_id
         JOIN employees et ON et.id = re.target_id
@@ -138,26 +138,24 @@ def load_daily_activity(snapshot_date: date, days: int, cur) -> dict[str, np.nda
     )
     rows = cur.fetchall()
     cur.execute("SELECT id::text FROM employees WHERE consent = true AND active = true")
-    series: dict[str, np.ndarray] = {r[0]: np.zeros(days) for r in cur.fetchall()}
-    for emp_id, day_idx, cnt in rows:
-        if emp_id in series and 0 <= int(day_idx) < days:
-            series[emp_id][int(day_idx)] = float(cnt)
+    series: dict[str, np.ndarray] = {r[0]: np.zeros(weeks) for r in cur.fetchall()}
+    for emp_id, week_idx, cnt in rows:
+        if emp_id in series and 0 <= int(week_idx) < weeks:
+            series[emp_id][int(week_idx)] = float(cnt)
     return series
 
 
-def compute_sudden_withdrawals(
-    snapshot_date: date,
-    days: int = CHANGEPOINT_WINDOW_DAYS,
-) -> dict[str, RateDrop]:
-    """Run detect_rate_drop for every employee; returns only those with a detected drop."""
+def compute_sudden_withdrawals(snapshot_date: date) -> dict[str, ActivityDrop]:
+    """Run detect_activity_drop for every employee; returns only those with a detected drop."""
     from ingestion.db import get_conn
 
+    weeks = SUDDEN_WITHDRAWAL_BASELINE_WEEKS + SUDDEN_WITHDRAWAL_RECENT_WEEKS
     with get_conn() as conn:
         with conn.cursor() as cur:
-            series = load_daily_activity(snapshot_date, days, cur)
-    out: dict[str, RateDrop] = {}
+            series = load_weekly_activity(snapshot_date, weeks, cur)
+    out: dict[str, ActivityDrop] = {}
     for emp_id, counts in series.items():
-        hit = detect_rate_drop(counts)
+        hit = detect_activity_drop(counts)
         if hit is not None:
             out[emp_id] = hit
     return out

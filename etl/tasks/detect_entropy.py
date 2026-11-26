@@ -101,13 +101,13 @@ def task_score_risks(snapshot_date_str: str, window_days: int = 30) -> dict:
     return stats
 
 
-def task_detect_sudden_withdrawal(snapshot_date_str: str, recent_days: int = 14) -> dict:
-    """Fire ``sudden_withdrawal`` alerts for abrupt drops in daily activity rate.
+def task_detect_sudden_withdrawal(snapshot_date_str: str) -> dict:
+    """Fire ``sudden_withdrawal`` alerts when recent activity is implausibly low
+    against the employee's own baseline (ml/features/changepoint.py).
 
-    Uses the Poisson change-point test in ml/features/changepoint.py.  Only drops
-    that started within the last *recent_days* alert (older ones were already
-    seen), and an employee with an unresolved sudden_withdrawal alert in that
-    window is not alerted again — so one drop produces one alert.
+    The test runs daily on overlapping windows, so an employee with an
+    unresolved sudden_withdrawal alert fired within the recent window is not
+    alerted again — one sustained drop produces one alert.
 
     Returns:
         JSON-serialisable dict with detected and alerts_written counts.
@@ -118,15 +118,15 @@ def task_detect_sudden_withdrawal(snapshot_date_str: str, recent_days: int = 14)
     import psycopg2.extras
 
     from ingestion.db import get_conn
-    from ml.features.changepoint import compute_sudden_withdrawals
+    from ml.features.changepoint import SUDDEN_WITHDRAWAL_RECENT_WEEKS, compute_sudden_withdrawals
 
     d = date.fromisoformat(snapshot_date_str)
-    drops = compute_sudden_withdrawals(d)
-    recent = {e: r for e, r in drops.items() if r.days_since_change <= recent_days}
+    recent_days = 7 * SUDDEN_WITHDRAWAL_RECENT_WEEKS
+    recent = compute_sudden_withdrawals(d)
 
     if not recent:
-        logger.info("task_detect_sudden_withdrawal: none on %s (detected=%d)", snapshot_date_str, len(drops))
-        return {"snapshot_date": snapshot_date_str, "detected": len(drops), "alerts_written": 0}
+        logger.info("task_detect_sudden_withdrawal: none on %s", snapshot_date_str)
+        return {"snapshot_date": snapshot_date_str, "detected": 0, "alerts_written": 0}
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -142,10 +142,10 @@ def task_detect_sudden_withdrawal(snapshot_date_str: str, recent_days: int = 14)
             already = {r[0] for r in cur.fetchall()}
 
         rows = []
+        window_start = d - timedelta(days=recent_days - 1)
         for emp_id, r in recent.items():
             if emp_id in already:
                 continue
-            change_date = d - timedelta(days=r.days_since_change - 1)
             rows.append(
                 (
                     str(uuid.uuid4()),
@@ -154,17 +154,18 @@ def task_detect_sudden_withdrawal(snapshot_date_str: str, recent_days: int = 14)
                     json.dumps(
                         {
                             "employee_id": emp_id,
-                            "change_date": change_date.isoformat(),
-                            "rate_before": r.rate_before,
-                            "rate_after": r.rate_after,
+                            "window_start": window_start.isoformat(),
+                            "weekly_before": r.weekly_before,
+                            "weekly_after": r.weekly_after,
                             "drop": r.drop,
-                            "statistic": r.statistic,
+                            "p_value": r.p_value,
                             "snapshot_date": snapshot_date_str,
                         }
                     ),
                     (
-                        f"Employee {emp_id[:8]}… activity fell {r.drop:.0%} from {r.rate_before:.1f} to "
-                        f"{r.rate_after:.1f} interactions/day around {change_date.isoformat()}"
+                        f"Employee {emp_id[:8]}… initiated {r.weekly_after:.1f} interactions/week over the last "
+                        f"{r.recent_weeks} weeks vs. {r.weekly_before:.1f} before ({r.drop:.0%} drop) — "
+                        "check for leave before acting"
                     ),
                 )
             )
@@ -179,7 +180,7 @@ def task_detect_sudden_withdrawal(snapshot_date_str: str, recent_days: int = 14)
                     rows,
                 )
 
-    stats = {"snapshot_date": snapshot_date_str, "detected": len(drops), "alerts_written": len(rows)}
+    stats = {"snapshot_date": snapshot_date_str, "detected": len(recent), "alerts_written": len(rows)}
     logger.info("task_detect_sudden_withdrawal: %s", stats)
     return stats
 

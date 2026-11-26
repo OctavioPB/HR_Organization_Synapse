@@ -70,6 +70,12 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements-ci.txt
 
+      - name: Fetch real-network test data (SNAP email-Eu-core, ~1.7 MB)
+        # Best effort: if SNAP is unreachable, tests/validation/real_network_evaluator.py
+        # skips rather than failing the build.
+        continue-on-error: true
+        run: python scripts/fetch_external_data.py
+
       - name: Run tests
         # Excluded test files contain pre-existing failures unrelated to CI setup:
         #   test_tenant.py     — KeyError 'role': mock fixture missing field

@@ -44,6 +44,7 @@ coverage.xml
 Thumbs.db
 
 # Docker volumes (local data)
+data/external/
 data/postgres/
 data/kafka/
 data/zookeeper/

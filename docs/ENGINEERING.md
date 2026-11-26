@@ -122,7 +122,8 @@ The CI scope is `graph/`, `ml/anomaly/`, and `ml/features/`, with `--ignore-miss
 
 | Suite | What it proves | Needs | Runtime |
 |---|---|---|---|
-| `tests/validation/` | Models recover **planted ground truth**: bridges, withdrawers, sole experts, silos, anomalies, entropy-trend accuracy and change-point false-alarm/power (38 tests) | nothing | ~15 s |
+| `tests/validation/` (synthetic) | Models recover **planted ground truth**: bridges, withdrawers, sole experts, silos, anomalies, entropy-trend accuracy, sudden-withdrawal false alarms and power (38 tests) | nothing | ~15 s |
+| `tests/validation/real_network_evaluator.py` | The same models on a **real** e-mail network: real-data nulls (shuffled labels or weeks) and injected withdrawals (8 tests) | `python scripts/fetch_external_data.py` (skips otherwise) | ~15 s |
 | `tests/unit/` | Pure functions + API routers with `dependency_overrides` mocking the DB (~497 tests) | nothing | fast |
 | `tests/integration/` | DAG import/wiring; Kafka → consumer → Postgres | Docker Compose | `-m integration` |
 | `tests/performance/` | Load test of the API | running API | manual |

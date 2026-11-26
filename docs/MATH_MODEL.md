@@ -82,6 +82,17 @@ A GitHub review is therefore worth 4.5 Slack-message-equivalents per event, and 
 > The cause is the rank-percentile step in §5. Directed betweenness is exactly 0 for most people, so they tie at percentile 0. Undirected betweenness is tiny but nonzero for almost everyone, and ranking stretches those negligible differences across the full 0–1 range, so low-activity people with one cross-department tie rank as top brokers.
 >
 > Undirected betweenness should be revisited together with a tail-aware normalization of the BC term (track B/D), not on its own.
+>
+> **Real-network evidence (Nov 2026).** On the SNAP email-Eu-core network (986 people), measured removal damage was compared with each score over ~100 one-at-a-time removals. Undirected betweenness does *not* hurt there:
+>
+> | Score | Spearman with damage |
+> |---|---|
+> | SPOF with directed BC (current) | 0.87 |
+> | SPOF with undirected BC | 0.89 |
+> | Raw directed BC | 0.90 |
+> | Raw undirected BC | 0.91 |
+>
+> The 100 % → 50 % precision drop therefore looks like an artifact of the synthetic generator, which defines bridges by who *initiates* cross-department contact. The SPOF composite also tracks damage no better than raw betweenness: the CDR, clustering and entropy terms add little for this purpose.
 
 ---
 
@@ -105,8 +116,9 @@ A straight-line fit through 4 noisy points has two failure modes: one odd week (
 
 ```
 1. raw slope      s_v  = median over pairs i<j of (H_j − H_i)/(j − i)              Theil-Sen, 6 pairs
-2. its noise      v_v  = Σ_k w_k² · Var(H_k) / (Σ_k w_k²)²,   w_k = k − 1.5
+2. its noise      v_v  = Σ_k w_k² · (Var(H_k) + σ²_extra) / (Σ_k w_k²)²,   w_k = k − 1.5
                   Var(H_k) = max( (Σ p·log₂²p − H²)/n_k , 1/n_k )                  delta method, floored; empty week = 1
+                  σ²_extra = max(0, median_v (RSS_v/2 − mean_k Var(H_vk)))         week-to-week variation beyond sampling
 3. shrinkage      τ²   = DerSimonian–Laird between-employee variance of s given v
                   B_v  = τ² / (τ² + v_v)
                   entropy_trend(v) = m + B_v (s_v − m),   m = median_v s_v
@@ -115,40 +127,52 @@ A straight-line fit through 4 noisy points has two failure modes: one odd week (
 withdrawing(v)  ⇔  P(true slope < −0.05) = Φ((−0.05 − entropy_trend) / sd) ≥ 0.90
 ```
 
-- **Theil-Sen** fully ignores an outlier in a middle week. An outlier in the *latest* week moves it about halfway, because with 4 points a collapse in the newest week looks the same as the start of real withdrawal. Change-point detection on daily activity (§4.2) adjudicates that case.
-- **Shrinkage** pulls an employee toward the population center in proportion to how noisy their estimate is. On the validation org, a low-activity employee keeps a median 23 % of their raw slope and a well-measured one keeps 64 %.
-- **DerSimonian–Laird** is the standard random-effects estimator for units with heterogeneous known variances. The simpler method of moments, Var(s) − mean(v), was tried first and failed: variances differ by orders of magnitude, so a few near-silent employees inflate mean(v), and τ² collapsed to ≈0, shrinking everyone onto the median.
-- **The variance formula** over-states true sampling variance by about 1.5–3× in isolation. It was nevertheless the best of four variants inside the full pipeline: looser floors raised false positives to 7–10 %, and the second-order Basharin term breaks on single-partner weeks.
-- **The withdrawing flag is probabilistic.** It no longer means "noisy estimate below −0.05", and the threshold (`ENTROPY_SLOPE_THRESHOLD`) and confidence (`ENTROPY_WITHDRAW_CONFIDENCE`) are configurable.
+- **Theil-Sen** fully ignores an outlier in a middle week. An outlier in the *latest* week moves it about halfway, because with 4 points a collapse in the newest week looks the same as the start of real withdrawal. The sudden-withdrawal test (§4.2) adjudicates that case.
+- **Shrinkage** pulls an employee toward the population center in proportion to how noisy their estimate is. On the synthetic org, a low-activity employee keeps a median 23 % of their raw slope and a well-measured one keeps 64 %.
+- **DerSimonian–Laird** is the standard random-effects estimator for units with heterogeneous known variances. The simpler method of moments, Var(s) − mean(v), collapsed τ² to ≈0 on real data and shrank everyone onto the median.
+- **σ²_extra** captures how real collaboration sets shift week to week (projects, meetings, travel) beyond multinomial sampling noise. Without it the posterior is over-confident on real e-mail. It is estimated from each person's scatter around their own trend line, using a median because a mean is dominated by a few erratic people. It comes out **0** on the synthetic org and **0.37 bits²** on real e-mail.
+- **The variance formula** over-states true sampling variance by about 1.5–3× in isolation. It was still the best of four variants inside the full pipeline.
+- **The withdrawing flag is probabilistic.** `ENTROPY_SLOPE_THRESHOLD` and `ENTROPY_WITHDRAW_CONFIDENCE` are configurable.
 
-Measured on planted ground truth ([`tests/validation/entropy_trend_evaluator.py`](../tests/validation/entropy_trend_evaluator.py): 2,000 employees, 2–60 events/week, 10 % withdrawers, 25 % with a holiday week):
-
-| | Before (OLS) | After |
+| | Synthetic org (`entropy_trend_evaluator.py`) | Real e-mail (`real_network_evaluator.py`) |
 |---|---|---|
-| Slope RMSE, all | 0.300 | **0.140** (−53 %) |
-| Slope RMSE, < 8 events/week | 0.370 | **0.167** (−55 %) |
-| Stable employees flagged `withdrawing` | **50.8 %** (old rule: any negative slope) | **2.5 %** |
-| Planted withdrawers flagged | 76 %, at 39 % false positives (OLS < −0.05) | 37 % overall, **84 %** at ≥ 20 events/week |
+| Slope RMSE vs OLS | 0.300 → **0.140** (−53 %); low-activity −55 % | no ground truth |
+| False positives: stable / trendless people flagged | **2.5 %** (old rule: 50.8 %) | **2.0 %** on week-shuffled histories (old rule: 48.9 %; 12.5 % without σ²_extra) |
+| Power | 37 % of planted withdrawers; 84 % at ≥ 20 events/week | **58 %** when the last 2 weeks are re-routed to the person's top-2 recipients |
 
 Recall is limited by data, not by the method: a person with a few events a week cannot support a confident call. On the demo database the old rule flagged 53 of 118 people; the new flag flags 0–1 per week.
 
-### 4.2 Sudden withdrawal: change-point on daily activity
+### 4.2 Sudden withdrawal: recent activity vs. personal baseline
 
 **Code:** [`ml/features/changepoint.py`](../ml/features/changepoint.py), alert type `sudden_withdrawal` (migration 018)
 
-The shrunk trend reacts slowly to an abrupt stop, so sudden drops get their own test. For each employee's daily *initiated* interactions c_1 … c_28 (inbound messages keep arriving after someone withdraws), a single Poisson change-point is fitted:
+The shrunk trend reacts slowly to an abrupt stop, so sudden drops get their own test. It compares each employee's last 3 weeks of *initiated* interactions with their own previous 9 weeks. Inbound messages are excluded because they keep arriving after someone withdraws.
 
 ```
-2·LLR(τ) = 2 [ A ln(λ₁/λ₀) + B ln(λ₂/λ₀) ]     A = Σ_{t<τ} c_t, B = Σ_{t≥τ} c_t, λ₁ = A/τ, λ₂ = B/(28−τ), λ₀ = (A+B)/28
+baseline weeks b_1…b_9:  m = mean, v = max(var, m)          → one week ~ NB(r, p),  r = m²/(v − m),  p = r/(r + m)
+recent weeks x_1…x_3:    total X ~ NB(3r, p) if nothing changed
 
-sudden withdrawal  ⇔  max_τ 2·LLR ≥ 13.8   and   λ₂/λ₁ ≤ 0.5   and   λ₁ ≥ 1/day      (segments ≥ 5 days)
+sudden withdrawal  ⇔  P(NB(3r, p) ≤ X) < 0.001   and   mean(x) ≤ 0.5·m   and   m ≥ 7 / week
 ```
 
-- **Calibration.** The maximum over split points is not χ²-distributed, so the threshold was set by simulation. The 99.5th percentile of max 2·LLR on stable Poisson series is ≈11 at every rate from 1 to 8 per day. 13.8 gives **0.05 %** false alarms per employee-run.
-- **Power.** For a 70 % drop, power is 94 % at 5 interactions/day and 100 % at ≥ 8/day, with the median change-day exactly right. It falls to 61 % at 3/day and 9 % at 1/day, which is why a minimum pre-drop rate is required.
-- **Alerting.** `graph_builder_dag` → `detect_sudden_withdrawal` alerts only on drops that began in the last 14 days, once per employee, at severity `high` for drops of 80 % or more and `medium` otherwise.
-- **Demo data.** It flags one employee (1.71 → 0.29 interactions/day for 21 days) whose shrunk entropy trend alone reached only p = 0.67. The two detectors are complementary.
+Weekly totals remove the weekday cycle, and the person's own baseline variance means bursty people need more evidence. Twelve weeks fit inside the 90-day `raw_events` retention.
 
+**Why not a daily change-point.** The first version, a Poisson single change-point on 28 days of daily counts calibrated in simulation to 0.05 % false alarms, failed on real e-mail:
+- Real activity has a strong weekly cycle: weekends run at ≈0.1× weekdays.
+- Real activity is overdispersed: variance is a median 4.8× the mean.
+- It false-alarmed on **32–43 %** of order-shuffled real histories.
+- Seasonal and quasi-Poisson corrections cut that to ≈14 %, but power collapsed to 6–16 %.
+
+| On real e-mail (`real_network_evaluator.py`) | Poisson daily change-point (v1) | NB personal baseline (current) |
+|---|---|---|
+| False alarms on shuffled real histories | 32–43 % | **1.5 %** |
+| Power, sustained 70 % drop | — | 22 % |
+| Power, sustained 90 % drop | — | **53 %** (higher for more active people) |
+
+The 9 + 3 weeks, α = 0.001 operating point was chosen from a grid (10 + 2 and 9 + 3 weeks; α 0.001–0.01). Looser settings raise power to 72 % at 4.6 % false alarms.
+
+- **Alerting.** `graph_builder_dag` → `detect_sudden_withdrawal` fires once per employee per recent window, at severity `high` for drops of 80 % or more and `medium` otherwise. The alert text asks HR to check for leave before acting: vacations look exactly like this, and HRIS PTO data could suppress them (open item).
+- **Honest limit.** One person's e-mail volume is noisy, so this is a coarse safety net for near-total stops, not an early-warning system for subtle disengagement.
 > **Fixed November 2026: the trend had never been computed on real data.** The bucketing SQL used `EXTRACT(EPOCH FROM (date − date))`. In Postgres `date − date` is an integer, so the query failed, and every stored `entropy_trend` was 0. That left the SPOF δ term, the anomaly detector's entropy features, and health `entropy_risk` without their signal.
 >
 > The old buckets were also unequal: a 30-day window gave the last "week" about 10 days, which inflates its entropy and biased slopes upward (median +0.08 on the demo data; −0.02 after the fix).
@@ -441,7 +465,7 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 
 | Area | Spec says | Code does | Why it stays open |
 |---|---|---|---|
-| Betweenness graph | Undirected ([Decisions.md §6](Decisions.md)) | Directed | Switching alone cuts validation Precision@critical 100 % → 50 % (§3 note). Needs a tail-aware BC normalization first (track B/D) |
+| Betweenness graph | Undirected ([Decisions.md §6](Decisions.md)) | Directed | On a real network undirected is marginally *better* (Spearman with damage 0.89 vs 0.87), but on the synthetic generator it cuts Precision@critical 100 % → 50 % (§3 note). Needs a tail-aware BC normalization first (track B/D) |
 | Onboarding alert | DCP < 0.25 and tenure ≥ 60 | degree ≤ cohort p25 and tenure ≥ 60 | Code is the better rule (cohort-relative). MODEL.md §9 should be updated to match |
 | GNN edge weights | Graph uses ω-weighted edges | ChurnGAT / temporal GNN use `log1p(count)` | Changing inputs invalidates trained checkpoints; adopt ω at next retrain |
 
@@ -458,7 +482,8 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 | Silo detection | Size-biased isolation ratio; thresholds 2.5 (detector), 4.0 (scenarios, Airflow env) | Coleman homophily on interaction volume, one detector everywhere (§7) |
 | Entropy trend | SQL failed on Postgres, so every trend was 0; unequal buckets; no consent filter | Integer-day equal weeks, consent-filtered (§4) |
 | Entropy estimator | 4-point OLS slope; "withdrawing" = any negative slope (≈51 % of stable people) | Theil-Sen + DerSimonian–Laird shrinkage; probabilistic flag, 2.5 % false positives (§4.1) |
-| Sudden withdrawal | Not detected | Poisson change-point on daily activity, `sudden_withdrawal` alerts (§4.2) |
+| Sudden withdrawal | Not detected | Recent 3 weeks vs. personal 9-week NB baseline, `sudden_withdrawal` alerts, 1.5 % false alarms on real e-mail (§4.2) |
+| Silo index bias | Verified on synthetic data only | Unbiased on a real network: Spearman with size +0.00 under shuffled departments (legacy ratio +0.88) |
 
 ---
 
@@ -473,7 +498,26 @@ This is the drift ledger between [MODEL.md](MODEL.md) and the running code. Each
 | Churn | LogReg (3 feats) AUROC 0.722 vs GraphMLP 0.616 at N = 300 | both > 0.5; **baseline wins** |
 | Isolation Forest | Severe recall 100 % (oracle), 75 % at production contamination | 100 %, ≥ 50 % |
 | Entropy trend | Slope RMSE −53 %; withdrawal false positives 2.5 % (was 50.8 %) | ≥ 35 %, ≤ 6 % |
-| Sudden withdrawal | False alarms 0.05 %; power 94–100 % at ≥ 5/day | ≤ 0.5 %, ≥ 95 % (rates 5–12) |
+| Sudden withdrawal | False alarms 0.38 % on an overdispersed null; 100 % power for a 90 % drop | ≤ 0.5 %, ≥ 80 % |
+
+### 13.1 Real-network test bed
+
+Synthetic organizations share the models' assumptions, so a model can pass its own simulation and fail on real data, and twice it did (LESSONS_LEARNED §1.16–1.17). [`tests/validation/real_network_evaluator.py`](../tests/validation/real_network_evaluator.py) runs every model on the public SNAP **email-Eu-core** networks from a European research institution:
+- **Static network:** 1,005 people and 25,571 edges, with 42 department labels.
+- **Temporal network:** 332,334 timestamped e-mails over 803 days.
+
+Real data has no "who is truly withdrawing" labels. So each test uses a **null built from the real data that is known to contain no signal**, or a **signal injected into real histories**:
+
+| Model | Real-data null / injection | Result | Synthetic said |
+|---|---|---|---|
+| Silo index | Department labels shuffled across people | Size correlation **+0.00**, no silos flagged (legacy ratio +0.88) | unbiased |
+| SPOF | One-at-a-time removals, measured damage | Spearman **0.87** | 0.80 (archetype medians) |
+| Entropy flag | Each person's 4 weeks shuffled | **2.0 %** false positives (12.5 % before σ²_extra) | 2.5 % |
+| Entropy flag | Last 2 weeks re-routed to top-2 recipients | **58 %** power | 37 % |
+| Sudden withdrawal | Each person's 12 weeks shuffled | **1.5 %** false alarms (Poisson v1: 32–43 %) | 0.05 % (v1) |
+| Sudden withdrawal | 90 % drop injected for 3 weeks | **53 %** power | 94–100 % (v1) |
+
+Fetch the data with `python scripts/fetch_external_data.py`; it is not committed, because SNAP states no redistribution license. The tests skip when it is absent, and CI fetches it on a best-effort basis. Please cite Yin et al. (KDD 2017), Leskovec et al. (TKDD 2007) and Paranjape et al. (WSDM 2017) when publishing results.
 
 The full tables are in the [README](../README.md#validation--results). What these results mean for decisions is in [LESSONS_LEARNED.md](LESSONS_LEARNED.md).
 

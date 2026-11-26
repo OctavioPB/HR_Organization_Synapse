@@ -79,6 +79,17 @@ Status: **✅ applied** · **🟡 partially applied** · **🔴 open**
 **Lesson:** Check calibration of each component (predicted vs. empirical variance) separately, and run on real data before trusting a simulation that shares the model's assumptions. For heterogeneous known variances, use the meta-analysis estimator built for it (DerSimonian–Laird).
 **Changed:** DL τ², plus a 4-variant bake-off across 3 seeds to pick the variance formula. A regression test covers the collapse.
 
+### 1.17 Your simulator agrees with your model; reality doesn't have to ✅
+**What happened:** We built a test bed on a public real e-mail network (SNAP email-Eu-core) and re-ran every model against nulls built from real data. It overturned two "validated" results and confirmed two:
+- **Sudden withdrawal:** the Poisson change-point, calibrated to 0.05 % false alarms in simulation, false-alarmed on **32–43 %** of real trendless histories. Real e-mail has a weekly cycle (weekends ≈0.1×) and variance ≈5× the mean.
+- **Entropy flag:** 2.5 % false positives in simulation became **12.5 %** on real data, because real collaboration sets shift week to week beyond sampling noise.
+- **Silo index:** confirmed unbiased on real data (size correlation +0.00 under shuffled labels; legacy ratio +0.88).
+- **Directed vs. undirected betweenness:** the precision loss from undirected betweenness turned out to be an artifact of our generator. On real data undirected is marginally better.
+
+**Lesson:** Synthetic tests check that code implements a model. They can't check that the model fits the world. When ground truth is unavailable, build nulls from real data (shuffle the thing that carries the signal) and inject known signals into real histories.
+
+**Changed:** the sudden-withdrawal test now compares recent weeks with a personal negative-binomial baseline (1.5 % real false alarms). The entropy noise model gained a population-estimated week-to-week variance (real false positives 2.0 %). Both are guarded by `real_network_evaluator.py`, which CI runs when the data is reachable.
+
 ### 1.15 A "fix" that matches the spec can still be wrong 🟡
 **What happened:** Decisions.md says betweenness should be undirected, and the code was directed. Making it undirected halved validation Precision@critical (100 % → 50 %). Undirected betweenness is tiny but nonzero for nearly everyone, and the rank-percentile step stretches those negligible differences into the full 0–1 range.
 **Lesson:** Run the validation suite on every spec reconciliation, and expect two documented choices to interact. Directed betweenness stays until the BC term gets a tail-aware normalization.
@@ -190,7 +201,9 @@ Also resolved in November 2026: channel weights applied (4.1), org-health compon
 | 2 | **Privacy:** add the consent/active filter to the dashboard edge queries (`fetch_graph_edges`, ego-network edges in `api/db.py`) | 3.5 | S |
 | 3 | Re-run the graph, risk and health DAGs (or re-seed) so stored scores reflect the corrected math | 1.12–1.14 | S |
 | 4 | Apply migration 018 (`sudden_withdrawal` alert type) to existing databases; run `scripts/migrate_tenants.py` for tenant schemas | 1.14 | S |
-| 5 | Tail-aware normalization of the BC term, then adopt undirected betweenness (tracks B/D) | 1.15 | M |
+| 5 | Adopt undirected betweenness: real-network evidence now favors it (1.17). Fix the synthetic generator's initiator-defined bridges so the synthetic suite agrees | 1.15, 1.17 | M |
+| 5a | SPOF's CDR/clustering/entropy terms add nothing over raw betweenness for predicting removal damage on real data; decide what they are for, or refit the weights (track D) | 1.17 | M |
+| 5b | Suppress `sudden_withdrawal` alerts during HRIS-recorded leave (vacations look identical) | 1.17 | S |
 | 6 | Fix and re-enable `test_tenant.py`, `test_compliance.py` | 2.8 | S |
 | 7 | Isolate cache unit tests from a live local Redis (two tests fail when one is running on :6379) | 2.8 | S |
 | 8 | Unify the dashboard silo KPI with department-level alerts | 3.3 | S |
