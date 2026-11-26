@@ -196,6 +196,36 @@ def test_ego_network_returns_200(client):
     assert len(body["neighbors"]) == 1
 
 
+def test_ego_network_node_carries_spof_flag(client):
+    """Regression: the profile badge read a flag this endpoint never returned,
+    so every employee — including the org's #1 SPOF — displayed as 'normal'."""
+    node = {**_NODE_ROWS[0], "spof_score": 0.897, "flag": "critical", "risk_scored_at": _SNAPSHOT_DATE}
+    ego = {"node": node, "neighbors": [_NODE_ROWS[1]], "edges": _EDGE_ROWS}
+    with (
+        patch("api.routers.graph.queries.fetch_latest_snapshot_date", return_value=_SNAPSHOT_DATE),
+        patch("api.routers.graph.queries.fetch_ego_network", return_value=ego),
+    ):
+        resp = client.get(f"/graph/employee/{_EMP_A}")
+    assert resp.status_code == 200
+    centre = resp.json()["node"]
+    assert centre["flag"] == "critical"
+    assert centre["spof_score"] == 0.897
+    assert centre["risk_scored_at"] == _SNAPSHOT_DATE.isoformat()
+
+
+def test_ego_network_unscored_employee_has_null_flag_not_normal(client):
+    """No risk score on record must surface as null (UI: 'unknown'), never 'normal'."""
+    node = {**_NODE_ROWS[0], "spof_score": None, "flag": None, "risk_scored_at": None}
+    ego = {"node": node, "neighbors": [], "edges": []}
+    with (
+        patch("api.routers.graph.queries.fetch_latest_snapshot_date", return_value=_SNAPSHOT_DATE),
+        patch("api.routers.graph.queries.fetch_ego_network", return_value=ego),
+    ):
+        resp = client.get(f"/graph/employee/{_EMP_A}")
+    assert resp.status_code == 200
+    assert resp.json()["node"]["flag"] is None
+
+
 def test_ego_network_404_when_missing(client):
     with (
         patch("api.routers.graph.queries.fetch_latest_snapshot_date", return_value=_SNAPSHOT_DATE),

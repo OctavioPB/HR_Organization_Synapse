@@ -11,6 +11,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.deps import get_db
+from etl.tasks.compute_equity import MIN_GROUP_SIZE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/equity", tags=["equity"])
@@ -25,6 +26,8 @@ def get_centrality_distribution(
     """Return centrality distribution by demographic group for the latest computed date.
 
     All values are aggregated at the group level — no individual data exposed.
+    Groups with fewer than MIN_GROUP_SIZE members are suppressed (k-anonymity);
+    only their count is reported, never their label or statistics.
     """
     valid_dims = {"gender_group", "tenure_band", "level_band"}
     valid_metrics = {"betweenness", "degree"}
@@ -58,12 +61,18 @@ def get_centrality_distribution(
             """,
             (dimension, metric, latest),
         )
-        rows = [dict(r) for r in cur.fetchall()]
+        all_rows = [dict(r) for r in cur.fetchall()]
+
+    # Defence in depth: filter here too, so rows persisted before the SQL guard
+    # in compute_equity existed can never leak a small group.
+    rows = [r for r in all_rows if int(r["member_count"] or 0) >= MIN_GROUP_SIZE]
 
     return {
         "computed_at": str(latest),
         "dimension": dimension,
         "metric": metric,
+        "min_group_size": MIN_GROUP_SIZE,
+        "suppressed_groups": len(all_rows) - len(rows),
         "groups": [
             {
                 "group_value": r["group_value"],

@@ -28,6 +28,13 @@ _METRICS = ["betweenness", "degree", "cross_dept_ratio"]
 # mistaken for a fixed legal line.
 _DISPARITY_RATIO = float(os.environ.get("EQUITY_DISPARITY_RATIO", "0.8"))
 
+# k-anonymity floor for group aggregates.  A median over 1–4 people can reveal
+# an individual's structural position, so groups smaller than this are never
+# persisted (enforced in SQL below) and never returned by /equity/* (enforced
+# again in the router, which also covers rows written before this guard existed).
+# Clamped to >= 2: a "group" of one is an individual record by definition.
+MIN_GROUP_SIZE = max(2, int(os.environ.get("EQUITY_MIN_GROUP_SIZE", "5")))
+
 
 def task_compute_equity(snapshot_date_str: str, conn) -> dict:
     snapshot_date = date.fromisoformat(snapshot_date_str)
@@ -82,8 +89,9 @@ def task_compute_equity(snapshot_date_str: str, conn) -> dict:
                 FROM demo_metrics
                 WHERE group_val IS NOT NULL
                 GROUP BY group_val
+                HAVING COUNT(*) >= %s
                 """,
-                (snapshot_date,),
+                (snapshot_date, MIN_GROUP_SIZE),
             )
             group_rows = [dict(r) for r in cur.fetchall()]
 

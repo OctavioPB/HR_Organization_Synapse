@@ -131,7 +131,12 @@ export default function EquityDashboard() {
           fontFamily: "var(--fb)", fontSize: "13px", color: "var(--primary)",
           marginBottom: "24px",
         }}>
-          <strong>Privacy:</strong> All data shown is aggregated by group (minimum 5 members per group). No individual demographic attributes are accessible through this interface.
+          <strong>Privacy:</strong> All data shown is aggregated by group (minimum {data?.min_group_size ?? 5} members per group — smaller groups are suppressed server-side). No individual demographic attributes are accessible through this interface.
+          {data?.suppressed_groups > 0 && (
+            <div style={{ marginTop: "6px", color: "var(--mid)" }}>
+              {data.suppressed_groups} group{data.suppressed_groups === 1 ? "" : "s"} hidden for this view because {data.suppressed_groups === 1 ? "it has" : "they have"} fewer than {data.min_group_size} members.
+            </div>
+          )}
         </div>
 
         {/* Controls */}

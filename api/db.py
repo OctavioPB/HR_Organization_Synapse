@@ -114,13 +114,25 @@ def fetch_ego_network(
                 gs.degree_in,
                 gs.degree_out,
                 gs.clustering,
-                gs.community_id
+                gs.community_id,
+                rs.spof_score,
+                rs.flag,
+                rs.scored_at::date AS risk_scored_at
             FROM graph_snapshots gs
             JOIN employees e ON gs.employee_id = e.id
+            -- Latest SPOF score on or before the snapshot date (NULLs if never scored).
+            LEFT JOIN LATERAL (
+                SELECT r.spof_score, r.flag, r.scored_at
+                FROM risk_scores r
+                WHERE r.employee_id = gs.employee_id
+                  AND r.scored_at::date <= %s
+                ORDER BY r.scored_at DESC
+                LIMIT 1
+            ) rs ON TRUE
             WHERE gs.snapshot_date = %s
               AND gs.employee_id = %s::uuid
             """,
-            (snapshot_date, employee_id),
+            (snapshot_date, snapshot_date, employee_id),
         )
         node_row = cur.fetchone()
 

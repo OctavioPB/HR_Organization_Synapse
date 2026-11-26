@@ -55,10 +55,23 @@ class CommunitiesResponse(BaseModel):
     communities: list[Community]
 
 
+class EgoNode(NodeMetrics):
+    """Centre node of an ego network, enriched with its latest SPOF risk.
+
+    ``flag`` / ``spof_score`` are None when the employee has no risk score on or
+    before the snapshot date — clients must render that as *unknown*, never as
+    ``normal`` (a missing score is not evidence of low risk).
+    """
+
+    spof_score: float | None = None
+    flag: str | None = None
+    risk_scored_at: date | None = None
+
+
 class EgoNetwork(BaseModel):
     employee_id: str
     snapshot_date: date
-    node: NodeMetrics
+    node: EgoNode
     neighbors: list[NodeMetrics]
     edges: list[GraphEdge]
 

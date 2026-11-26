@@ -14,6 +14,7 @@ from api.models.schemas import (
     CommunitiesResponse,
     Community,
     EgoNetwork,
+    EgoNode,
     GraphEdge,
     GraphSnapshot,
     KnowledgeIsland,
@@ -123,7 +124,7 @@ def get_employee_ego_network(
     return EgoNetwork(
         employee_id=employee_id,
         snapshot_date=snapshot_date,
-        node=NodeMetrics(**ego["node"]),
+        node=EgoNode(**ego["node"]),
         neighbors=[NodeMetrics(**n) for n in ego["neighbors"]],
         edges=[GraphEdge(**e) for e in ego["edges"]],
     )

@@ -17,6 +17,7 @@ import {
   fetchEmployeeRiskHistory,
   simulateRemoval,
 } from "../lib/api.js";
+import { spofFlagStyle } from "../lib/spofFlag.js";
 import OrgGraph from "../components/OrgGraph.jsx";
 import TransferPlanPanel from "../components/TransferPlanPanel.jsx";
 
@@ -81,13 +82,8 @@ function ImpactRow({ label, value, note, severity = "neutral" }) {
 }
 
 function SpofBadge({ flag }) {
-  const cls =
-    flag === "critical"
-      ? "badge badge-critical"
-      : flag === "warning"
-      ? "badge badge-warning"
-      : "badge badge-normal";
-  return <span className={cls}>{flag ?? "normal"}</span>;
+  const { cls, label } = spofFlagStyle(flag);
+  return <span className={cls}>{label}</span>;
 }
 
 function SimulatePanel({ employeeId }) {
@@ -348,7 +344,7 @@ export default function EmployeeDetail() {
                   {employee?.department}
                 </span>
                 {employee && (
-                  <SpofBadge flag={employee.spof_flag ?? employee.flag ?? "normal"} />
+                  <SpofBadge flag={employee.flag} />
                 )}
               </div>
             </>
