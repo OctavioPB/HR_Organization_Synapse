@@ -1,9 +1,44 @@
 # Organizational Synapse & Knowledge Risk
 
-[![CI](https://github.com/YOUR_ORG/HR_Organization_Synapse/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/HR_Organization_Synapse/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/YOUR_ORG/HR_Organization_Synapse/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_ORG/HR_Organization_Synapse)
+[![CI](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ci.yml/badge.svg)](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ci.yml)
+[![Ruff](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ruff.yml/badge.svg)](https://github.com/OctavioPB/HR_Organization_Synapse/actions/workflows/ruff.yml)
+[![codecov](https://codecov.io/gh/OctavioPB/HR_Organization_Synapse/branch/main/graph/badge.svg)](https://codecov.io/gh/OctavioPB/HR_Organization_Synapse)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](frontend/package.json)
+[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://img.shields.io/badge/mypy-checked-2A6DB2)](https://mypy-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/OctavioPB/HR_Organization_Synapse)](https://github.com/OctavioPB/HR_Organization_Synapse/commits/main)
 
 A graph-based HR intelligence platform that surfaces structural risk from collaboration metadata — before HR has any subjective signal.
+
+![Organizational Synapse dashboard](docs/screenshots/dashboard.png)
+
+---
+
+## Documentation
+
+| | |
+|---|---|
+| [**Architecture**](docs/ARCHITECTURE.md) | Components, data flow, storage, multi-tenancy, privacy boundaries, scaling |
+| [**Engineering**](docs/ENGINEERING.md) | Conventions, local setup, quality gates, tests, recipe for adding a score |
+| [**Math Model**](docs/MATH_MODEL.md) | Every formula as implemented: SPOF, knowledge risk, churn, succession, org health |
+| [**Business Value**](docs/BUSINESS_VALUE.md) | Value levers, worked ROI example, 90-day pilot, KPIs |
+| [**Lessons Learned**](docs/LESSONS_LEARNED.md) | What we got wrong, what we changed, what's still open |
+
+Also: [research foundations](docs/MODEL.md) · [engineering decisions](docs/Decisions.md) · [business case](docs/Business.md) · [model card](docs/MODEL_CARD_CHURN.md) · [DPIA](docs/DPIA_THREAT_MODEL.md) · [all docs + screenshot gallery](docs/README.md)
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| **Collaboration graph.** Node size = bridging, color = departure risk<br>![](docs/screenshots/dashboard-graph.png) | **Employee detail.** SPOF components, ego network, What-If<br>![](docs/screenshots/employee-detail.png) |
+| **People roster.** Org-wide SPOF and leave risk<br>![](docs/screenshots/people-roster.png) | **My Team.** Manager traffic-light view, no raw scores<br>![](docs/screenshots/manager-view.png) |
+| **Reorg scenarios.** Before/after structural impact<br>![](docs/screenshots/scenario-planner.png) | **Team builder.** Bridge departments, cover domains<br>![](docs/screenshots/team-optimizer.png) |
+| **Structural equity.** Centrality by group, aggregates only<br>![](docs/screenshots/equity-dashboard.png) | **API.** FastAPI Swagger UI<br>![](docs/screenshots/api-swagger.png) |
 
 ---
 
@@ -33,7 +68,7 @@ Daily and weekly ML pipelines derive:
 |---|---|
 | **SPOF score** | Betweenness centrality + cross-department bridging + clustering coefficient + entropy trend (formula below) |
 | **Knowledge risk** | Sole-expert fraction × document volume × domain breadth, fused with SPOF score |
-| **Churn probability** | Graph Attention Network (11-feature node matrix, 90-day horizon) enriched with HRIS tenure, promotion, and PTO signals — see [MODEL_CARD_CHURN.md](MODEL_CARD_CHURN.md) |
+| **Churn probability** | Graph Attention Network (11-feature node matrix, 90-day horizon) enriched with HRIS tenure, promotion, and PTO signals — see [MODEL_CARD_CHURN.md](docs/MODEL_CARD_CHURN.md) |
 | **Silo detection** | Louvain community detection; internal/external edge ratio vs. configurable threshold |
 | **Org health** | Composite 0–100 weekly score with AI executive briefing |
 
@@ -219,8 +254,18 @@ org-synapse/
 ├── demo.ps1                    # One-command launcher (Windows/PowerShell)
 ├── docker-compose.yml
 ├── .env.example
-├── MODEL_CARD_CHURN.md         # ChurnGAT model card (architecture, fairness, limitations)
-├── DPIA_THREAT_MODEL.md        # GDPR Art. 35 DPIA + threat model (re-identification, misuse, controls)
+│
+├── docs/
+│   ├── ARCHITECTURE.md         # Components, data flow, tenancy, privacy boundaries
+│   ├── ENGINEERING.md          # Conventions, local setup, quality gates, extension recipe
+│   ├── MATH_MODEL.md           # Every formula as implemented + spec-vs-code ledger
+│   ├── BUSINESS_VALUE.md       # Value levers, ROI example, pilot plan, KPIs
+│   ├── LESSONS_LEARNED.md      # Modeling, engineering, product, process lessons
+│   ├── MODEL.md                # Research foundations (theory, literature, v2/v3 corrections)
+│   ├── Decisions.md            # Engineering decision records
+│   ├── MODEL_CARD_CHURN.md     # ChurnGAT model card (architecture, fairness, limitations)
+│   ├── DPIA_THREAT_MODEL.md    # GDPR Art. 35 DPIA + threat model
+│   └── screenshots/            # Dashboard captures used in README and docs
 │
 ├── ingestion/
 │   ├── producers/              # Kafka producers (synthetic + real-API + multi-tenant)
@@ -604,7 +649,7 @@ curl http://localhost:8000/risk/scores \
 - **Manager view abstraction.** Managers see traffic-light status only — numeric SPOF scores and churn probabilities are `hr_admin`-scoped and never travel over the wire for `manager` role keys.
 - **GDPR Article 20.** `GET /compliance/data-export/{id}` returns a complete personal data package.
 - **Retention.** `raw_events` purged after 90 days; `graph_snapshots` after 365 days.
-- **DPIA.** [`DPIA_THREAT_MODEL.md`](DPIA_THREAT_MODEL.md) documents the full GDPR Art. 35 Data Protection Impact Assessment: data inventory, 15 identified threats (re-identification, misuse vectors, technical exploitation, model-specific harms), risk matrix, and controls map. Required reading before production deployment.
+- **DPIA.** [`DPIA_THREAT_MODEL.md`](docs/DPIA_THREAT_MODEL.md) documents the full GDPR Art. 35 Data Protection Impact Assessment: data inventory, 15 identified threats (re-identification, misuse vectors, technical exploitation, model-specific harms), risk matrix, and controls map. Required reading before production deployment.
 
 ---
 
